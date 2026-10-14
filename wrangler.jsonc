@@ -5,6 +5,9 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "training-web",
   "compatibility_date": "2026-10-01",
+  // Custom domain (zone must be on this Cloudflare account). Same value goes
+  // into training-api CORS_ORIGIN and the Apple Services ID web auth config.
+  "routes": [{ "pattern": "make-it.life4like.com", "custom_domain": true }],
   "assets": {
     "directory": "./build/client",
     "not_found_handling": "single-page-application"

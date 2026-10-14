@@ -1,6 +1,6 @@
 # training-web
 
-富士山マラソン 2026 訓練課表的手機版前端。React Router v7 framework mode（Remix 的後繼）、SPA 模式、TypeScript，資料來自 [training-api](https://github.com/iamwuwei/training-api)，部署到 Cloudflare Pages。
+富士山マラソン 2026 訓練課表的手機版前端，線上網址 **https://make-it.life4like.com**。React Router v7 framework mode（Remix 的後繼）、SPA 模式、TypeScript，資料來自 [training-api](https://github.com/iamwuwei/training-api)，部署到 Cloudflare Pages。
 
 ## 畫面
 
@@ -64,6 +64,6 @@ Workers & Pages → Create → Workers → Import a repository，選這個 repo�
 | Deploy command | `npx wrangler deploy` |
 | Environment variables | `VITE_API_URL`、`VITE_AUTH_URL`、`VITE_APPLE_CLIENT_ID`（Build 階段要看得到） |
 
-`wrangler.jsonc` 把 `build/client` 當靜態資產上傳，`not_found_handling: single-page-application` 讓所有路徑回到 `index.html`。部署好的 `*.workers.dev` 網域要填進 training-api 的 `CORS_ORIGIN`，以及 Apple Services ID 的 Web Authentication 設定。
+`wrangler.jsonc` 把 `build/client` 當靜態資產上傳，`not_found_handling: single-page-application` 讓所有路徑回到 `index.html`，並把 `make-it.life4like.com` 綁成 custom domain。這個網域要填進 training-api 的 `CORS_ORIGIN`（`https://make-it.life4like.com`），以及 Apple Services ID 的 Web Authentication：Domain `make-it.life4like.com`、Return URL `https://make-it.life4like.com`。
 
 CLI 手動部署：`npm run build && npx wrangler deploy`。
