@@ -54,17 +54,16 @@ npm run preview
 - 超出課表上限的心拍、快過下限的配速，數字本身變紅。
 - 進度條：進行中灰，達標綠。
 
-## 部署（Cloudflare Pages）
+## 部署（Cloudflare Workers）
 
-Workers & Pages → Create → Pages → Connect to Git，選這個 repo：
+Workers & Pages → Create → Workers → Import a repository，選這個 repo：
 
 | 設定 | 值 |
 |---|---|
-| Production branch | `main` |
 | Build command | `npm run build` |
-| Build output directory | `build/client` |
-| Environment variables | `NODE_VERSION=22`、`VITE_API_URL`、`VITE_AUTH_URL`、`VITE_APPLE_CLIENT_ID` |
+| Deploy command | `npx wrangler deploy` |
+| Environment variables | `VITE_API_URL`、`VITE_AUTH_URL`、`VITE_APPLE_CLIENT_ID`（Build 階段要看得到） |
 
-`public/_redirects` 把所有路徑導回 `index.html`。部署好的網域要填進 training-api 的 `CORS_ORIGIN`，以及 Apple Services ID 的 Web Authentication 設定。
+`wrangler.jsonc` 把 `build/client` 當靜態資產上傳，`not_found_handling: single-page-application` 讓所有路徑回到 `index.html`。部署好的 `*.workers.dev` 網域要填進 training-api 的 `CORS_ORIGIN`，以及 Apple Services ID 的 Web Authentication 設定。
 
-CLI 手動部署：`npm run build && npx wrangler pages deploy build/client`。
+CLI 手動部署：`npm run build && npx wrangler deploy`。

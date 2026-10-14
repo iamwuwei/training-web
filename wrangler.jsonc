@@ -1,7 +1,12 @@
-// Cloudflare Pages / Wrangler config. Lets `npx wrangler pages dev dist` and
-// `npx wrangler pages deploy dist` work without extra flags.
+// Cloudflare Workers with static assets. The Git-connected Workers build runs
+// `npm run build` then `npx wrangler deploy`; this uploads build/client as the
+// site and serves index.html for any unknown path (client-side routing).
 {
+  "$schema": "node_modules/wrangler/config-schema.json",
   "name": "training-web",
-  "pages_build_output_dir": "build/client",
-  "compatibility_date": "2026-10-01"
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./build/client",
+    "not_found_handling": "single-page-application"
+  }
 }
