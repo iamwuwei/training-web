@@ -3,7 +3,7 @@ import type { Route } from "./+types/_app.activities.$id";
 import { BackIcon } from "../components/icons";
 import { Avatar, Reminders, TopBar } from "../components/ui";
 import { ApiError, getActivities } from "../lib/api";
-import { getToken } from "../lib/auth";
+import { hasSession } from "../lib/auth";
 import { mdDow } from "../lib/date";
 import { duration, int, km, kmPlan, pace, paceRange } from "../lib/format";
 import { labelStyle, verdictKind } from "../lib/labels";
@@ -15,7 +15,7 @@ import { usePlan } from "../lib/use-plan";
 // /activities for unplanned runs (which /plan does not return).
 
 export async function clientLoader({ params }: Route.ClientLoaderArgs) {
-  if (!getToken()) throw redirect("/login");
+  if (!hasSession()) throw redirect("/login");
   try {
     const { activities } = await getActivities();
     const activity = activities.find((a) => a.id === params.id);

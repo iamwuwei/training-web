@@ -4,7 +4,7 @@ import type { Route } from "./+types/_app.history";
 import { ActivityPost } from "../components/posts";
 import { TopBar } from "../components/ui";
 import { ApiError, getActivities } from "../lib/api";
-import { getToken } from "../lib/auth";
+import { hasSession } from "../lib/auth";
 import { km } from "../lib/format";
 import { FILTERS, labelStyle } from "../lib/labels";
 import { usePlan } from "../lib/use-plan";
@@ -12,7 +12,7 @@ import { usePlan } from "../lib/use-plan";
 // Reads /activities (not /plan) so unplanned runs show up too.
 
 export async function clientLoader() {
-  if (!getToken()) throw redirect("/login");
+  if (!hasSession()) throw redirect("/login");
   try {
     return await getActivities();
   } catch (e) {

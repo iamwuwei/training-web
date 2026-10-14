@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useRouteLoaderData } from "react-router";
 import type { clientLoader } from "../routes/_app";
-import type { ApiUser } from "../types/api";
+import type { ApiUser } from "./auth";
 import { todayJst } from "./date";
 import { buildPlanView, type PlanView } from "./plan";
 
