@@ -1,5 +1,6 @@
 import type {
   ActivitiesResponse,
+  DeleteStravaResponse,
   ErrorResponse,
   MatchStatus,
   MeResponse,
@@ -43,6 +44,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 export function getMe(): Promise<MeResponse> {
   if (useMock) return Promise.resolve(mockMe());
   return request<MeResponse>("/me");
+}
+
+export function disconnectStrava(): Promise<DeleteStravaResponse> {
+  if (useMock) return Promise.resolve({ ok: true });
+  return request<DeleteStravaResponse>("/me/strava", { method: "DELETE" });
 }
 
 export function getPlan(): Promise<PlanResponse> {
