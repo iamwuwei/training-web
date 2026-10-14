@@ -3,8 +3,8 @@
 // results become an activity + manual review on the same local date.
 
 import plans from "./plans.json";
-import type { ActivitiesResponse, ApiActivity, ApiSession, ApiWeek, MatchStatus, PlanResponse, Verdict } from "../types/api";
-import { MOCK_USER } from "../lib/auth";
+import type { ActivitiesResponse, ApiActivity, ApiSession, ApiWeek, MatchStatus, MeResponse, PlanResponse, Verdict } from "../types/api";
+const MOCK_USER_ID = "7d1c3a0e-4f7b-4d2e-9c1a-5b8e2f6a1c01"; // ww in training-api seed
 
 interface SeedSession {
   date: string; week_no: number; phase: string; label: string; type: ApiSession["type"];
@@ -57,7 +57,7 @@ function build(): PlanResponse {
     const session = byDate.get(r.date) ?? null;
     return {
       id: `a-${r.date}`,
-      user_id: MOCK_USER.id,
+      user_id: MOCK_USER_ID,
       strava_activity_id: r.date.replace(/-/g, ""),
       session_id: session?.id ?? null,
       // 07:00 JST on that day
@@ -90,7 +90,7 @@ function build(): PlanResponse {
   return {
     plan: {
       id: PLAN_ID,
-      user_id: MOCK_USER.id,
+      user_id: MOCK_USER_ID,
       race_name: seed.race_name,
       race_date: seed.race_date,
       goal_time_sec: seed.goal_time_sec ?? null,
@@ -109,6 +109,14 @@ const data = () => (cache ??= build());
 export function mockPlan(): PlanResponse {
   const d = data();
   return { ...d, activities: d.activities.filter((a) => a.session_id) };
+}
+
+export function mockMe(): MeResponse {
+  return {
+    user: { id: MOCK_USER_ID, display_name: "Wei Wu", email: "wei@example.com" },
+    strava: { athlete_id: "12345678", scope: "read,activity:read_all", expires_at: new Date(Date.now() + 3600_000).toISOString() },
+    strava_connect_url: `https://example.invalid/strava/oauth/start?user=${MOCK_USER_ID}`,
+  };
 }
 
 export function mockActivities(status?: MatchStatus): ActivitiesResponse {

@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useRouteLoaderData } from "react-router";
 import type { clientLoader } from "../routes/_app";
-import type { ApiUser } from "./auth";
+import type { SessionUser } from "./auth";
 import { todayJst } from "./date";
 import { buildPlanView, type PlanView } from "./plan";
 
@@ -13,7 +13,7 @@ export function usePlan(): PlanView | null {
   return useMemo(() => (data ? buildPlanView(data, today) : null), [data, today]);
 }
 
-export function useUser(): ApiUser | null {
+export function useUser(): SessionUser | null {
   return useRouteLoaderData<typeof clientLoader>("routes/_app")?.user ?? null;
 }
 

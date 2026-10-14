@@ -2,7 +2,7 @@ import { Outlet, redirect } from "react-router";
 import type { Route } from "./+types/_app";
 import { TabBar } from "../components/ui";
 import { ApiError, getPlan } from "../lib/api";
-import { AuthError, completeLogin, getUser, hasSession, logout, type ApiUser } from "../lib/auth";
+import { AuthError, completeLogin, getUser, hasSession, logout, type SessionUser } from "../lib/auth";
 import type { PlanResponse } from "../types/api";
 
 // Layout for the three tabs. Finishes the Cognito callback (?code=&state= on "/"),
@@ -17,7 +17,7 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
     if (e instanceof AuthError) loginError = e.message;
     else throw e;
   }
-  if (loginError) return { data: null as PlanResponse | null, user: null as ApiUser | null, error: loginError };
+  if (loginError) return { data: null as PlanResponse | null, user: null as SessionUser | null, error: loginError };
   if (!hasSession()) throw redirect("/login");
 
   const user = getUser();

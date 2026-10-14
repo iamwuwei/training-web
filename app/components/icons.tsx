@@ -14,6 +14,9 @@ export const CalendarIcon = (p: SVGProps<SVGSVGElement>) => (
 export const BarsIcon = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><path d="M4 20.5h18M7 17v-6M13 17V6M19 17v-4" /></svg>
 );
+export const UserIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><circle cx="13" cy="9" r="4.5" /><path d="M4.5 22c.8-4.2 4.3-6.5 8.5-6.5s7.7 2.3 8.5 6.5" /></svg>
+);
 export const BackIcon = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base({ width: 22, height: 22, viewBox: "0 0 22 22", strokeWidth: 2, ...p })}><path d="M13.5 5l-6 6 6 6" /></svg>
 );

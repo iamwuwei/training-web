@@ -2,13 +2,14 @@ import type {
   ActivitiesResponse,
   ErrorResponse,
   MatchStatus,
+  MeResponse,
   PlanResponse,
   PutReviewRequest,
   PutReviewResponse,
 } from "../types/api";
 import { clearSession, getIdToken } from "./auth";
 import { config, useMock } from "./config";
-import { mockActivities, mockPlan } from "../mock/mock";
+import { mockActivities, mockMe, mockPlan } from "../mock/mock";
 
 /** 401: API Gateway rejected the token. 403: token fine, but this account is not in the users table. */
 export class ApiError extends Error {
@@ -37,6 +38,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     throw new ApiError(res.status, message);
   }
   return (await res.json()) as T;
+}
+
+export function getMe(): Promise<MeResponse> {
+  if (useMock) return Promise.resolve(mockMe());
+  return request<MeResponse>("/me");
 }
 
 export function getPlan(): Promise<PlanResponse> {

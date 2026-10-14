@@ -4,9 +4,9 @@
 
 import { config, useMock } from "./config";
 
-/** Who is logged in, from the ID token claims. */
-export interface ApiUser {
-  id: string; // Cognito sub
+/** Who is logged in, from the ID token claims (users.id and email come from GET /me). */
+export interface SessionUser {
+  sub: string;
   display_name: string;
 }
 
@@ -18,7 +18,7 @@ const safe = <T>(fn: () => T, fallback: T): T => {
   try { return fn(); } catch { return fallback; }
 };
 
-export const MOCK_USER: ApiUser = { id: "mock", display_name: "Wei Wu" };
+export const MOCK_USER: SessionUser = { sub: "mock", display_name: "Wei Wu" };
 
 export class AuthError extends Error {}
 
@@ -68,12 +68,12 @@ export async function getIdToken(): Promise<string | null> {
   }
 }
 
-export function getUser(): ApiUser | null {
+export function getUser(): SessionUser | null {
   if (useMock) return MOCK_USER;
   const id = storedIdToken();
   if (!id) return null;
   const c = decodeClaims(id);
-  return { id: c.sub ?? "", display_name: c.name ?? c.email ?? "" };
+  return { sub: c.sub ?? "", display_name: c.name ?? c.email ?? "" };
 }
 
 export function clearSession(): void {

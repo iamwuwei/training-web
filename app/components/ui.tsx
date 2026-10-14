@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { NavLink } from "react-router";
 import type { ApiSession, Verdict } from "../types/api";
 import { labelStyle, verdictKind } from "../lib/labels";
-import { BarsIcon, CalendarIcon, HomeIcon } from "./icons";
+import { BarsIcon, CalendarIcon, HomeIcon, UserIcon } from "./icons";
 
 /** Type avatar: coloured disc with a 1–2 character code; rest/strength is a hollow grey ring. */
 export function Avatar({ session }: { session: Pick<ApiSession, "label" | "type"> | null | undefined }) {
@@ -46,6 +46,7 @@ export function TabBar() {
         <NavLink to="/" end aria-label="今天"><HomeIcon /></NavLink>
         <NavLink to="/plan" aria-label="課表"><CalendarIcon /></NavLink>
         <NavLink to="/history" aria-label="紀錄"><BarsIcon /></NavLink>
+        <NavLink to="/settings" aria-label="設定"><UserIcon /></NavLink>
       </nav>
     </div>
   );
