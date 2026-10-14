@@ -3,7 +3,7 @@
 // results become an activity + manual review on the same local date.
 
 import plans from "./plans.json";
-import type { ActivitiesResponse, ApiActivity, ApiSession, ApiWeek, MatchStatus, MeResponse, PlanResponse, Verdict } from "../types/api";
+import type { ActivitiesResponse, ApiActivity, ApiSession, ApiWeek, MatchStatus, MeResponse, PlanResponse, PutMemoRequest, PutMemoResponse, Verdict } from "../types/api";
 const MOCK_USER_ID = "7d1c3a0e-4f7b-4d2e-9c1a-5b8e2f6a1c01"; // ww in training-api seed
 
 interface SeedSession {
@@ -60,6 +60,7 @@ function build(): PlanResponse {
       user_id: MOCK_USER_ID,
       strava_activity_id: r.date.replace(/-/g, ""),
       session_id: session?.id ?? null,
+      sport_type: "Run",
       // 07:00 JST on that day
       start_time: new Date(`${r.date}T07:00:00+09:00`).toISOString(),
       distance_m: r.distance_m,
@@ -70,6 +71,9 @@ function build(): PlanResponse {
       avg_watts: r.avg_watts,
       kcal: r.kcal,
       description: null,
+      memo: r.memo,
+      rpe: null,
+      memo_updated_at: r.memo ? new Date(`${r.date}T12:00:00+09:00`).toISOString() : null,
       device_name: r.device,
       gear_name: r.shoes,
       weather: r.weather,
@@ -77,7 +81,7 @@ function build(): PlanResponse {
       match_status: session ? "auto" : "unplanned",
       review: {
         verdict: r.verdict,
-        comment: r.memo,
+        comment: null,
         reminders: r.reminders ?? [],
         rpe: null,
         source: "manual",
@@ -117,6 +121,16 @@ export function mockMe(): MeResponse {
     strava: { athlete_id: "12345678", scope: "read,activity:read_all", expires_at: new Date(Date.now() + 3600_000).toISOString() },
     strava_connect_url: `https://example.invalid/strava/oauth/start?user=${MOCK_USER_ID}`,
   };
+}
+
+/** Demo mode: update the in-memory activity so the editor round-trips. */
+export function mockPutMemo(activityId: string, body: PutMemoRequest): PutMemoResponse {
+  const a = data().activities.find((x) => x.id === activityId);
+  if (!a) throw new Error("not found");
+  a.memo = body.memo && body.memo.trim() ? body.memo.trim() : null;
+  a.rpe = body.rpe ?? null;
+  a.memo_updated_at = new Date().toISOString();
+  return { activity: { ...a } };
 }
 
 export function mockActivities(status?: MatchStatus): ActivitiesResponse {

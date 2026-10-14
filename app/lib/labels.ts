@@ -39,8 +39,31 @@ const BY_TYPE: Record<SessionType, LabelStyle> = {
   rest: { kind: "rest", short: "休", name: "休息" },
 };
 
-export function labelStyle(session: Pick<ApiSession, "label" | "type"> | null | undefined): LabelStyle {
-  if (!session) return { kind: "rest", short: "跑", name: "未排課" };
+const SPORTS: Record<string, { short: string; name: string }> = {
+  Run: { short: "跑", name: "跑步" },
+  TrailRun: { short: "越", name: "越野跑" },
+  VirtualRun: { short: "跑", name: "跑步機" },
+  Walk: { short: "走", name: "走路" },
+  Hike: { short: "山", name: "健行" },
+  Ride: { short: "騎", name: "騎車" },
+  VirtualRide: { short: "騎", name: "騎車" },
+  Swim: { short: "泳", name: "游泳" },
+  WeightTraining: { short: "肌", name: "重訓" },
+  Workout: { short: "練", name: "訓練" },
+  Crossfit: { short: "練", name: "CrossFit" },
+  HighIntensityIntervalTraining: { short: "練", name: "HIIT" },
+  Yoga: { short: "瑜", name: "瑜珈" },
+};
+
+export function sportName(sport: string | null | undefined): string {
+  return (sport && SPORTS[sport]?.name) || "運動";
+}
+
+export function labelStyle(session: Pick<ApiSession, "label" | "type"> | null | undefined, sport?: string | null): LabelStyle {
+  if (!session) {
+    const sp = sport ? SPORTS[sport] : undefined;
+    return { kind: "rest", short: sp?.short ?? "動", name: sp?.name ?? "未排課" };
+  }
   return (session.label && BY_LABEL[session.label]) || BY_TYPE[session.type] || BY_TYPE.easy;
 }
 

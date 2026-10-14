@@ -1,12 +1,14 @@
-import { redirect, useNavigate } from "react-router";
+import { useEffect, useRef, useState } from "react";
+import { redirect, useNavigate, useRevalidator } from "react-router";
 import type { Route } from "./+types/_app.activities.$id";
 import { BackIcon } from "../components/icons";
+import { MemoEditor } from "../components/memo";
 import { Avatar, Reminders, TopBar } from "../components/ui";
 import { ApiError, getActivities } from "../lib/api";
 import { hasSession } from "../lib/auth";
 import { mdDow } from "../lib/date";
 import { duration, int, km, kmPlan, pace, paceRange } from "../lib/format";
-import { labelStyle, verdictKind } from "../lib/labels";
+import { labelStyle, sportName, verdictKind } from "../lib/labels";
 import { activityDate, hrOver, paceFast } from "../lib/plan";
 import type { ApiActivity, ApiSession } from "../types/api";
 import { usePlan } from "../lib/use-plan";
@@ -99,29 +101,46 @@ function Splits({ splits }: { splits: NonNullable<ApiActivity["splits"]> }) {
 export default function Report({ loaderData }: Route.ComponentProps) {
   const view = usePlan();
   const navigate = useNavigate();
-  const { activity: a, all } = loaderData;
+  const revalidator = useRevalidator();
+  const { all } = loaderData;
+  // A memo save shows immediately through `override`; once a revalidation brings the
+  // same memo_updated_at back from the server, the loader's copy (with the new review) wins.
+  const [override, setOverride] = useState<ApiActivity | null>(null);
+  const L = loaderData.activity;
+  const a = override && override.id === L.id && override.memo_updated_at !== L.memo_updated_at ? override : L;
+
+  // After a memo save, Claude re-reviews in the background: poll a few times for the new verdict.
+  const polls = useRef<number[]>([]);
+  useEffect(() => () => polls.current.forEach(clearTimeout), []);
+  function onMemoSaved(updated: ApiActivity) {
+    setOverride(updated);
+    if (updated.session_id && updated.review?.source !== "manual") {
+      polls.current.forEach(clearTimeout);
+      polls.current = [6000, 15000, 30000].map((ms) => window.setTimeout(() => void revalidator.revalidate(), ms));
+    }
+  }
+
   const sessions = view?.data.sessions ?? [];
   const s = sessions.find((x) => x.id === a.session_id) ?? null;
   const r = a.review;
   const vk = verdictKind(r?.verdict);
-  const memo = r?.comment ?? a.description;
   const target = s ? (s.target ?? paceRange(s.target_pace_min_sec_km, s.target_pace_max_sec_km)) : null;
-  const hrK = s?.target_hr_max != null ? `心拍 · 最高 ${int(a.max_hr)}` : "心拍";
+  const waitingReview = a.session_id && a.memo_updated_at && (!r || (r.source === "claude" && r.created_at < a.memo_updated_at));
 
   return (
     <>
       <TopBar title="報告" back={<button type="button" className="back" aria-label="返回" onClick={() => (window.history.length > 1 ? void navigate(-1) : void navigate("/history"))}><BackIcon /></button>} />
       <main>
         <article className="post" style={{ paddingTop: 18, paddingBottom: 16 }}>
-          <Avatar session={s} />
+          <Avatar session={s} sport={a.sport_type} />
           <div className="body">
             <div className="meta">
               <b>{mdDow(activityDate(a))}</b>
-              <span className="grey">{s ? `· 第 ${s.week_no} 週${s.phase ? ` · ${s.phase}` : ""}` : "· 未排課"}</span>
+              <span className="grey">{s ? `· 第 ${s.week_no} 週${s.phase ? ` · ${s.phase}` : ""}` : `· 未排課 · ${sportName(a.sport_type)}`}</span>
             </div>
-            <p className="title lg" style={{ fontSize: 18, fontWeight: 700 }}>{s?.content ?? `跑步 ${km(a.distance_m)} km`}</p>
+            <p className="title lg" style={{ fontSize: 18, fontWeight: 700 }}>{s?.content ?? `${sportName(a.sport_type)} ${km(a.distance_m)} km`}</p>
             {target && target !== "–" ? <p className="muted">目標 {target}</p> : null}
-            {memo ? <p className="text" style={{ marginTop: 12, lineHeight: 1.65 }}>{memo}</p> : null}
+            {!a.memo && a.description ? <p className="text" style={{ marginTop: 10, color: "var(--ink-2)" }}>{a.description}</p> : null}
           </div>
         </article>
 
@@ -129,17 +148,25 @@ export default function Report({ loaderData }: Route.ComponentProps) {
           <Stat v={km(a.distance_m)} k={s?.target_distance_m ? `km · 課表 ${kmPlan(s.target_distance_m)}` : "km"} />
           <Stat v={duration(a.moving_time_sec)} k="時間" />
           <Stat v={pace(a.avg_pace_sec_km)} k="配速 /km" over={paceFast(a, s)} />
-          <Stat v={int(a.avg_hr)} k={a.max_hr != null ? `心拍 · 最高 ${a.max_hr}` : hrK} over={hrOver(a, s)} />
+          <Stat v={int(a.avg_hr)} k={a.max_hr != null ? `心拍 · 最高 ${a.max_hr}` : "心拍"} over={hrOver(a, s)} />
           {a.avg_watts != null ? <Stat v={int(a.avg_watts)} k="功率 W" /> : null}
           {a.kcal != null ? <Stat v={int(a.kcal)} k="卡路里" /> : null}
         </section>
 
+        <MemoEditor key={a.id} activity={a} onSaved={onMemoSaved} />
+
         {r?.verdict ? (
           <section className={`verdict-block ${vk ?? ""}`}>
             <h2>{r.verdict}</h2>
+            {r.comment ? <p style={{ fontSize: 14, lineHeight: 1.6, color: "var(--ink-2)" }}>{r.comment}</p> : null}
             {r.reminders.length ? <Reminders items={r.reminders} /> : null}
-            <div className="src">{r.source === "claude" ? `自動判定${r.model ? ` · ${r.model}` : ""}` : "手動判定"}</div>
+            <div className="src">
+              {r.source === "claude" ? `教練判定 · 自動${r.model ? ` · ${r.model}` : ""}` : "教練判定 · 手動"}
+              {waitingReview ? " · 正在依你的心得重新評…" : ""}
+            </div>
           </section>
+        ) : waitingReview ? (
+          <section className="verdict-block"><div className="src">教練判定產生中，幾秒後更新…</div></section>
         ) : null}
 
         {a.splits?.length ? <Splits splits={a.splits} /> : null}

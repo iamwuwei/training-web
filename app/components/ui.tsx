@@ -5,8 +5,8 @@ import { labelStyle, verdictKind } from "../lib/labels";
 import { BarsIcon, CalendarIcon, HomeIcon, UserIcon } from "./icons";
 
 /** Type avatar: coloured disc with a 1–2 character code; rest/strength is a hollow grey ring. */
-export function Avatar({ session }: { session: Pick<ApiSession, "label" | "type"> | null | undefined }) {
-  const s = labelStyle(session);
+export function Avatar({ session, sport }: { session: Pick<ApiSession, "label" | "type"> | null | undefined; sport?: string | null }) {
+  const s = labelStyle(session, sport);
   const cjk = s.short.charCodeAt(0) > 127;
   return (
     <div className={`avatar ${s.kind}${cjk ? " cjk" : ""}`} aria-hidden="true">

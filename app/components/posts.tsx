@@ -4,6 +4,7 @@ import { mdDow } from "../lib/date";
 import { duration, km, kmPlan, paceRange, pace } from "../lib/format";
 import { activityDate, hrOver, paceFast } from "../lib/plan";
 import { Avatar, Reminders, VerdictTag } from "./ui";
+import { sportName } from "../lib/labels";
 
 /** A planned session that has not been run yet (today / upcoming). */
 export function PlanPost({ session, when, big, weekNo }: { session: ApiSession; when?: string; big?: boolean; weekNo?: boolean }) {
@@ -46,18 +47,18 @@ export function ActivityPost({ activity, session, showReminders, weekNo }: {
   activity: ApiActivity; session: ApiSession | null; showReminders?: boolean; weekNo?: boolean;
 }) {
   const r = activity.review;
-  const memo = r?.comment ?? activity.description;
+  const memo = activity.memo ?? activity.description;
   return (
     <Link to={`/activities/${activity.id}`} className="post link">
-      <Avatar session={session} />
+      <Avatar session={session} sport={activity.sport_type} />
       <div className="body">
         <div className="meta">
           <b>{mdDow(activityDate(activity))}</b>
           <span className="grey">· {session ? (weekNo !== false && session.week_no != null ? `第 ${session.week_no} 週` : "") : "未排課"}</span>
           <VerdictTag verdict={r?.verdict} />
         </div>
-        <p className="title">{session?.content ?? `跑步 ${km(activity.distance_m)} km`}</p>
-        {memo ? <p className="text clamp">{memo}</p> : null}
+        <p className="title">{session?.content ?? `${sportName(activity.sport_type)} ${km(activity.distance_m)} km`}</p>
+        {memo ? <p className="text clamp">{activity.rpe ? <b style={{ fontWeight: 600, color: "var(--ink)" }}>RPE {activity.rpe} · </b> : null}{memo}</p> : null}
         {showReminders && r?.reminders.length ? <Reminders items={r.reminders} /> : null}
         <div className="stats">
           <span><b className="num">{km(activity.distance_m)}</b> km</span>

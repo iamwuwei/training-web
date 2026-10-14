@@ -5,12 +5,16 @@ import type {
   MatchStatus,
   MeResponse,
   PlanResponse,
+  PutMemoRequest,
+  PutMemoResponse,
   PutReviewRequest,
   PutReviewResponse,
+  PutSessionRequest,
+  PutSessionResponse,
 } from "../types/api";
 import { clearSession, getIdToken } from "./auth";
 import { config, useMock } from "./config";
-import { mockActivities, mockMe, mockPlan } from "../mock/mock";
+import { mockActivities, mockMe, mockPlan, mockPutMemo } from "../mock/mock";
 
 /** 401: API Gateway rejected the token. 403: token fine, but this account is not in the users table. */
 export class ApiError extends Error {
@@ -59,6 +63,17 @@ export function getPlan(): Promise<PlanResponse> {
 export function getActivities(status?: MatchStatus): Promise<ActivitiesResponse> {
   if (useMock) return Promise.resolve(mockActivities(status));
   return request<ActivitiesResponse>(status ? `/activities?status=${status}` : "/activities");
+}
+
+/** The athlete's own note + RPE. A Claude-written review is regenerated afterwards (a few seconds). */
+export function putMemo(activityId: string, body: PutMemoRequest): Promise<PutMemoResponse> {
+  if (useMock) return Promise.resolve(mockPutMemo(activityId, body));
+  return request<PutMemoResponse>(`/activities/${activityId}/memo`, { method: "PUT", body: JSON.stringify(body) });
+}
+
+export function putSession(activityId: string, body: PutSessionRequest): Promise<PutSessionResponse> {
+  if (useMock) return Promise.reject(new ApiError(501, "mock mode: read-only"));
+  return request<PutSessionResponse>(`/activities/${activityId}/session`, { method: "PUT", body: JSON.stringify(body) });
 }
 
 export function putReview(activityId: string, body: PutReviewRequest): Promise<PutReviewResponse> {

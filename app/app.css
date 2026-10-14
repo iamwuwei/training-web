@@ -183,6 +183,25 @@ ul { padding: 0; list-style: none; }
 
 .gear { padding: 14px 0; font-size: 12px; color: var(--ink-3); line-height: 1.7; }
 
+/* ---- memo editor (報告頁 · 我的心得) ------------------------------------------ */
+.memo { padding: 16px 0; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
+.memo .head { display: flex; justify-content: space-between; align-items: baseline; }
+.memo .head h2 { margin: 0; font-size: 12px; font-weight: 600; color: var(--ink-3); letter-spacing: 0.08em; }
+.memo .head button { font-size: 13px; color: var(--ink-2); }
+.memo .body { font-size: 15px; line-height: 1.65; white-space: pre-wrap; }
+.memo .body.placeholder { color: var(--ink-3); }
+.memo .rpe-k { font-size: 12px; color: var(--ink-3); }
+.rpe { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 4px; }
+.rpe button { height: 36px; border-radius: 8px; border: 1px solid var(--chip-line); font-family: var(--font-num); font-size: 15px; font-weight: 600; color: var(--ink-2); background: var(--bg); }
+.rpe button[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+.rpe-scale { display: flex; justify-content: space-between; font-size: 11px; color: var(--ink-3); }
+.memo textarea { width: 100%; min-height: 110px; padding: 10px 12px; border: 1px solid var(--chip-line); border-radius: 10px; font: inherit; font-size: 15px; line-height: 1.55; color: var(--ink); background: var(--bg); resize: vertical; }
+.memo textarea:focus { outline: none; border-color: var(--ink-2); }
+.memo .actions { display: flex; gap: 8px; }
+.memo .actions .btn { margin-top: 0; flex: 1 1 auto; height: 44px; }
+.memo .hint { font-size: 12px; color: var(--ink-3); }
+.memo .rpe-chip { display: inline-block; font-family: var(--font-num); font-weight: 700; font-size: 15px; color: var(--ink); margin-right: 6px; }
+
 /* ---- settings ------------------------------------------------------------------ */
 .setting { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--line); font-size: 15px; }
 .setting .k { color: var(--ink-2); flex: none; }

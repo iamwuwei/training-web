@@ -36,7 +36,15 @@ export default function Today() {
         {!todayDay ? (
           <p className="empty">{today > data.plan.race_date ? "課表已結束，辛苦了。" : "課表還沒開始。"}</p>
         ) : todayDay.activity ? (
-          <ActivityPost activity={todayDay.activity} session={todayDay.session} showReminders />
+          <>
+            <ActivityPost activity={todayDay.activity} session={todayDay.session} showReminders />
+            {!todayDay.activity.memo && todayDay.activity.rpe == null ? (
+              <Link to={`/activities/${todayDay.activity.id}`} className="post link" style={{ display: "flex", alignItems: "center", gap: 10, color: "var(--ink-2)", fontSize: 14 }}>
+                <span style={{ width: 36, textAlign: "center", fontSize: 18 }}>✎</span>
+                <span>跑完了，寫下今天的感受與心得 →</span>
+              </Link>
+            ) : null}
+          </>
         ) : todayDay.session.type === "rest" ? (
           <RestPost session={todayDay.session} />
         ) : (
