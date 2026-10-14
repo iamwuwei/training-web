@@ -2,6 +2,6 @@
 // `npx wrangler pages deploy dist` work without extra flags.
 {
   "name": "training-web",
-  "pages_build_output_dir": "dist",
+  "pages_build_output_dir": "build/client",
   "compatibility_date": "2026-10-01"
 }

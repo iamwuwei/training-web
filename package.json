@@ -4,20 +4,24 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
+    "dev": "react-router dev",
+    "build": "react-router build",
+    "typecheck": "react-router typegen && tsc",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview --outDir build/client"
   },
   "dependencies": {
+    "isbot": "^5.2.2",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "react-router": "^8.4.0"
   },
   "devDependencies": {
+    "@react-router/dev": "^8.4.0",
+    "@react-router/fs-routes": "^8.4.0",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
-    "@vitejs/plugin-react": "^6.1.1",
     "oxlint": "^1.81.0",
     "typescript": "~6.0.2",
     "vite": "^8.3.0"
