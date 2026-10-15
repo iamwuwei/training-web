@@ -3,7 +3,8 @@
 // results become an activity + manual review on the same local date.
 
 import plans from "./plans.json";
-import type { ActivitiesResponse, ApiActivity, ApiSession, ApiWeek, MatchStatus, MeResponse, PlanResponse, PutMemoRequest, PutMemoResponse, Verdict } from "../types/api";
+import type { ActivitiesResponse, ApiActivity, ApiSession, ApiWeek, MatchStatus, MeResponse, PlanResponse, PutMemoRequest, PutMemoResponse, PutSessionRequest, PutSessionResponse, Verdict } from "../types/api";
+import { todayJst } from "../lib/date";
 const MOCK_USER_ID = "7d1c3a0e-4f7b-4d2e-9c1a-5b8e2f6a1c01"; // ww in training-api seed
 
 interface SeedSession {
@@ -91,6 +92,14 @@ function build(): PlanResponse {
     };
   });
 
+  // Demo inbox: two things Strava "just synced" today, waiting for the athlete to pick a session.
+  const today = todayJst();
+  const base = { user_id: MOCK_USER_ID, description: null, memo: null, rpe: null, memo_updated_at: null, gear_name: null, weather: null, splits: null, session_id: null, match_status: "unplanned" as const, review: null };
+  const unassigned: ApiActivity[] = [
+    { ...base, id: "u-run", strava_activity_id: "900001", sport_type: "Run", start_time: new Date(`${today}T06:40:00+09:00`).toISOString(), distance_m: 6020, moving_time_sec: 2676, avg_pace_sec_km: 445, avg_hr: 141, max_hr: 149, avg_watts: null, kcal: 392, device_name: "Apple Watch Series 11" },
+    { ...base, id: "u-hyrox", strava_activity_id: "900002", sport_type: "WeightTraining", start_time: new Date(`${today}T18:30:00+09:00`).toISOString(), distance_m: 0, moving_time_sec: 3480, avg_pace_sec_km: null, avg_hr: 152, max_hr: 171, avg_watts: null, kcal: 620, device_name: "Apple Watch Series 11" },
+  ];
+
   return {
     plan: {
       id: PLAN_ID,
@@ -104,6 +113,7 @@ function build(): PlanResponse {
     weeks,
     sessions,
     activities,
+    unassigned,
   };
 }
 
@@ -112,7 +122,7 @@ const data = () => (cache ??= build());
 
 export function mockPlan(): PlanResponse {
   const d = data();
-  return { ...d, activities: d.activities.filter((a) => a.session_id) };
+  return { ...d, activities: d.activities.filter((a) => a.session_id), unassigned: d.unassigned.filter((a) => !a.session_id) };
 }
 
 export function mockMe(): MeResponse {
@@ -125,7 +135,7 @@ export function mockMe(): MeResponse {
 
 /** Demo mode: update the in-memory activity so the editor round-trips. */
 export function mockPutMemo(activityId: string, body: PutMemoRequest): PutMemoResponse {
-  const a = data().activities.find((x) => x.id === activityId);
+  const a = findActivity(activityId);
   if (!a) throw new Error("not found");
   a.memo = body.memo && body.memo.trim() ? body.memo.trim() : null;
   a.rpe = body.rpe ?? null;
@@ -133,7 +143,41 @@ export function mockPutMemo(activityId: string, body: PutMemoRequest): PutMemoRe
   return { activity: { ...a } };
 }
 
+const findActivity = (id: string) => [...data().activities, ...data().unassigned].find((x) => x.id === id);
+
+/** Demo mode: assign an unassigned activity to a session; the "coach" answers after ~4 s. */
+export function mockPutSession(activityId: string, body: PutSessionRequest): PutSessionResponse {
+  const d = data();
+  const a = findActivity(activityId);
+  if (!a) throw new Error("not found");
+  if (body.session_id) {
+    const holder = d.activities.find((x) => x.session_id === body.session_id && x.id !== a.id);
+    if (holder) { holder.session_id = null; holder.match_status = "unplanned"; holder.review = null; }
+    a.session_id = body.session_id;
+    a.match_status = "confirmed";
+    a.review = null;
+    if (body.memo !== undefined || body.rpe !== undefined) {
+      a.memo = body.memo && body.memo.trim() ? body.memo.trim() : null;
+      a.rpe = body.rpe ?? null;
+      a.memo_updated_at = new Date().toISOString();
+    }
+    setTimeout(() => {
+      a.review = { verdict: "達成", comment: "（示範）數據落在課表目標內，感受也一致。", reminders: [], source: "claude", model: "claude-haiku-4-5", created_at: new Date().toISOString() };
+    }, 4000);
+  } else {
+    a.session_id = null;
+    a.match_status = body.status ?? "unplanned";
+    a.review = null;
+  }
+  d.activities = d.activities.filter((x) => x.session_id || x.id !== a.id);
+  d.unassigned = d.unassigned.filter((x) => x.id !== a.id);
+  if (a.session_id) d.activities.push(a);
+  else d.unassigned.push(a);
+  d.activities.sort((x, y) => x.start_time.localeCompare(y.start_time));
+  return { activity: { ...a } };
+}
+
 export function mockActivities(status?: MatchStatus): ActivitiesResponse {
-  const all = [...data().activities].sort((a, b) => b.start_time.localeCompare(a.start_time));
+  const all = [...data().activities, ...data().unassigned].sort((a, b) => b.start_time.localeCompare(a.start_time));
   return { activities: status ? all.filter((a) => a.match_status === status) : all };
 }

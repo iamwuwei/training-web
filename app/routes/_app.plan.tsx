@@ -1,10 +1,11 @@
 import { Fragment, useState } from "react";
 import type { Route } from "./+types/_app.plan";
+import { Link } from "react-router";
 import { ActivityPost, PlanPost, RestPost } from "../components/posts";
 import { Bar, TopBar } from "../components/ui";
 import { md } from "../lib/date";
 import { km, kmPlan } from "../lib/format";
-import type { Week } from "../lib/plan";
+import { isLoggable, isLoggableNow, type Week } from "../lib/plan";
 import { NoPlan, usePlan } from "../lib/use-plan";
 
 export function meta(): Route.MetaDescriptors {
@@ -44,7 +45,7 @@ function WeekBars({ weeks }: { weeks: Week[] }) {
   );
 }
 
-function WeekSection({ week, expanded, onToggle }: { week: Week; expanded: boolean; onToggle: () => void }) {
+function WeekSection({ week, expanded, onToggle, today }: { week: Week; expanded: boolean; onToggle: () => void; today: string }) {
   const rows = expanded ? week.days : week.days.filter((d) => d.session.type !== "rest" || d.activity);
   return (
     <Fragment>
@@ -64,20 +65,23 @@ function WeekSection({ week, expanded, onToggle }: { week: Week; expanded: boole
       {rows.map((d) =>
         d.activity ? (
           <ActivityPost key={d.session.id} activity={d.activity} session={d.session} weekNo={false} />
-        ) : d.session.type === "rest" ? (
+        ) : !isLoggable(d.session) ? (
           <RestPost key={d.session.id} session={d.session} />
         ) : (
-          <PlanRow key={d.session.id} isToday={d.status === "today"} skipped={d.status === "skipped"} session={d.session} />
+          <PlanRow key={d.session.id} today={today} isToday={d.status === "today"} skipped={d.status === "skipped"} session={d.session} />
         ),
       )}
     </Fragment>
   );
 }
 
-function PlanRow({ session, isToday, skipped }: { session: Week["days"][number]["session"]; isToday: boolean; skipped: boolean }) {
+function PlanRow({ session, isToday, skipped, today }: { session: Week["days"][number]["session"]; isToday: boolean; skipped: boolean; today: string }) {
+  const post = <PlanPost session={session} when={isToday ? "今天" : skipped ? "跳過" : undefined} />;
+  // Today, past and the next two days can be logged (pick the Strava activity + write the feeling).
+  const loggable = isLoggableNow(session, today);
   return (
     <div style={skipped ? { opacity: 0.55 } : undefined}>
-      <PlanPost session={session} when={isToday ? "今天" : skipped ? "跳過" : undefined} />
+      {loggable ? <Link to={`/sessions/${session.id}`} style={{ display: "block", color: "inherit" }}>{post}</Link> : post}
     </div>
   );
 }
@@ -110,7 +114,7 @@ export default function Plan() {
       <TopBar title="課表" aside={currentWeek ? `第 ${currentWeek.week_no} 週 / ${weeks.length} 週 · ${currentWeek.phase?.split("｜")[0] ?? ""}` : `${weeks.length} 週`} />
       <main>
         <WeekBars weeks={weeks} />
-        {ordered.map((w) => <WeekSection key={w.week_no} week={w} expanded={isOpen(w)} onToggle={() => toggle(w)} />)}
+        {ordered.map((w) => <WeekSection key={w.week_no} week={w} expanded={isOpen(w)} onToggle={() => toggle(w)} today={view.today} />)}
         <p className="note">非本週的休息日已折疊，點週標題展開</p>
       </main>
     </>

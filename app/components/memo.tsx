@@ -5,6 +5,28 @@ import { ApiError, putMemo } from "../lib/api";
 const RPE_WORDS: Record<number, string> = { 1: "很輕鬆", 3: "輕鬆", 5: "適中", 7: "吃力", 9: "很吃力", 10: "極限" };
 export const rpeWord = (n: number | null | undefined) => (n ? RPE_WORDS[n] ?? RPE_WORDS[n - 1] ?? "" : "");
 
+/** RPE 1–10 buttons + the free-text box. Controlled; the parent owns state and saving. */
+export function MemoFields({ memo, rpe, onMemo, onRpe }: { memo: string; rpe: number | null; onMemo: (v: string) => void; onRpe: (v: number | null) => void }) {
+  return (
+    <>
+      <div className="rpe-k">今天跑起來的感受（RPE）{rpe ? ` · ${rpe} ${rpeWord(rpe)}` : ""}</div>
+      <div className="rpe" role="group" aria-label="RPE 1 到 10">
+        {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+          <button key={n} type="button" aria-pressed={rpe === n} onClick={() => onRpe(rpe === n ? null : n)}>{n}</button>
+        ))}
+      </div>
+      <div className="rpe-scale"><span>很輕鬆</span><span>適中</span><span>極限</span></div>
+      <textarea
+        value={memo}
+        onChange={(e) => onMemo(e.target.value)}
+        maxLength={4000}
+        placeholder="身體狀況、哪一段最累、配速感覺、天氣路線、下次想試什麼…"
+        aria-label="心得"
+      />
+    </>
+  );
+}
+
 /**
  * 我的心得：the athlete's own note + RPE on one activity. Saves through PUT …/memo and
  * hands the updated activity back; the parent decides whether to poll for a new review.
@@ -60,20 +82,7 @@ export function MemoEditor({ activity, onSaved }: { activity: ApiActivity; onSav
         <h2>我的心得</h2>
         {activity.memo || activity.rpe != null ? <button type="button" onClick={() => { setMemo(activity.memo ?? ""); setRpe(activity.rpe); setEditing(false); }}>取消</button> : null}
       </div>
-      <div className="rpe-k">今天跑起來的感受（RPE）{rpe ? ` · ${rpe} ${rpeWord(rpe)}` : ""}</div>
-      <div className="rpe" role="group" aria-label="RPE 1 到 10">
-        {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-          <button key={n} type="button" aria-pressed={rpe === n} onClick={() => setRpe(rpe === n ? null : n)}>{n}</button>
-        ))}
-      </div>
-      <div className="rpe-scale"><span>很輕鬆</span><span>適中</span><span>極限</span></div>
-      <textarea
-        value={memo}
-        onChange={(e) => setMemo(e.target.value)}
-        maxLength={4000}
-        placeholder="身體狀況、哪一段最累、配速感覺、天氣路線、下次想試什麼…"
-        aria-label="心得"
-      />
+      <MemoFields memo={memo} rpe={rpe} onMemo={setMemo} onRpe={setRpe} />
       <div className="actions">
         <button type="button" className="btn primary" onClick={() => void save()} disabled={busy || (!memo.trim() && rpe == null)}>
           {busy ? "儲存中…" : "儲存"}

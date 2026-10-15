@@ -50,3 +50,10 @@ export function relativeDay(iso: string, today: string): string {
   if (n === -1) return "昨天";
   return n > 0 ? `${n} 天後` : `${-n} 天前`;
 }
+
+const hm = new Intl.DateTimeFormat("en-GB", { timeZone: JST, hour: "2-digit", minute: "2-digit", hour12: false });
+
+/** '06:40' of an instant, in JST. */
+export function timeJst(d: Date | string): string {
+  return hm.format(typeof d === "string" ? new Date(d) : d);
+}

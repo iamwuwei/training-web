@@ -14,7 +14,7 @@ import type {
 } from "../types/api";
 import { clearSession, getIdToken } from "./auth";
 import { config, useMock } from "./config";
-import { mockActivities, mockMe, mockPlan, mockPutMemo } from "../mock/mock";
+import { mockActivities, mockMe, mockPlan, mockPutMemo, mockPutSession } from "../mock/mock";
 
 /** 401: API Gateway rejected the token. 403: token fine, but this account is not in the users table. */
 export class ApiError extends Error {
@@ -71,8 +71,9 @@ export function putMemo(activityId: string, body: PutMemoRequest): Promise<PutMe
   return request<PutMemoResponse>(`/activities/${activityId}/memo`, { method: "PUT", body: JSON.stringify(body) });
 }
 
+/** Which planned session an activity fulfils (+ memo/RPE in the same call). The coach review is generated afterwards. */
 export function putSession(activityId: string, body: PutSessionRequest): Promise<PutSessionResponse> {
-  if (useMock) return Promise.reject(new ApiError(501, "mock mode: read-only"));
+  if (useMock) return Promise.resolve(mockPutSession(activityId, body));
   return request<PutSessionResponse>(`/activities/${activityId}/session`, { method: "PUT", body: JSON.stringify(body) });
 }
 

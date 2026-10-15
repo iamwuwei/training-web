@@ -1,11 +1,12 @@
-import { Link } from "react-router";
+import { Link, useRevalidator } from "react-router";
 import type { Route } from "./+types/_app._index";
 import { MountainIcon } from "../components/icons";
+import { StravaRow } from "../components/pick";
 import { ActivityPost, PlanPost, RestPost } from "../components/posts";
 import { Bar, SectionH, TopBar } from "../components/ui";
 import { md, mdDow, relativeDay } from "../lib/date";
 import { km, kmPlan } from "../lib/format";
-import { sessionOf } from "../lib/plan";
+import { isLoggable, isLoggableNow, sessionOf } from "../lib/plan";
 import { NoPlan, usePlan } from "../lib/use-plan";
 
 export function meta(): Route.MetaDescriptors {
@@ -14,8 +15,9 @@ export function meta(): Route.MetaDescriptors {
 
 export default function Today() {
   const view = usePlan();
+  const revalidator = useRevalidator();
   if (!view) return <NoPlan title="今天" />;
-  const { totals, todayDay, upcoming, latest, currentWeek, daysToRace, data, today } = view;
+  const { totals, todayDay, todayActivities, upcoming, latest, currentWeek, daysToRace, data, today } = view;
 
   return (
     <>
@@ -32,28 +34,56 @@ export default function Today() {
           <Bar value={totals.actual_m} max={totals.plan_to_date_m} tone={totals.pct >= 100 ? "good" : undefined} />
         </section>
 
-        <SectionH>今天 · {mdDow(today)}</SectionH>
+        <SectionH
+          action={<button type="button" onClick={() => void revalidator.revalidate()} disabled={revalidator.state === "loading"}>{revalidator.state === "loading" ? "更新中…" : "重新整理"}</button>}
+        >
+          今天 · {mdDow(today)} · 來自 Strava
+        </SectionH>
+        {todayActivities.length ? todayActivities.map((a) => (
+          <Link key={a.id} to={`/activities/${a.id}`} style={{ display: "block", color: "inherit" }}>
+            <StravaRow activity={a} sessionName={a.session_id ? "已記錄" : null} />
+          </Link>
+        )) : <p className="empty">今天還沒有同步到活動。跑完後按「重新整理」。</p>}
+
+        <SectionH>今天的課表</SectionH>
         {!todayDay ? (
           <p className="empty">{today > data.plan.race_date ? "課表已結束，辛苦了。" : "課表還沒開始。"}</p>
         ) : todayDay.activity ? (
           <>
             <ActivityPost activity={todayDay.activity} session={todayDay.session} showReminders />
             {!todayDay.activity.memo && todayDay.activity.rpe == null ? (
-              <Link to={`/activities/${todayDay.activity.id}`} className="post link" style={{ display: "flex", alignItems: "center", gap: 10, color: "var(--ink-2)", fontSize: 14 }}>
-                <span style={{ width: 36, textAlign: "center", fontSize: 18 }}>✎</span>
-                <span>跑完了，寫下今天的感受與心得 →</span>
+              <Link to={`/sessions/${todayDay.session.id}`} className="cta-row">
+                <span>✎</span><span>寫下今天的感受與心得</span><span className="arrow">→</span>
               </Link>
             ) : null}
           </>
-        ) : todayDay.session.type === "rest" ? (
-          <RestPost session={todayDay.session} />
+        ) : !isLoggable(todayDay.session) ? (
+          <>
+            <RestPost session={todayDay.session} />
+            {todayActivities.some((a) => !a.session_id) ? (
+              <p className="note" style={{ textAlign: "left" }}>今天排的是休息。要把上面的活動算進某一堂課，點下面的課表。</p>
+            ) : null}
+          </>
         ) : (
-          <PlanPost session={todayDay.session} big weekNo />
+          <>
+            <PlanPost session={todayDay.session} big weekNo />
+            <Link to={`/sessions/${todayDay.session.id}`} className="cta-row">
+              <span>✎</span>
+              <span>{todayActivities.some((a) => !a.session_id) ? "記錄今天的訓練：選活動、寫感受" : "記錄今天的訓練"}</span>
+              <span className="arrow">→</span>
+            </Link>
+          </>
         )}
 
         <SectionH>下次練習</SectionH>
         {upcoming.length ? upcoming.map((d) => (
-          <PlanPost key={d.session.id} session={d.session} when={relativeDay(d.session.scheduled_date, today)} />
+          isLoggableNow(d.session, today) ? (
+            <Link key={d.session.id} to={`/sessions/${d.session.id}`} style={{ display: "block", color: "inherit" }}>
+              <PlanPost session={d.session} when={relativeDay(d.session.scheduled_date, today)} />
+            </Link>
+          ) : (
+            <PlanPost key={d.session.id} session={d.session} when={relativeDay(d.session.scheduled_date, today)} />
+          )
         )) : <p className="empty">沒有後續課表</p>}
 
         <SectionH>最新報告</SectionH>

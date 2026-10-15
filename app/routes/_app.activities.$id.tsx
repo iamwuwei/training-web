@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { redirect, useNavigate, useRevalidator } from "react-router";
+import { useEffect, useState } from "react";
+import { Link, redirect, useNavigate, useRevalidator } from "react-router";
 import type { Route } from "./+types/_app.activities.$id";
 import { BackIcon } from "../components/icons";
 import { MemoEditor } from "../components/memo";
@@ -109,23 +109,24 @@ export default function Report({ loaderData }: Route.ComponentProps) {
   const L = loaderData.activity;
   const a = override && override.id === L.id && override.memo_updated_at !== L.memo_updated_at ? override : L;
 
-  // After a memo save, Claude re-reviews in the background: poll a few times for the new verdict.
-  const polls = useRef<number[]>([]);
-  useEffect(() => () => polls.current.forEach(clearTimeout), []);
-  function onMemoSaved(updated: ApiActivity) {
-    setOverride(updated);
-    if (updated.session_id && updated.review?.source !== "manual") {
-      polls.current.forEach(clearTimeout);
-      polls.current = [6000, 15000, 30000].map((ms) => window.setTimeout(() => void revalidator.revalidate(), ms));
-    }
-  }
-
   const sessions = view?.data.sessions ?? [];
   const s = sessions.find((x) => x.id === a.session_id) ?? null;
   const r = a.review;
   const vk = verdictKind(r?.verdict);
   const target = s ? (s.target ?? paceRange(s.target_pace_min_sec_km, s.target_pace_max_sec_km)) : null;
-  const waitingReview = a.session_id && a.memo_updated_at && (!r || (r.source === "claude" && r.created_at < a.memo_updated_at));
+  const waitingReview = !!(a.session_id && a.memo_updated_at && (!r || (r.source === "claude" && r.created_at < a.memo_updated_at)));
+
+  // Claude's review arrives a few seconds after the memo / session is sent: check back every 5 s, up to 40 s.
+  const { revalidate } = revalidator;
+  useEffect(() => {
+    if (!waitingReview) return;
+    let n = 0;
+    const t = window.setInterval(() => {
+      void revalidate();
+      if (++n >= 8) window.clearInterval(t);
+    }, 5000);
+    return () => window.clearInterval(t);
+  }, [waitingReview, revalidate]);
 
   return (
     <>
@@ -153,7 +154,13 @@ export default function Report({ loaderData }: Route.ComponentProps) {
           {a.kcal != null ? <Stat v={int(a.kcal)} k="卡路里" /> : null}
         </section>
 
-        <MemoEditor key={a.id} activity={a} onSaved={onMemoSaved} />
+        {s ? (
+          <p className="note" style={{ margin: 0, padding: "10px 0", textAlign: "left" }}>
+            對應課表 {s.scheduled_date.slice(5).replace("-", "/")} ·{" "}
+            <Link to={`/sessions/${s.id}`} style={{ textDecoration: "underline" }}>換一個活動</Link>
+          </p>
+        ) : null}
+        <MemoEditor key={a.id} activity={a} onSaved={setOverride} />
 
         {r?.verdict ? (
           <section className={`verdict-block ${vk ?? ""}`}>

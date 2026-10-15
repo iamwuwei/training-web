@@ -2,7 +2,7 @@
 // "跳過" is not an API state: a past, non-rest session with no matched activity.
 
 import type { ApiActivity, ApiSession, ApiWeek, PlanResponse, Verdict } from "../types/api";
-import { toJstDate } from "./date";
+import { dayDiff, toJstDate } from "./date";
 
 export type DayStatus = "done" | "today" | "upcoming" | "skipped" | "rest";
 
@@ -36,6 +36,10 @@ export interface PlanView {
   todayDay: Day | null;
   /** Next runs after today, rest days skipped. */
   upcoming: Day[];
+  /** Strava activities (any sport) not yet assigned to a session, newest first. */
+  unassigned: ApiActivity[];
+  /** Everything Strava synced for today (assigned or not), oldest first. */
+  todayActivities: ApiActivity[];
   /** Newest completed activity. */
   latest: ApiActivity | null;
   totals: {
@@ -107,6 +111,10 @@ export function buildPlanView(data: PlanResponse, today: string): PlanView {
     weeks,
     byDate,
     activityById,
+    unassigned: data.unassigned ?? [],
+    todayActivities: [...data.activities, ...(data.unassigned ?? [])]
+      .filter((a) => toJstDate(a.start_time) === today)
+      .sort((a, b) => a.start_time.localeCompare(b.start_time)),
     todayDay: byDate.get(today) ?? null,
     upcoming: days.filter((d) => d.session.scheduled_date > today && d.session.type !== "rest").slice(0, 3),
     latest: sortedActs[0] ?? null,
@@ -135,4 +143,44 @@ export function hrOver(a: ApiActivity, s: ApiSession | null): boolean {
 /** Is the pace faster than the fastest allowed? */
 export function paceFast(a: ApiActivity, s: ApiSession | null): boolean {
   return a.avg_pace_sec_km != null && s?.target_pace_min_sec_km != null && a.avg_pace_sec_km < s.target_pace_min_sec_km;
+}
+
+const RUN_SPORTS = new Set(["Run", "TrailRun", "VirtualRun"]);
+export const isRunSport = (sport: string | null | undefined) => !!sport && RUN_SPORTS.has(sport);
+
+/** A session the athlete can log: any training day, plus 肌力 days (which the plan types as rest). */
+export function isLoggable(s: ApiSession): boolean {
+  return s.type !== "rest" || s.label === "肌力";
+}
+
+/** Can this session be logged today? Today, past ones, and the next two days (ran a day early). */
+export function isLoggableNow(s: ApiSession, today: string): boolean {
+  return isLoggable(s) && dayDiff(today, s.scheduled_date) <= 2;
+}
+
+/**
+ * Activities the athlete can pick for a session: the unassigned ones within ±2 days
+ * (same day first, then closest to the target distance), plus whatever already holds it.
+ */
+export function candidatesFor(view: PlanView, session: ApiSession): ApiActivity[] {
+  const holder = view.byDate.get(session.scheduled_date)?.activity ?? null;
+  const near = view.unassigned.filter((a) => Math.abs(dayDiff(session.scheduled_date, activityDate(a))) <= 2);
+  const target = session.target_distance_m ?? 0;
+  const rank = (a: ApiActivity) => [
+    a.id === holder?.id ? 0 : 1,
+    activityDate(a) === session.scheduled_date ? 0 : 1,
+    target > 0 ? Math.abs(a.distance_m - target) : 0,
+  ];
+  return [...(holder ? [holder] : []), ...near].sort((a, b) => {
+    const ra = rank(a), rb = rank(b);
+    return ra[0] - rb[0] || ra[1] - rb[1] || ra[2] - rb[2] || a.start_time.localeCompare(b.start_time);
+  });
+}
+
+/** Pre-selected pick: the current holder, else the same-day run closest to the target distance. */
+export function defaultPick(session: ApiSession, candidates: ApiActivity[]): ApiActivity | null {
+  const held = candidates.find((a) => a.session_id === session.id);
+  if (held) return held;
+  if (session.type === "rest") return null;
+  return candidates.find((a) => isRunSport(a.sport_type) && activityDate(a) === session.scheduled_date) ?? null;
 }
