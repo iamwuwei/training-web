@@ -67,6 +67,13 @@ export function labelStyle(session: Pick<ApiSession, "label" | "type"> | null | 
   return (session.label && BY_LABEL[session.label]) || BY_TYPE[session.type] || BY_TYPE.easy;
 }
 
+/** 'MP 7 km', 'Easy 6 km', '肌力': the type name plus planned distance, for one-line rows. */
+export function shortName(session: Pick<ApiSession, "label" | "type" | "target_distance_m">): string {
+  const name = labelStyle(session).name;
+  const m = session.target_distance_m;
+  return m ? `${name} ${Math.round(m / 100) / 10} km` : name;
+}
+
 /** Filter groups on the history page, in display order. */
 export const FILTERS: { key: string; name: string; kind: Kind | null; match: (s: LabelStyle | null) => boolean }[] = [
   { key: "all", name: "全部", kind: null, match: () => true },

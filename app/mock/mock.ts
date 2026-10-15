@@ -162,7 +162,7 @@ export function mockPutSession(activityId: string, body: PutSessionRequest): Put
       a.memo_updated_at = new Date().toISOString();
     }
     setTimeout(() => {
-      a.review = { verdict: "達成", comment: "（示範）數據落在課表目標內，感受也一致。", reminders: [], source: "claude", model: "claude-haiku-4-5", created_at: new Date().toISOString() };
+      a.review = { verdict: "達成", comment: "（示範）數據落在課表目標內，感受也一致。", reminders: ["第 1 km 先走 2 分鐘再起跑"], source: "claude", model: "claude-haiku-4-5", created_at: new Date().toISOString() };
     }, 4000);
   } else {
     a.session_id = null;

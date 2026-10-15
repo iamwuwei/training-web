@@ -184,3 +184,18 @@ export function defaultPick(session: ApiSession, candidates: ApiActivity[]): Api
   if (session.type === "rest") return null;
   return candidates.find((a) => isRunSport(a.sport_type) && activityDate(a) === session.scheduled_date) ?? null;
 }
+
+/**
+ * Where an unassigned activity on `date` could be logged: a loggable session within ±2 days
+ * that has nothing yet, same day first, then the nearest (later before earlier on ties).
+ */
+export function sessionForExtra(view: PlanView, date: string): ApiSession | null {
+  const open = view.days.filter(
+    (d) => !d.activity && isLoggable(d.session) && Math.abs(dayDiff(date, d.session.scheduled_date)) <= 2 && dayDiff(view.today, d.session.scheduled_date) <= 2,
+  );
+  open.sort((a, b) => {
+    const da = dayDiff(date, a.session.scheduled_date), db = dayDiff(date, b.session.scheduled_date);
+    return Math.abs(da) - Math.abs(db) || db - da;
+  });
+  return open[0]?.session ?? null;
+}

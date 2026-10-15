@@ -203,7 +203,7 @@ ul { padding: 0; list-style: none; }
 .memo .body.placeholder { color: var(--ink-3); }
 .memo .rpe-k { font-size: 12px; color: var(--ink-3); }
 .rpe { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 4px; }
-.rpe button { height: 36px; border-radius: 8px; border: 1px solid var(--chip-line); font-family: var(--font-num); font-size: 15px; font-weight: 600; color: var(--ink-2); background: var(--bg); }
+.rpe button { height: 44px; border-radius: 8px; border: 1px solid var(--chip-line); font-family: var(--font-num); font-size: 15px; font-weight: 600; color: var(--ink-2); background: var(--bg); }
 .rpe button[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--bg); }
 .rpe-scale { display: flex; justify-content: space-between; font-size: 11px; color: var(--ink-3); }
 .memo textarea { width: 100%; min-height: 110px; padding: 10px 12px; border: 1px solid var(--chip-line); border-radius: 10px; font: inherit; font-size: 15px; line-height: 1.55; color: var(--ink); background: var(--bg); resize: vertical; }
@@ -258,16 +258,38 @@ ul { padding: 0; list-style: none; }
 }
 
 /* ---- log a session: pick the Strava activity ---- */
-.picks { display: flex; flex-direction: column; gap: 8px; }
-.pick { display: grid; grid-template-columns: 40px minmax(0, 1fr) 20px; gap: 12px; align-items: center; width: 100%; padding: 10px 12px; text-align: left; border: 1px solid var(--chip-line); border-radius: 12px; background: var(--bg); color: var(--ink); }
-.pick[aria-checked="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
-.pick .txt, .strava-row .txt { display: flex; flex-direction: column; min-width: 0; }
-.pick .t, .strava-row .t { font-weight: 600; font-size: 15px; }
-.pick .s, .strava-row .s { font-size: 13px; color: var(--ink-2); }
-.pick .radio { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--chip-line); }
-.pick[aria-checked="true"] .radio { border-color: var(--ink); background: radial-gradient(circle, var(--ink) 40%, transparent 45%); }
-.strava-row { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
-.strava-row .state { font-size: 12px; color: var(--ink-3); border: 1px solid var(--chip-line); border-radius: 999px; padding: 2px 10px; }
-.strava-row .state.done { color: var(--v-good); border-color: currentColor; }
-.cta-row { display: flex; align-items: center; gap: 10px; padding: 14px 0; border-bottom: 1px solid var(--line); font-weight: 600; color: var(--ink); }
-.cta-row .arrow { margin-left: auto; color: var(--ink-3); }
+.picks { display: flex; flex-direction: column; }
+.pick { display: grid; grid-template-columns: 40px minmax(0, 1fr) 22px; gap: 12px; align-items: center; width: 100%; padding: 12px 0; text-align: left; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: none; color: var(--ink); }
+.pick[aria-checked="true"] .t { font-weight: 700; }
+.pick .txt { display: flex; flex-direction: column; min-width: 0; }
+.pick .t { font-weight: 600; font-size: 15px; }
+.pick .s { font-size: 13px; color: var(--ink-2); }
+.pick .radio { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--chip-line); box-sizing: border-box; }
+.pick[aria-checked="true"] .radio { border-color: var(--ink); background: radial-gradient(circle, var(--ink) 0 5px, transparent 5.5px); }
+
+/* ---- 今天頁：one post for today's session ---------------------------------- */
+.week-line { display: flex; color: var(--ink); border-bottom: 1px solid var(--line); }
+.today-post .head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.today-post .head > b { font-size: 16px; font-weight: 700; }
+.today-post .pending { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: var(--ink-2); }
+.today-post .pending::before { content: ""; width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid var(--ink-3); box-sizing: border-box; }
+.today-post .next { margin-top: 6px; font-size: 14px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.today-open { padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+.today-open .post { border-bottom: none; padding-bottom: 4px; }
+.today-open .post .foot { display: none; }
+.today-open .synced { margin: 4px 0 12px 52px; font-size: 13px; color: var(--ink-2); display: flex; align-items: baseline; gap: 0 4px; white-space: nowrap; overflow: hidden; }
+.today-open .synced i { width: 7px; height: 7px; border-radius: 50%; background: #fc5200; align-self: center; margin-right: 4px; }
+.today-open .synced .num { font-size: 16px; color: var(--ink); }
+.today-open .hint { margin: 0 0 0 52px; font-size: 13px; color: var(--ink-3); }
+.extra-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.extra-row .who { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 12px; align-items: center; color: var(--ink); }
+.extra-row .txt { display: flex; flex-direction: column; min-width: 0; }
+.extra-row .t { font-weight: 600; }
+.extra-row .s { font-size: 13px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.extra-row .chip { color: var(--ink); }
+.next-row { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); color: var(--ink); }
+.next-row .avatar { width: 28px; height: 28px; font-size: 13px; justify-self: center; }
+.next-row .avatar.cjk { font-size: 12px; }
+.next-row .t { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.next-row .when { font-size: 13px; color: var(--ink-3); white-space: nowrap; }
+.section-row .refresh { font-size: 13px; color: var(--ink-2); }

@@ -28,20 +28,3 @@ export function ActivityPick({ activity, checked, onPick, sessionDate }: {
     </button>
   );
 }
-
-/** Compact row in "今天 · 來自 Strava": what synced, and whether it is already a session. */
-export function StravaRow({ activity, sessionName }: { activity: ApiActivity; sessionName: string | null }) {
-  const run = isRunSport(activity.sport_type);
-  return (
-    <div className="strava-row">
-      <Avatar session={null} sport={activity.sport_type} />
-      <span className="txt">
-        <span className="t">{sportName(activity.sport_type)}{activity.distance_m > 0 ? ` ${km(activity.distance_m)} km` : ""}</span>
-        <span className="s">
-          {[timeJst(activity.start_time), run ? `${pace(activity.avg_pace_sec_km)}/km` : null, activity.avg_hr != null ? `${activity.avg_hr} bpm` : null, duration(activity.moving_time_sec)].filter(Boolean).join(" · ")}
-        </span>
-      </span>
-      <span className={`state${sessionName ? " done" : ""}`}>{sessionName ? "已記錄" : "未記錄"}</span>
-    </div>
-  );
-}
