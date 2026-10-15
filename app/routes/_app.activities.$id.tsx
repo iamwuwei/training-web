@@ -157,7 +157,7 @@ export default function Report({ loaderData }: Route.ComponentProps) {
         {s ? (
           <p className="note" style={{ margin: 0, padding: "10px 0", textAlign: "left" }}>
             對應課表 {s.scheduled_date.slice(5).replace("-", "/")} ·{" "}
-            <Link to={`/sessions/${s.id}`} style={{ textDecoration: "underline" }}>換一個活動</Link>
+            <Link to={`/sessions/${s.id}`} className="chip" style={{ marginLeft: 6 }}>換一個活動</Link>
           </p>
         ) : null}
         <MemoEditor key={a.id} activity={a} onSaved={setOverride} />

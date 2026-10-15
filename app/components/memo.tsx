@@ -66,7 +66,7 @@ export function MemoEditor({ activity, onSaved }: { activity: ApiActivity; onSav
       <section className="memo">
         <div className="head">
           <h2>我的心得</h2>
-          <button type="button" onClick={startEditing}>編輯</button>
+          <button type="button" className="chip" onClick={startEditing}>編輯</button>
         </div>
         <p className="body">
           {activity.rpe ? <span className="rpe-chip">RPE {activity.rpe}<span style={{ fontFamily: "var(--font)", fontSize: 13, fontWeight: 500, color: "var(--ink-2)" }}> {rpeWord(activity.rpe)}</span></span> : null}
@@ -80,7 +80,7 @@ export function MemoEditor({ activity, onSaved }: { activity: ApiActivity; onSav
     <section className="memo">
       <div className="head">
         <h2>我的心得</h2>
-        {activity.memo || activity.rpe != null ? <button type="button" onClick={() => { setMemo(activity.memo ?? ""); setRpe(activity.rpe); setEditing(false); }}>取消</button> : null}
+        {activity.memo || activity.rpe != null ? <button type="button" className="chip" onClick={() => { setMemo(activity.memo ?? ""); setRpe(activity.rpe); setEditing(false); }}>取消</button> : null}
       </div>
       <MemoFields memo={memo} rpe={rpe} onMemo={setMemo} onRpe={setRpe} />
       <div className="actions">

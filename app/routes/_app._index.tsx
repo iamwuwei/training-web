@@ -118,7 +118,7 @@ export default function Today() {
         ) : null}
 
         <SectionH
-          action={<button type="button" className="refresh" onClick={() => void revalidator.revalidate()} disabled={revalidator.state === "loading"}>{revalidator.state === "loading" ? "更新中…" : "重新整理"}</button>}
+          action={<button type="button" className="chip" onClick={() => void revalidator.revalidate()} disabled={revalidator.state === "loading"}>{revalidator.state === "loading" ? "更新中…" : "重新整理"}</button>}
         >
           今天 · {mdDow(today)}
         </SectionH>

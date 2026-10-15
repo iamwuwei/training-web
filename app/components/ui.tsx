@@ -43,10 +43,10 @@ export function TabBar() {
   return (
     <div className="tabbar">
       <nav aria-label="主選單">
-        <NavLink to="/" end aria-label="今天"><HomeIcon /></NavLink>
-        <NavLink to="/plan" aria-label="課表"><CalendarIcon /></NavLink>
-        <NavLink to="/history" aria-label="紀錄"><BarsIcon /></NavLink>
-        <NavLink to="/settings" aria-label="設定"><UserIcon /></NavLink>
+        <NavLink to="/" end><HomeIcon /><span>今天</span></NavLink>
+        <NavLink to="/plan"><CalendarIcon /><span>課表</span></NavLink>
+        <NavLink to="/history"><BarsIcon /><span>紀錄</span></NavLink>
+        <NavLink to="/settings"><UserIcon /><span>設定</span></NavLink>
       </nav>
     </div>
   );
