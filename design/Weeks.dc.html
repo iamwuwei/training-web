@@ -15,7 +15,7 @@ body{margin:0}
 a{color:#14161B;text-decoration:none}a:hover{color:#2B5BD7}
 </style>
 </helmet>
-<div style="width: 390px; height: 1460px; box-sizing: border-box; background: #FFFFFF; color: #14161B; font-family: 'Noto Sans TC', system-ui, sans-serif; font-size: 15px; line-height: 1.5; display: flex; flex-direction: column; position: relative; overflow: hidden">
+<div style="width: 390px; height: 1000px; box-sizing: border-box; background: #FFFFFF; color: #14161B; font-family: 'Noto Sans TC', system-ui, sans-serif; font-size: 15px; line-height: 1.5; display: flex; flex-direction: column; position: relative; overflow: hidden">
 
   <header style="display: flex; align-items: center; justify-content: space-between; padding: 22px 20px 14px; border-bottom: 1px solid #ECEDF0">
     <h1 style="margin: 0; font-size: 17px; font-weight: 700; letter-spacing: -.01em">課表</h1>
@@ -27,7 +27,7 @@ a{color:#14161B;text-decoration:none}a:hover{color:#2B5BD7}
     <section style="padding: 18px 0 14px; border-bottom: 1px solid #ECEDF0; display: flex; flex-direction: column; gap: 10px">
       <div style="display: grid; grid-template-columns: repeat(11, minmax(0, 1fr)); gap: 5px; align-items: end; height: 72px">
         <div style="display: flex; flex-direction: column; justify-content: flex-end; height: 100%"><div style="height: 38%; background: #1B7A48; border-radius: 3px"></div></div>
-        <div style="display: flex; flex-direction: column; justify-content: flex-end; height: 100%; position: relative"><div style="height: 52%; background: #ECEDF0; border-radius: 3px; position: relative; overflow: hidden"><div style="position: absolute; left: 0; right: 0; bottom: 0; height: 19%; background: #14161B"></div></div></div>
+        <div style="display: flex; flex-direction: column; justify-content: flex-end; height: 100%; position: relative"><div style="height: 52%; background: #ECEDF0; border-radius: 3px; position: relative; overflow: hidden; box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 3.5px #14161B"><div style="position: absolute; left: 0; right: 0; bottom: 0; height: 19%; background: #14161B"></div></div></div>
         <div style="display: flex; flex-direction: column; justify-content: flex-end; height: 100%"><div style="height: 60%; background: #ECEDF0; border-radius: 3px"></div></div>
         <div style="display: flex; flex-direction: column; justify-content: flex-end; height: 100%"><div style="height: 67%; background: #ECEDF0; border-radius: 3px"></div></div>
         <div style="display: flex; flex-direction: column; justify-content: flex-end; height: 100%"><div style="height: 80%; background: #ECEDF0; border-radius: 3px"></div></div>
@@ -38,29 +38,31 @@ a{color:#14161B;text-decoration:none}a:hover{color:#2B5BD7}
         <div style="display: flex; flex-direction: column; justify-content: flex-end; height: 100%"><div style="height: 25%; background: #ECEDF0; border-radius: 3px"></div></div>
         <div style="display: flex; flex-direction: column; justify-content: flex-end; height: 100%"><div style="height: 70%; background: #ECEDF0; border-radius: 3px; border: 1.5px solid #B3261E; box-sizing: border-box"></div></div>
       </div>
-      <div style="display: grid; grid-template-columns: repeat(11, minmax(0, 1fr)); gap: 5px; font-family: 'Barlow Condensed', sans-serif; font-size: 13px; font-weight: 600; color: #8A909C; text-align: center">
-        <span>1</span><span style="color: #14161B; font-weight: 700">2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>10</span><span style="color: #B3261E">42</span>
+      <div style="display: grid; grid-template-columns: repeat(11, minmax(0, 1fr)); gap: 5px; font-family: 'Barlow Condensed', sans-serif; font-size: 13px; font-weight: 600; color: #6B7180; text-align: center">
+        <span>1</span><span style="color: #14161B; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 2px">2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>10</span><span style="color: #B3261E">42</span>
       </div>
-      <div style="display: flex; justify-content: space-between; font-size: 12px; color: #8A909C"><span>重建 · 馬拉松訓練 · Peak · Taper · 12/14 比賽</span><span>週跑量 23→60 km</span></div>
+      <div style="display: flex; justify-content: space-between; font-size: 12px; color: #6B7180"><span>重建 · 馬拉松訓練 · Peak · Taper · 12/14 比賽</span><span>週跑量 23→60 km</span></div>
     </section>
 
     <section style="padding: 14px 0 12px; display: flex; flex-direction: column; gap: 8px">
-      <div style="display: flex; justify-content: space-between; align-items: baseline; font-size: 14px">
-        <span><b style="font-weight: 600">第 2 週</b> <span style="color: #8A909C">· 10/12–10/18 · 長跑 14</span></span>
-        <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 17px; font-weight: 700">6.01 <span style="font-weight: 600; color: #8A909C">/ 31</span></span>
+      <div style="display: flex; align-items: center; gap: 8px">
+        <button type="button" aria-label="上一週" style="flex: none; width: 36px; height: 36px; border-radius: 50%; border: 1px solid #DDE0E6; background: #FFFFFF; font: inherit; font-size: 20px; line-height: 1; color: #14161B">‹</button>
+        <span style="flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 6px; font-size: 14px"><b style="font-weight: 600">第 2 週</b><span style="font-size: 11px; font-weight: 600; color: #FFFFFF; background: #14161B; border-radius: 999px; padding: 1px 7px">本週</span><span style="flex-basis: 100%; font-size: 13px; color: #6B7180">10/12–10/18 · 長跑 14</span></span>
+        <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 17px; font-weight: 700">6.01 <span style="font-weight: 600; color: #6B7180">/ 31</span></span>
+        <button type="button" aria-label="下一週" style="flex: none; width: 36px; height: 36px; border-radius: 50%; border: 1px solid #DDE0E6; background: #FFFFFF; font: inherit; font-size: 20px; line-height: 1; color: #14161B">›</button>
       </div>
-      <div style="height: 3px; background: #ECEDF0; border-radius: 999px; overflow: hidden"><div style="width: 19%; height: 100%; background: #8A909C; border-radius: 999px"></div></div>
+      <div style="height: 3px; background: #ECEDF0; border-radius: 999px; overflow: hidden"><div style="width: 19%; height: 100%; background: #6B7180; border-radius: 999px"></div></div>
     </section>
 
-    <article style="display: grid; grid-template-columns: 40px 1fr; gap: 12px; padding: 10px 0; border-bottom: 1px solid #ECEDF0; color: #8A909C">
-      <div style="width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid #DDE0E6; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; color: #8A909C" aria-hidden="true">休</div>
+    <article style="display: grid; grid-template-columns: 40px 1fr; gap: 12px; padding: 10px 0; border-bottom: 1px solid #ECEDF0; color: #6B7180">
+      <div style="width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid #DDE0E6; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; color: #6B7180" aria-hidden="true">休</div>
       <div style="min-width: 0"><div style="font-size: 14px"><b style="font-weight: 600; color: #5C6370">10/12 週一</b> · 休息</div><div style="font-size: 13px">走路 20〜30 分＋伸展滾筒</div></div>
     </article>
 
     <article style="display: grid; grid-template-columns: 40px 1fr; gap: 12px; padding: 10px 0; border-bottom: 1px solid #ECEDF0">
       <div style="width: 36px; height: 36px; border-radius: 50%; background: #2B5BD7; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-family: 'Barlow Condensed', sans-serif; font-size: 15px; font-weight: 700" aria-hidden="true">E</div>
       <div style="min-width: 0">
-        <div style="display: flex; align-items: baseline; gap: 6px; font-size: 14px; flex-wrap: wrap"><b style="font-weight: 600">10/13 週二</b><span style="color: #8A909C">· 6 km</span><span style="display: inline-flex; align-items: center; gap: 5px; color: #1B7A48; font-weight: 600; font-size: 13px"><span style="width: 7px; height: 7px; border-radius: 50%; background: #1B7A48"></span>達成</span></div>
+        <div style="display: flex; align-items: baseline; gap: 6px; font-size: 14px; flex-wrap: wrap"><b style="font-weight: 600">10/13 週二</b><span style="color: #6B7180">· 6 km</span><span style="display: inline-flex; align-items: center; gap: 5px; color: #1B7A48; font-weight: 600; font-size: 13px"><span style="width: 7px; height: 7px; border-radius: 50%; background: #1B7A48"></span>達成</span></div>
         <div style="font-weight: 600">輕鬆跑 6 km</div>
         <div style="font-size: 13px; color: #5C6370">實際 6.01 km · 7:25 · 140 bpm</div>
       </div>
@@ -69,75 +71,56 @@ a{color:#14161B;text-decoration:none}a:hover{color:#2B5BD7}
     <article style="display: grid; grid-template-columns: 40px 1fr; gap: 12px; padding: 10px 0; border-bottom: 1px solid #ECEDF0">
       <div style="width: 36px; height: 36px; border-radius: 50%; background: #C25A00; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-family: 'Barlow Condensed', sans-serif; font-size: 15px; font-weight: 700" aria-hidden="true">MP</div>
       <div style="min-width: 0">
-        <div style="display: flex; align-items: baseline; gap: 6px; font-size: 14px"><b style="font-weight: 600">10/14 週三</b><span style="font-size: 11px; font-weight: 600; color: #FFFFFF; background: #14161B; border-radius: 999px; padding: 1px 7px">今天</span><span style="color: #8A909C">· 7 km</span></div>
+        <div style="display: flex; align-items: baseline; gap: 6px; font-size: 14px"><b style="font-weight: 600">10/14 週三</b><span style="color: #6B7180">· 今天 · 7 km</span></div>
         <div style="font-weight: 600">2 km Easy + 3 km @ MP + 2 km Easy</div>
         <div style="font-size: 13px; color: #5C6370">MP 段 6:35〜6:50 · 心拍不超過 165</div>
       </div>
     </article>
 
-    <article style="display: grid; grid-template-columns: 40px 1fr; gap: 12px; padding: 10px 0; border-bottom: 1px solid #ECEDF0; color: #8A909C">
-      <div style="width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid #DDE0E6; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; color: #8A909C" aria-hidden="true">休</div>
+    <article style="display: grid; grid-template-columns: 40px 1fr; gap: 12px; padding: 10px 0; border-bottom: 1px solid #ECEDF0; color: #6B7180">
+      <div style="width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid #DDE0E6; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; color: #6B7180" aria-hidden="true">休</div>
       <div style="min-width: 0"><div style="font-size: 14px"><b style="font-weight: 600; color: #5C6370">10/15 週四</b> · 休息</div><div style="font-size: 13px">本週肌力由 10/17 Hyrox 取代</div></div>
     </article>
 
     <article style="display: grid; grid-template-columns: 40px 1fr; gap: 12px; padding: 10px 0; border-bottom: 1px solid #ECEDF0">
       <div style="width: 36px; height: 36px; border-radius: 50%; background: #2B5BD7; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-family: 'Barlow Condensed', sans-serif; font-size: 15px; font-weight: 700" aria-hidden="true">R</div>
       <div style="min-width: 0">
-        <div style="display: flex; align-items: baseline; gap: 6px; font-size: 14px"><b style="font-weight: 600">10/16 週五</b><span style="color: #8A909C">· 4 km</span></div>
+        <div style="display: flex; align-items: baseline; gap: 6px; font-size: 14px"><b style="font-weight: 600">10/16 週五</b><span style="color: #6B7180">· 4 km</span></div>
         <div style="font-weight: 600">恢復跑 4 km</div>
         <div style="font-size: 13px; color: #5C6370">心拍 ≤140 / 7:45+ · 超過 145 就走</div>
       </div>
     </article>
 
-    <article style="display: grid; grid-template-columns: 40px 1fr; gap: 12px; padding: 10px 0; border-bottom: 1px solid #ECEDF0; color: #8A909C">
-      <div style="width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid #DDE0E6; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; color: #8A909C" aria-hidden="true">肌</div>
+    <article style="display: grid; grid-template-columns: 40px 1fr; gap: 12px; padding: 10px 0; border-bottom: 1px solid #ECEDF0; color: #6B7180">
+      <div style="width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid #DDE0E6; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; color: #6B7180" aria-hidden="true">肌</div>
       <div style="min-width: 0"><div style="font-size: 14px"><b style="font-weight: 600; color: #5C6370">10/17 週六</b> · Hyrox（已約）</div><div style="font-size: 13px">難度 6〜7，心拍不衝 160+</div></div>
     </article>
 
     <article style="display: grid; grid-template-columns: 40px 1fr; gap: 12px; padding: 10px 0; border-bottom: 1px solid #ECEDF0">
       <div style="width: 36px; height: 36px; border-radius: 50%; background: #6B3FC9; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-family: 'Barlow Condensed', sans-serif; font-size: 15px; font-weight: 700" aria-hidden="true">L</div>
       <div style="min-width: 0">
-        <div style="display: flex; align-items: baseline; gap: 6px; font-size: 14px"><b style="font-weight: 600">10/18 週日</b><span style="color: #8A909C">· 14 km</span></div>
+        <div style="display: flex; align-items: baseline; gap: 6px; font-size: 14px"><b style="font-weight: 600">10/18 週日</b><span style="color: #6B7180">· 14 km</span></div>
         <div style="font-weight: 600">長跑 14 km</div>
         <div style="font-size: 13px; color: #5C6370">7:15〜7:45 · 只求完成，心拍 ≤150，掉到 8:00 也可</div>
       </div>
     </article>
 
-    <section style="padding: 20px 0 10px; display: flex; justify-content: space-between; align-items: baseline; font-size: 14px">
-      <span><b style="font-weight: 600">第 3 週</b> <span style="color: #8A909C">· 10/19–10/25 · 長跑 16，第一次坡跑</span></span>
-      <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 17px; font-weight: 600; color: #8A909C">36</span>
-    </section>
-
-    <article style="display: grid; grid-template-columns: 40px 1fr; gap: 12px; padding: 10px 0; border-bottom: 1px solid #ECEDF0">
-      <div style="width: 36px; height: 36px; border-radius: 50%; background: #2B5BD7; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-family: 'Barlow Condensed', sans-serif; font-size: 15px; font-weight: 700" aria-hidden="true">E</div>
-      <div style="min-width: 0"><div style="font-size: 14px"><b style="font-weight: 600">10/20 週二</b> <span style="color: #8A909C">· 6 km</span></div><div style="font-weight: 600">輕鬆跑 6 km</div></div>
-    </article>
-    <article style="display: grid; grid-template-columns: 40px 1fr; gap: 12px; padding: 10px 0; border-bottom: 1px solid #ECEDF0">
-      <div style="width: 36px; height: 36px; border-radius: 50%; background: #C25A00; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700" aria-hidden="true">坡</div>
-      <div style="min-width: 0"><div style="font-size: 14px"><b style="font-weight: 600">10/21 週三</b> <span style="color: #8A909C">· 8 km</span></div><div style="font-weight: 600">2 km Easy + 5×90 秒上坡 + 2 km Easy</div><div style="font-size: 13px; color: #5C6370">模擬河口湖→西湖爬坡</div></div>
-    </article>
-    <article style="display: grid; grid-template-columns: 40px 1fr; gap: 12px; padding: 10px 0; border-bottom: 1px solid #ECEDF0">
-      <div style="width: 36px; height: 36px; border-radius: 50%; background: #2B5BD7; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-family: 'Barlow Condensed', sans-serif; font-size: 15px; font-weight: 700" aria-hidden="true">E</div>
-      <div style="min-width: 0"><div style="font-size: 14px"><b style="font-weight: 600">10/23 週五</b> <span style="color: #8A909C">· 6 km</span></div><div style="font-weight: 600">輕鬆跑 6 km</div></div>
-    </article>
-    <article style="display: grid; grid-template-columns: 40px 1fr; gap: 12px; padding: 10px 0">
-      <div style="width: 36px; height: 36px; border-radius: 50%; background: #6B3FC9; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-family: 'Barlow Condensed', sans-serif; font-size: 15px; font-weight: 700" aria-hidden="true">L</div>
-      <div style="min-width: 0"><div style="font-size: 14px"><b style="font-weight: 600">10/25 週日</b> <span style="color: #8A909C">· 16 km</span></div><div style="font-weight: 600">長跑 16 km</div><div style="font-size: 13px; color: #5C6370">7:10〜7:40 · 找有起伏的路線</div></div>
-    </article>
-    <p style="margin: 6px 0 0; font-size: 12px; color: #8A909C">休息日在非本週折疊，點週標題展開</p>
+    <p style="margin: 18px 0 0; font-size: 12px; color: #6B7180; text-align: center">點上面的長條切換週</p>
   </main>
 
-  <nav aria-label="主選單" style="position: absolute; left: 0; right: 0; bottom: 0; background: #FFFFFF; border-top: 1px solid #ECEDF0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 6px 8px 22px">
-    <a href="Main.dc.html" aria-label="今天" style="display: flex; align-items: center; justify-content: center; min-height: 44px; color: #A3A8B3">
-      <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 12.5 13 5l9 7.5V21a1 1 0 0 1-1 1h-5v-6h-6v6H5a1 1 0 0 1-1-1z"/></svg></a>
-    <a href="Weeks.dc.html" aria-label="課表" aria-current="page" style="display: flex; align-items: center; justify-content: center; min-height: 44px; color: #14161B">
-      <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="4" y="5.5" width="18" height="16" rx="2"/><path d="M4 10.5h18M9 3.5v4M17 3.5v4"/></svg></a>
-    <a href="History.dc.html" aria-label="紀錄" style="display: flex; align-items: center; justify-content: center; min-height: 44px; color: #A3A8B3">
-      <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 20.5h18M7 17v-6M13 17V6M19 17v-4"/></svg></a>
+  <nav aria-label="主選單" style="position: absolute; left: 0; right: 0; bottom: 0; background: #FFFFFF; border-top: 1px solid #ECEDF0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 6px 8px 22px">
+    <a href="Main.dc.html" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 48px; color: #6B7180; font-size: 11px; font-weight: 400">
+      <svg width="24" height="24" viewBox="0 0 26 26" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 12.5 13 5l9 7.5V21a1 1 0 0 1-1 1h-5v-6h-6v6H5a1 1 0 0 1-1-1z"/></svg><span>今天</span></a>
+    <a href="Weeks.dc.html" aria-current="page" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 48px; color: #14161B; font-size: 11px; font-weight: 700">
+      <svg width="24" height="24" viewBox="0 0 26 26" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="4" y="5.5" width="18" height="16" rx="2"/><path d="M4 10.5h18M9 3.5v4M17 3.5v4"/></svg><span>課表</span></a>
+    <a href="History.dc.html" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 48px; color: #6B7180; font-size: 11px; font-weight: 400">
+      <svg width="24" height="24" viewBox="0 0 26 26" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 20.5h18M7 17v-6M13 17V6M19 17v-4"/></svg><span>紀錄</span></a>
+    <a href="Settings.dc.html" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 48px; color: #6B7180; font-size: 11px; font-weight: 400">
+      <svg width="24" height="24" viewBox="0 0 26 26" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="13" cy="9" r="4.5"/><path d="M4.5 22c.8-4.2 4.3-6.5 8.5-6.5s7.7 2.3 8.5 6.5"/></svg><span>設定</span></a>
   </nav>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1460}}'>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1000}}'>
 class Component extends DCLogic {
   renderVals() {
     return {};
