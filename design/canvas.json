@@ -60,8 +60,8 @@
       "x": 2350,
       "y": 0,
       "w": 390,
-      "h": 1440,
-      "title": "單次報告（從今天或紀錄點進）",
+      "h": 1500,
+      "title": "單次報告（單一配速的課；從今天或紀錄點進）",
       "is_interactive": true,
       "radius": 28
     },
@@ -112,6 +112,14 @@
       "h": 844,
       "title": "今天 E · 休息日但有活動",
       "radius": 28
+    },
+    "Proposal-ReportMP.dc.html": {
+      "x": 0,
+      "y": 3180,
+      "w": 390,
+      "h": 1560,
+      "title": "單次報告 · 組合課（2 km Easy + 3 km @ MP + 2 km Easy）",
+      "radius": 28
     }
   },
   "order": [
@@ -126,7 +134,8 @@
     "Proposal-LogSession.dc.html",
     "Proposal-TodayC.dc.html",
     "Proposal-TodayD.dc.html",
-    "Proposal-TodayE.dc.html"
+    "Proposal-TodayE.dc.html",
+    "Proposal-ReportMP.dc.html"
   ],
   "notes": {
     "title": {
@@ -158,6 +167,14 @@
       "y": 1560,
       "w": 240,
       "text": "今天頁的狀態：同一堂課只出現一次（A 還沒跑 → B 已同步 → 記錄訓練 → C 分析中 → D 完成；E 休息日）",
+      "kind": "title1",
+      "maxW": 2740
+    },
+    "reportTitle": {
+      "x": 0,
+      "y": 2860,
+      "w": 240,
+      "text": "報告頁 · 組合課：配速只看重點段，每公里只在那幾公里畫目標帶（單一配速版在第一排）",
       "kind": "title1",
       "maxW": 2740
     }
