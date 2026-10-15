@@ -1,0 +1,29 @@
+{
+  "v": 3,
+  "attachments": {},
+  "createdOnFiles": { "v": 1, "at": "2026-10-14T04:40:00Z" },
+  "title": "training-web 設計稿",
+  "launch": { "view": "canvas" },
+  "pages": [],
+  "boards": {
+    "Login.dc.html": { "x": 0, "y": 0, "w": 390, "h": 844, "title": "登入", "is_interactive": true, "radius": 28 },
+    "Main.dc.html": { "x": 470, "y": 0, "w": 390, "h": 1300, "title": "今天", "is_interactive": true, "radius": 28 },
+    "Weeks.dc.html": { "x": 940, "y": 0, "w": 390, "h": 1460, "title": "課表", "is_interactive": true, "radius": 28 },
+    "History.dc.html": { "x": 1410, "y": 0, "w": 390, "h": 1300, "title": "紀錄", "is_interactive": true, "radius": 28 },
+    "Settings.dc.html": { "x": 1880, "y": 0, "w": 390, "h": 844, "title": "設定", "is_interactive": true, "radius": 28 },
+    "Report.dc.html": { "x": 2350, "y": 0, "w": 390, "h": 1440, "title": "單次報告（從紀錄點進）", "is_interactive": true, "radius": 28 }
+  },
+  "order": ["Login.dc.html", "Main.dc.html", "Weeks.dc.html", "History.dc.html", "Settings.dc.html", "Report.dc.html"],
+  "notes": {
+    "title": { "x": 0, "y": -340, "w": 240, "text": "training-web · 登入 ＋ 四個 tab ＋ 報告頁", "kind": "title1", "maxW": 2740 },
+    "palette": {
+      "x": 2820, "y": 0, "w": 340, "maxH": 700, "fill": "blue",
+      "text": "視覺：Threads 式極簡\n\n純白底、墨色 #14161B、次要文字 #5C6370、淡灰 #8A909C，1px 分隔線 #ECEDF0。沒有卡片。\n\n顏色只給需要一眼區分的符號：\n• 訓練類型 → 頭像圓圈：Easy／Recovery 藍 #2B5BD7、Long 紫 #6B3FC9、MP／坡跑／快步 橘 #C25A00、比賽 紅 #B3261E、休息／肌力 空心灰。\n• 判定 → 小色點：達成 綠 #1B7A48、達成但有提醒 琥珀 #9A5B00、未達成 紅、跳過 灰。\n• 超出目標的數字本身變紅（10/08 的 6:15 與 169）。\n• 進度條：進行中灰、達標綠。\n\n字體：Noto Sans TC 內文；數字 Barlow Condensed。"
+    },
+    "data": {
+      "x": 2820, "y": 760, "w": 340, "maxH": 520, "fill": "gray",
+      "text": "導覽：底部四個 tab\n今天 ／ 課表 ／ 紀錄 ／ 設定\n\n課表頁上方是 11 週的跑量長條，下面是每天的課表，非本週的休息日折疊。\n\n設定頁：帳號、Strava 連結狀態與連結按鈕（開 API 的 /strava/oauth/start）、登出。資料來自 GET /me。\n\n報告頁不在 tab 裡，從「今天」的最新報告或「紀錄」列表點進去。\n\n登入走 Cognito（可直接開 Apple）。"
+    }
+  },
+  "designSystems": []
+}
