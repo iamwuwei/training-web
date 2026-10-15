@@ -3,7 +3,7 @@
 // results become an activity + manual review on the same local date.
 
 import plans from "./plans.json";
-import type { ActivitiesResponse, ApiActivity, ApiSession, ApiWeek, MatchStatus, MeResponse, PlanResponse, PutMemoRequest, PutMemoResponse, PutSessionRequest, PutSessionResponse, Verdict } from "../types/api";
+import type { ActivitiesResponse, ApiActivity, ApiSession, ApiSplit, ApiWeek, MatchStatus, MeResponse, PlanResponse, PutMemoRequest, PutMemoResponse, PutSessionRequest, PutSessionResponse, Verdict } from "../types/api";
 import { todayJst } from "../lib/date";
 const MOCK_USER_ID = "7d1c3a0e-4f7b-4d2e-9c1a-5b8e2f6a1c01"; // ww in training-api seed
 
@@ -25,6 +25,10 @@ interface SeedPlan {
 }
 
 const seed = (plans as SeedPlan[])[0];
+
+/** Demo splits from [sec/km, avg HR] pairs, shaped like Strava's splits_metric. */
+const demoSplits = (rows: [number, number][]): ApiSplit[] =>
+  rows.map(([p, hr], i) => ({ split: i + 1, distance: 1000, moving_time: p, elapsed_time: p, elevation_difference: 0, average_speed: 1000 / p, average_heartrate: hr }));
 const PLAN_ID = "mock-plan";
 
 function build(): PlanResponse {
@@ -78,7 +82,7 @@ function build(): PlanResponse {
       device_name: r.device,
       gear_name: r.shoes,
       weather: r.weather,
-      splits: null,
+      splits: r.date === "2026-10-13" ? demoSplits([[395, 132], [455, 140], [450, 141], [447, 141], [447, 142], [481, 144]]) : null,
       match_status: session ? "auto" : "unplanned",
       review: {
         verdict: r.verdict,
@@ -96,7 +100,8 @@ function build(): PlanResponse {
   const today = todayJst();
   const base = { user_id: MOCK_USER_ID, description: null, memo: null, rpe: null, memo_updated_at: null, gear_name: null, weather: null, splits: null, session_id: null, match_status: "unplanned" as const, review: null };
   const unassigned: ApiActivity[] = [
-    { ...base, id: "u-run", strava_activity_id: "900001", sport_type: "Run", start_time: new Date(`${today}T06:40:00+09:00`).toISOString(), distance_m: 6020, moving_time_sec: 2676, avg_pace_sec_km: 445, avg_hr: 141, max_hr: 149, avg_watts: null, kcal: 392, device_name: "Apple Watch Series 11" },
+    { ...base, id: "u-run", strava_activity_id: "900001", sport_type: "Run", start_time: new Date(`${today}T06:40:00+09:00`).toISOString(), distance_m: 7000, moving_time_sec: 2998, avg_pace_sec_km: 428, avg_hr: 152, max_hr: 171, avg_watts: 168, kcal: 512, device_name: "Apple Watch Series 11",
+      splits: demoSplits([[442, 138], [435, 142], [401, 158], [404, 161], [413, 166], [448, 152], [455, 148]]) },
     { ...base, id: "u-hyrox", strava_activity_id: "900002", sport_type: "WeightTraining", start_time: new Date(`${today}T18:30:00+09:00`).toISOString(), distance_m: 0, moving_time_sec: 3480, avg_pace_sec_km: null, avg_hr: 152, max_hr: 171, avg_watts: null, kcal: 620, device_name: "Apple Watch Series 11" },
   ];
 

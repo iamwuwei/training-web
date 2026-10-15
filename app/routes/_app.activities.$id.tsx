@@ -7,9 +7,10 @@ import { Avatar, Reminders, TopBar } from "../components/ui";
 import { ApiError, getActivities } from "../lib/api";
 import { hasSession } from "../lib/auth";
 import { mdDow } from "../lib/date";
-import { duration, int, km, kmPlan, pace, paceRange } from "../lib/format";
-import { labelStyle, sportName, verdictKind } from "../lib/labels";
-import { activityDate, hrOver, paceFast } from "../lib/plan";
+import { duration, int, km, kmPlan, pace } from "../lib/format";
+import { labelStyle, shortName, sportName, verdictKind } from "../lib/labels";
+import { activityDate, isRunSport } from "../lib/plan";
+import { comparablePace, focusLabel, focusStats, fullSplits, planFor, sessionBand, splitPace, type Band, type SessionPlan } from "../lib/segments";
 import type { ApiActivity, ApiSession } from "../types/api";
 import { usePlan } from "../lib/use-plan";
 
@@ -33,62 +34,148 @@ export function meta(): Route.MetaDescriptors {
   return [{ title: "報告 · 富士山マラソン 2026" }];
 }
 
-function Stat({ v, k, over, unit }: { v: string; k: string; over?: boolean; unit?: string }) {
+const pos = (v: number, lo: number, hi: number) => Math.max(0, Math.min(100, ((v - lo) / (hi - lo)) * 100));
+
+/** Target band on a track, actual value as a dot; the dot turns red outside the band. */
+function RangeRow({ label, value, text, band, fmt, note }: {
+  label: string; value: number; text: string; band: Band; fmt: (n: number) => string; note?: string;
+}) {
+  const pad = Math.max(10, (band.hi - band.lo) * 0.8);
+  const lo = Math.min(band.lo, value) - pad, hi = Math.max(band.hi, value) + pad;
+  const ok = value >= band.lo && value <= band.hi;
+  const l = pos(band.lo, lo, hi), r = pos(band.hi, lo, hi);
   return (
-    <div>
-      <div className={`num${over ? " over" : ""}`}>{v}{unit ? <small> {unit}</small> : null}</div>
-      <div className="k">{k}</div>
+    <div className="range">
+      <span className="k">{label}</span>
+      <div className="track" role="img" aria-label={`${label} ${text}，目標 ${fmt(band.lo)}–${fmt(band.hi)}，${ok ? "在目標內" : "超出目標"}`}>
+        <i className="rail" />
+        <i className="band" style={{ left: `${l}%`, width: `${r - l}%` }} />
+        <i className={`dot${ok ? "" : " out"}`} style={{ left: `${pos(value, lo, hi)}%` }} />
+        <span className="tick" style={{ left: `${l}%` }}>{fmt(band.lo)}</span>
+        <span className="tick" style={{ left: `${r}%` }}>{fmt(band.hi)}</span>
+      </div>
+      <span className={`v${ok ? "" : " out"}`}><b className="num">{text}</b> {ok ? <span className="ok">✓</span> : <span className="bad">!</span>}</span>
+      {note ? <p className="note-line">{note}</p> : null}
     </div>
   );
 }
 
-function Compare({ current, session, all, sessions }: { current: ApiActivity; session: ApiSession; all: ApiActivity[]; sessions: ApiSession[] }) {
-  const kind = labelStyle(session).kind;
-  const peers = all
-    .map((a) => ({ a, s: sessions.find((x) => x.id === a.session_id) ?? null }))
-    .filter(({ a, s }) => s && labelStyle(s).kind === kind && a.avg_pace_sec_km)
-    .sort((x, y) => x.a.start_time.localeCompare(y.a.start_time))
-    .slice(-5);
-  if (peers.length < 2) return null;
-  const fastest = Math.min(...peers.map(({ a }) => a.avg_pace_sec_km!));
+function DistRow({ actual, plan }: { actual: number; plan: number }) {
+  const ok = actual >= plan * 0.9;
   return (
-    <section className="compare">
-      <h2 className="section-h" style={{ margin: 0 }}>同類型比較 · {labelStyle(session).name}</h2>
-      <div className="rows">
-        {peers.map(({ a, s }) => {
-          const cur = a.id === current.id;
-          const width = (fastest / a.avg_pace_sec_km!) * 100;
-          return (
-            <div key={a.id} className={`row${cur ? " cur" : ""}`}>
-              <span className="d">{activityDate(a).slice(5).replace("-", "/")}</span>
-              <div className="bar"><i style={{ width: `${width}%`, background: cur ? `var(--t-${kind})` : "var(--chip-line)" }} /></div>
-              <span className={`num${paceFast(a, s) ? " over" : ""}`}>{pace(a.avg_pace_sec_km)}</span>
-              <span className={`num${hrOver(a, s) ? " over" : cur && a.avg_hr != null && s?.target_hr_min != null && a.avg_hr <= (s.target_hr_max ?? Infinity) ? " under" : ""}`}>{int(a.avg_hr)}</span>
-            </div>
-          );
-        })}
-      </div>
-      <div className="legend"><span>配速</span><span>心拍</span></div>
+    <div className="range">
+      <span className="k">距離</span>
+      <div className="bar"><i style={{ width: `${Math.min(100, (actual / plan) * 100)}%`, background: ok ? "var(--v-good)" : "var(--ink-3)" }} /></div>
+      <span className="v"><b className="num">{km(actual)}</b> <span className="of">/ {kmPlan(plan)} km</span></span>
+    </div>
+  );
+}
+
+/** "Target vs actual": pace and HR against the session's ranges, plus distance. */
+function TargetVsActual({ a, s, plan }: { a: ApiActivity; s: ApiSession; plan: SessionPlan }) {
+  const rows = [];
+  const hrBand = s.target_hr_min != null || s.target_hr_max != null
+    ? { lo: s.target_hr_min ?? (s.target_hr_max as number) - 20, hi: s.target_hr_max ?? (s.target_hr_min as number) + 10 }
+    : null;
+  if (plan.single) {
+    const band = sessionBand(s);
+    if (band && a.avg_pace_sec_km) rows.push(<RangeRow key="p" label="配速" value={a.avg_pace_sec_km} text={pace(a.avg_pace_sec_km)} band={band} fmt={pace} />);
+    if (hrBand && a.avg_hr != null) rows.push(<RangeRow key="h" label="心拍" value={a.avg_hr} text={String(a.avg_hr)} band={hrBand} fmt={String} />);
+  } else {
+    const f = focusStats(plan, a.splits);
+    const band = f && plan.kms?.[f.from - 1]?.band;
+    const range = f ? (f.from === f.to ? `第 ${f.from} km` : `第 ${f.from}〜${f.to} km`) : "";
+    if (f && band) rows.push(<RangeRow key="p" label={focusLabel(s)} value={f.pace} text={pace(f.pace)} band={band} fmt={pace} note={`${range}平均`} />);
+    if (f && hrBand && f.hrTop != null) rows.push(<RangeRow key="h" label="心拍" value={f.hrTop} text={String(f.hrTop)} band={hrBand} fmt={String} note={`${range}裡心拍最高的一公里`} />);
+  }
+  if (s.target_distance_m && isRunSport(a.sport_type)) rows.push(<DistRow key="d" actual={a.distance_m} plan={s.target_distance_m} />);
+  if (!rows.length) return null;
+  return (
+    <section className="targets">
+      <h2 className="section-h" style={{ margin: 0 }}>目標 vs 實際</h2>
+      {rows}
     </section>
   );
 }
 
-function Splits({ splits }: { splits: NonNullable<ApiActivity["splits"]> }) {
-  const paces = splits.map((s) => (s.average_speed > 0 ? 1000 / s.average_speed : 0)).filter(Boolean);
-  if (!paces.length) return null;
-  const fastest = Math.min(...paces);
+/** One dot per km on a pace axis; the target band is drawn on the km it applies to. */
+function SplitDots({ a, s, plan }: { a: ApiActivity; s: ApiSession | null; plan: SessionPlan | null }) {
+  const sps = fullSplits(a.splits);
+  if (!sps.length) return null;
+  const paces = sps.map(splitPace);
+  const bands = (plan?.kms ?? []).map((k) => k.band).filter((b): b is Band => !!b);
+  const lo = Math.min(...paces, ...bands.map((b) => b.lo)) - 10;
+  const hi = Math.max(...paces, ...bands.map((b) => b.hi)) + 10;
+  const hrCap = s?.target_hr_max ?? null;
+  const banded = plan?.kms?.some((k) => k.band);
+  return (
+    <section className="dots">
+      <h2 className="section-h" style={{ margin: 0 }}>每公里</h2>
+      {sps.map((sp) => {
+        const p = splitPace(sp);
+        const t = plan?.kms?.[sp.split - 1];
+        const band = t?.band ?? null;
+        const out = band ? p < band.lo || p > band.hi : false;
+        const hr = sp.average_heartrate != null ? Math.round(sp.average_heartrate) : null;
+        return (
+          <div key={sp.split} className="row">
+            <span className="d">{sp.split}</span>
+            <div className="lane">
+              <i className="rail" />
+              {band ? <i className="band" style={{ left: `${pos(band.lo, lo, hi)}%`, width: `${pos(band.hi, lo, hi) - pos(band.lo, lo, hi)}%` }} /> : null}
+              <i className={`dot${out ? " out" : ""}`} style={{ left: `${pos(p, lo, hi)}%` }} />
+            </div>
+            <span className={`num${out ? " over" : ""}`}>{pace(p)}</span>
+            <span className={`num${hr != null && hrCap != null && t?.focus && hr > hrCap ? " over" : ""}`}>{hr ?? "–"}</span>
+          </div>
+        );
+      })}
+      <div className="legend">
+        <span>{banded ? (plan?.single ? "綠帶 = 目標配速" : "綠帶 = 該段的目標配速") : s ? "這堂課的分段讀不出來，只畫實際配速" : ""}</span>
+        <span>配速 · 心拍</span>
+      </div>
+    </section>
+  );
+}
+
+function Compare({ current, session, all, sessions }: { current: ApiActivity; session: ApiSession; all: ApiActivity[]; sessions: ApiSession[] }) {
+  const kind = labelStyle(session);
+  const single = planFor(session).single;
+  const peers = all
+    .map((a) => {
+      const s = sessions.find((x) => x.id === a.session_id) ?? null;
+      if (!s || labelStyle(s).name !== kind.name) return null;
+      const c = comparablePace(a, s);
+      return c ? { a, s, ...c } : null;
+    })
+    .filter((x): x is NonNullable<typeof x> => !!x)
+    .sort((x, y) => x.a.start_time.localeCompare(y.a.start_time))
+    .slice(-5);
+  const title = `同類型比較 · ${kind.name}${single ? "" : `（${focusLabel(session)}）`}`;
+  if (peers.length < 2) {
+    return (
+      <section className="compare">
+        <h2 className="section-h" style={{ margin: 0 }}>{title}</h2>
+        <p className="empty-line">{peers.length ? `這是第一次 ${kind.name} 課，下一次之後就會出現比較。` : "還沒有可以比較的紀錄。"}</p>
+      </section>
+    );
+  }
+  const fastest = Math.min(...peers.map((p) => p.pace));
   return (
     <section className="compare">
-      <h2 className="section-h" style={{ margin: 0 }}>每公里</h2>
+      <h2 className="section-h" style={{ margin: 0 }}>{title}</h2>
       <div className="rows">
-        {splits.map((s) => {
-          const p = s.average_speed > 0 ? 1000 / s.average_speed : null;
+        {peers.map(({ a, s, pace: p, hr }) => {
+          const cur = a.id === current.id;
+          const band = single ? sessionBand(s) : null;
+          const paceOut = band ? p < band.lo || p > band.hi : false;
+          const hrOut = hr != null && s.target_hr_max != null && hr > s.target_hr_max;
           return (
-            <div key={s.split} className="row">
-              <span className="d">{s.split}</span>
-              <div className="bar"><i style={{ width: p ? `${(fastest / p) * 100}%` : 0, background: "var(--ink)" }} /></div>
-              <span className="num">{pace(p)}</span>
-              <span className="num">{s.average_heartrate != null ? int(s.average_heartrate) : "–"}</span>
+            <div key={a.id} className={`row${cur ? " cur" : ""}`}>
+              <span className="d">{activityDate(a).slice(5).replace("-", "/")}</span>
+              <div className="bar"><i style={{ width: `${(fastest / p) * 100}%`, background: cur ? `var(--t-${kind.kind})` : "var(--chip-line)" }} /></div>
+              <span className={`num${paceOut ? " over" : ""}`}>{pace(p)}</span>
+              <span className={`num${hrOut ? " over" : ""}`}>{hr != null ? Math.round(hr) : "–"}</span>
             </div>
           );
         })}
@@ -111,9 +198,9 @@ export default function Report({ loaderData }: Route.ComponentProps) {
 
   const sessions = view?.data.sessions ?? [];
   const s = sessions.find((x) => x.id === a.session_id) ?? null;
+  const plan = s ? planFor(s) : null;
   const r = a.review;
   const vk = verdictKind(r?.verdict);
-  const target = s ? (s.target ?? paceRange(s.target_pace_min_sec_km, s.target_pace_max_sec_km)) : null;
   const waitingReview = !!(a.session_id && a.memo_updated_at && (!r || (r.source === "claude" && r.created_at < a.memo_updated_at)));
 
   // Claude's review arrives a few seconds after the memo / session is sent: check back every 5 s, up to 40 s.
@@ -128,47 +215,35 @@ export default function Report({ loaderData }: Route.ComponentProps) {
     return () => window.clearInterval(t);
   }, [waitingReview, revalidate]);
 
+  const date = mdDow(activityDate(a));
+  const meta = s ? [date, s.week_no != null ? `第 ${s.week_no} 週` : null, s.target ? `目標 ${s.target}` : null].filter(Boolean).join(" · ") : `${date} · 未排課`;
+  const run = isRunSport(a.sport_type);
+  const extra = [
+    duration(a.moving_time_sec),
+    a.avg_watts != null ? `功率 ${a.avg_watts} W` : null,
+    a.kcal != null ? `${a.kcal} kcal` : null,
+    a.max_hr != null ? `最高心拍 ${a.max_hr}` : null,
+  ].filter(Boolean).join(" · ");
+
   return (
     <>
       <TopBar title="報告" back={<button type="button" className="back" aria-label="返回" onClick={() => (window.history.length > 1 ? void navigate(-1) : void navigate("/history"))}><BackIcon /></button>} />
       <main>
-        <article className="post" style={{ paddingTop: 18, paddingBottom: 16 }}>
+        <article className="post report-head">
           <Avatar session={s} sport={a.sport_type} />
           <div className="body">
-            <div className="meta">
-              <b>{mdDow(activityDate(a))}</b>
-              <span className="grey">{s ? `· 第 ${s.week_no} 週${s.phase ? ` · ${s.phase}` : ""}` : `· 未排課 · ${sportName(a.sport_type)}`}</span>
-            </div>
-            <p className="title lg" style={{ fontSize: 18, fontWeight: 700 }}>{s?.content ?? `${sportName(a.sport_type)} ${km(a.distance_m)} km`}</p>
-            {target && target !== "–" ? <p className="muted">目標 {target}</p> : null}
-            {!a.memo && a.description ? <p className="text" style={{ marginTop: 10, color: "var(--ink-2)" }}>{a.description}</p> : null}
+            <p className="name">{s ? shortName(s) : `${sportName(a.sport_type)} ${a.distance_m > 0 ? `${km(a.distance_m)} km` : duration(a.moving_time_sec)}`}</p>
+            <p className="meta-line">{meta}</p>
           </div>
         </article>
-
-        <section className="statgrid">
-          <Stat v={km(a.distance_m)} k={s?.target_distance_m ? `km · 課表 ${kmPlan(s.target_distance_m)}` : "km"} />
-          <Stat v={duration(a.moving_time_sec)} k="時間" />
-          <Stat v={pace(a.avg_pace_sec_km)} k="配速 /km" over={paceFast(a, s)} />
-          <Stat v={int(a.avg_hr)} k={a.max_hr != null ? `心拍 · 最高 ${a.max_hr}` : "心拍"} over={hrOver(a, s)} />
-          {a.avg_watts != null ? <Stat v={int(a.avg_watts)} k="功率 W" /> : null}
-          {a.kcal != null ? <Stat v={int(a.kcal)} k="卡路里" /> : null}
-        </section>
-
-        {s ? (
-          <p className="note" style={{ margin: 0, padding: "10px 0", textAlign: "left" }}>
-            對應課表 {s.scheduled_date.slice(5).replace("-", "/")} ·{" "}
-            <Link to={`/sessions/${s.id}`} className="chip" style={{ marginLeft: 6 }}>換一個活動</Link>
-          </p>
-        ) : null}
-        <MemoEditor key={a.id} activity={a} onSaved={setOverride} />
 
         {r?.verdict ? (
           <section className={`verdict-block ${vk ?? ""}`}>
             <h2>{r.verdict}</h2>
-            {r.comment ? <p style={{ fontSize: 14, lineHeight: 1.6, color: "var(--ink-2)" }}>{r.comment}</p> : null}
+            {r.comment ? <p className="comment">{r.comment}</p> : null}
             {r.reminders.length ? <Reminders items={r.reminders} /> : null}
             <div className="src">
-              {r.source === "claude" ? `教練判定 · 自動${r.model ? ` · ${r.model}` : ""}` : "教練判定 · 手動"}
+              {r.source === "claude" ? "教練判定 · 自動" : "教練判定 · 手動"}
               {waitingReview ? " · 正在依你的心得重新評…" : ""}
             </div>
           </section>
@@ -176,14 +251,33 @@ export default function Report({ loaderData }: Route.ComponentProps) {
           <section className="verdict-block"><div className="src">教練判定產生中，幾秒後更新…</div></section>
         ) : null}
 
-        {a.splits?.length ? <Splits splits={a.splits} /> : null}
+        {s && plan ? <TargetVsActual a={a} s={s} plan={plan} /> : (
+          <section className="targets">
+            <div className="stats">
+              {run || a.distance_m > 0 ? <span><b className="num">{km(a.distance_m)}</b> km</span> : null}
+              {run ? <span><b className="num">{pace(a.avg_pace_sec_km)}</b> /km</span> : null}
+              {a.avg_hr != null ? <span><b className="num">{int(a.avg_hr)}</b> bpm</span> : null}
+            </div>
+          </section>
+        )}
+
+        <MemoEditor key={a.id} activity={a} onSaved={setOverride} />
+        {!a.memo && a.description ? <p className="text" style={{ margin: "10px 0 0", color: "var(--ink-2)" }}>Strava 描述：{a.description}</p> : null}
+
+        <SplitDots a={a} s={s} plan={plan} />
         {s ? <Compare current={a} session={s} all={all} sessions={sessions} /> : null}
 
-        {(a.weather || a.gear_name || a.device_name) ? (
-          <section className="gear">
-            {a.weather ? <>{a.weather}<br /></> : null}
-            {[a.gear_name, a.device_name].filter(Boolean).join(" · ")}
-          </section>
+        <section className="gear">
+          {extra}
+          {a.weather ? <><br />{a.weather}</> : null}
+          {a.gear_name || a.device_name ? <><br />{[a.gear_name, a.device_name].filter(Boolean).join(" · ")}</> : null}
+        </section>
+
+        {s ? (
+          <p className="swap-line">
+            這筆活動算成 {s.scheduled_date.slice(5).replace("-", "/")} 的課
+            <Link to={`/sessions/${s.id}`} className="chip">換一個活動</Link>
+          </p>
         ) : null}
       </main>
     </>
