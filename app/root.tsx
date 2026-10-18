@@ -1,6 +1,7 @@
 import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router";
 import type { Route } from "./+types/root";
 import { FeedSkeleton } from "./components/ui";
+import { ApiError } from "./lib/api";
 import "./app.css";
 
 export const links: Route.LinksFunction = () => [
@@ -60,6 +61,9 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   if (isRouteErrorResponse(error)) {
     title = error.status === 404 ? "找不到這一頁" : `錯誤 ${error.status}`;
     detail = typeof error.data === "string" ? error.data : "";
+  } else if (error instanceof ApiError) {
+    title = `伺服器錯誤 ${error.status}`;
+    detail = error.message || (error.status >= 500 ? "API 沒有正常回應，可能是剛部署或資料表還沒建立。" : "");
   } else if (error instanceof Error) {
     detail = error.message;
   }
