@@ -3,7 +3,7 @@
 設計稿（Claude Design canvas）的原始檔，給改畫面時對照用。**畫面的真相仍是 `app/`**；這裡是「想要長成什麼樣」。
 
 - 來源：https://claude.ai/artifact/4Lc98VDehARXEZpFUfBZ7h（`training-web 設計稿`）
-- 這份快照：artifact version `1792082724-1e42`
+- 這份快照：artifact version `1792320305-b8de`
 - 每個 `*.dc.html` 是一個 390 px 寬的手機畫面（artboard），數字是 2026-10-14 視角的範例資料；`canvas.json` 是畫布索引（位置、尺寸、旁註）。
 - `*.dc.html` 引用的 `support.js` 是 Design canvas 的 runtime，沒有放進來，所以直接用瀏覽器開不會正常渲染；看樣式與結構就好，或回到上面的連結看。
 
