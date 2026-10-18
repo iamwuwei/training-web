@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { NavLink } from "react-router";
 import type { ApiSession, Verdict } from "../types/api";
 import { labelStyle, verdictKind } from "../lib/labels";
-import { BarsIcon, CalendarIcon, HomeIcon, UserIcon } from "./icons";
+import { BarsIcon, CalendarIcon, ChatIcon, HomeIcon } from "./icons";
 
 /** Type avatar: coloured disc with a 1–2 character code; rest/strength is a hollow grey ring. */
 export function Avatar({ session, sport }: { session: Pick<ApiSession, "label" | "type"> | null | undefined; sport?: string | null }) {
@@ -13,6 +13,11 @@ export function Avatar({ session, sport }: { session: Pick<ApiSession, "label" |
       {s.short}
     </div>
   );
+}
+
+/** The coach: an ink disc with a W. The only dark avatar in the app, so it reads as a person, not a session type. */
+export function CoachAvatar({ size = 36 }: { size?: number }) {
+  return <div className="avatar coach" style={{ width: size, height: size, fontSize: Math.round(size * 0.44) }} aria-hidden="true">W</div>;
 }
 
 export function VerdictTag({ verdict }: { verdict: Verdict | "跳過" | null | undefined }) {
@@ -46,7 +51,7 @@ export function TabBar() {
         <NavLink to="/" end><HomeIcon /><span>今天</span></NavLink>
         <NavLink to="/plan"><CalendarIcon /><span>課表</span></NavLink>
         <NavLink to="/history"><BarsIcon /><span>紀錄</span></NavLink>
-        <NavLink to="/settings"><UserIcon /><span>設定</span></NavLink>
+        <NavLink to="/coach"><ChatIcon /><span>教練</span></NavLink>
       </nav>
     </div>
   );

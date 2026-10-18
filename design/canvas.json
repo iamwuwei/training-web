@@ -1,125 +1,175 @@
 {
   "v": 3,
   "attachments": {},
-  "createdOnFiles": {
-    "v": 1,
-    "at": "2026-10-14T04:40:00Z"
+  "boards": {
+    "Coach.dc.html": {
+      "h": 1400,
+      "is_interactive": true,
+      "radius": 28,
+      "title": "教練 Woo（時間軸 · 建議 · 對話）",
+      "w": 390,
+      "x": 1880,
+      "y": 0
+    },
+    "History.dc.html": {
+      "h": 1300,
+      "is_interactive": true,
+      "radius": 28,
+      "title": "紀錄",
+      "w": 390,
+      "x": 1410,
+      "y": 0
+    },
+    "Login.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "radius": 28,
+      "title": "登入",
+      "w": 390,
+      "x": 0,
+      "y": 0
+    },
+    "Main.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "radius": 28,
+      "title": "今天",
+      "w": 390,
+      "x": 470,
+      "y": 0
+    },
+    "Proposal-LogSession.dc.html": {
+      "h": 844,
+      "radius": 28,
+      "title": "記錄訓練（選活動＋感受）",
+      "w": 390,
+      "x": 940,
+      "y": 1880
+    },
+    "Proposal-ReportMP.dc.html": {
+      "h": 1560,
+      "radius": 28,
+      "title": "單次報告 · 組合課（2 km Easy + 3 km @ MP + 2 km Easy）",
+      "w": 390,
+      "x": 0,
+      "y": 3180
+    },
+    "Proposal-TodayA.dc.html": {
+      "h": 844,
+      "radius": 28,
+      "title": "今天 A · 還沒跑",
+      "w": 390,
+      "x": 0,
+      "y": 1880
+    },
+    "Proposal-TodayB.dc.html": {
+      "h": 844,
+      "radius": 28,
+      "title": "今天 B · Strava 已同步、未記錄",
+      "w": 390,
+      "x": 470,
+      "y": 1880
+    },
+    "Proposal-TodayC.dc.html": {
+      "h": 844,
+      "radius": 28,
+      "title": "今天 C · 教練分析中",
+      "w": 390,
+      "x": 1410,
+      "y": 1880
+    },
+    "Proposal-TodayD.dc.html": {
+      "h": 844,
+      "radius": 28,
+      "title": "今天 D · 完成",
+      "w": 390,
+      "x": 1880,
+      "y": 1880
+    },
+    "Proposal-TodayE.dc.html": {
+      "h": 844,
+      "radius": 28,
+      "title": "今天 E · 休息日但有活動",
+      "w": 390,
+      "x": 2350,
+      "y": 1880
+    },
+    "Report.dc.html": {
+      "h": 1500,
+      "is_interactive": true,
+      "radius": 28,
+      "title": "單次報告（單一配速的課；從今天或紀錄點進）",
+      "w": 390,
+      "x": 2820,
+      "y": 0
+    },
+    "Settings.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "radius": 28,
+      "title": "設定（從今天頁右上角齒輪進）",
+      "w": 390,
+      "x": 2350,
+      "y": 0
+    },
+    "Weeks.dc.html": {
+      "h": 1000,
+      "is_interactive": true,
+      "radius": 28,
+      "title": "課表（點長條切換週）",
+      "w": 390,
+      "x": 940,
+      "y": 0
+    }
   },
-  "title": "training-web 設計稿",
+  "createdOnFiles": {
+    "at": "2026-10-14T04:40:00Z",
+    "v": 1
+  },
+  "designSystems": [],
   "launch": {
     "view": "canvas"
   },
-  "pages": [],
-  "boards": {
-    "Login.dc.html": {
+  "notes": {
+    "data": {
+      "fill": "gray",
+      "maxH": 900,
+      "text": "導覽：底部四個 tab\n今天 ／ 課表 ／ 紀錄 ／ 教練。設定移到今天頁右上角的齒輪。\n\n今天頁：頂部是本週里程一行；今天的課只出現一次，跟著狀態變（見下排）。今天其他沒算進課表的活動有「記錄」按鈕；下次練習每堂一行。\n\n課表頁：上方 11 週跑量長條，點一條切換下面那一週，‹ › 前後翻。\n\n教練頁（Woo）：一條時間軸，教練的訊息靠左（貼文式，W 頭像），你的訊息靠右淺灰氣泡。週日的週總結和每次跑完的判定都會自動變成 Woo 的訊息；調整建議是訊息的附件，按「採用」才會改課表（舊課表留著，新版本 version+1）。底部輸入框可以回話，Woo 用同一套資料（目標、課表、最近 14 天）回答，非同步，顯示「Woo 輸入中…」。範圍只限跑步、課表、恢復；離題一句話帶回來。報告頁的「問教練」會把那筆活動當引用帶進輸入框。\n\n設定頁：帳號、Strava 連結狀態與連結按鈕（開 API 的 /strava/oauth/start）、登出。資料來自 GET /me。\n\n報告頁不在 tab 裡，從「今天」的貼文或「紀錄」列表點進去。判定旁有「重新分析」；Claude 失敗時顯示「分析失敗」＋原因＋重新分析；分析中最多自動等 3 分鐘。\n\n教練判定只看數據，心得和最近 14 天、同類型上 5 次的歷史只影響評語和提醒。\n\n登入走 Cognito（可直接開 Apple）。",
+      "w": 340,
+      "x": 3290,
+      "y": 960
+    },
+    "palette": {
+      "fill": "blue",
+      "maxH": 900,
+      "text": "視覺：Threads 式極簡\n\n純白底、墨色 #14161B、次要文字 #5C6370、淡灰 #6B7180（白底 4.9:1，過 WCAG AA），1px 分隔線 #ECEDF0。沒有卡片。\n\n顏色只給需要一眼區分的符號：\n• 訓練類型 → 頭像圓圈：Easy／Recovery 藍 #2B5BD7、Long 紫 #6B3FC9、MP／坡跑／快步 橘 #C25A00、比賽 紅 #B3261E、休息／肌力 空心灰。\n• 判定 → 小色點：達成 綠 #1B7A48、達成但有提醒 琥珀 #9A5B00、未達成 紅、跳過 灰；分析中是空心點。\n• 超出目標的數字本身變紅（10/08 的 6:15 與 169）。\n• 進度條：進行中灰、達標綠。\n\n元件：\n• 區塊標題 13px 粗體、次要文字色。\n• 小動作（編輯、記錄、重新整理、換一個活動）一律外框膠囊按鈕，高 32px。\n• 主要動作是全寬黑色按鈕，一個畫面最多一個。\n• 底部 tab：圖示加文字。\n\n字體：Noto Sans TC 內文；數字 Barlow Condensed。",
+      "w": 340,
+      "x": 3290,
+      "y": 0
+    },
+    "proposalTitle": {
+      "kind": "title1",
+      "maxW": 2740,
+      "text": "今天頁的狀態：同一堂課只出現一次（A 還沒跑 → B 已同步 → 記錄訓練 → C 分析中 → D 完成；E 休息日）",
+      "w": 240,
       "x": 0,
-      "y": 0,
-      "w": 390,
-      "h": 844,
-      "title": "登入",
-      "is_interactive": true,
-      "radius": 28
+      "y": 1552
     },
-    "Main.dc.html": {
-      "x": 470,
-      "y": 0,
-      "w": 390,
-      "h": 844,
-      "title": "今天",
-      "is_interactive": true,
-      "radius": 28
-    },
-    "Weeks.dc.html": {
-      "x": 940,
-      "y": 0,
-      "w": 390,
-      "h": 1460,
-      "title": "課表（教練回顧與建議 · 點長條切換週）",
-      "is_interactive": true,
-      "radius": 28
-    },
-    "History.dc.html": {
-      "x": 1410,
-      "y": 0,
-      "w": 390,
-      "h": 1300,
-      "title": "紀錄",
-      "is_interactive": true,
-      "radius": 28
-    },
-    "Settings.dc.html": {
-      "x": 1880,
-      "y": 0,
-      "w": 390,
-      "h": 844,
-      "title": "設定",
-      "is_interactive": true,
-      "radius": 28
-    },
-    "Report.dc.html": {
-      "x": 2350,
-      "y": 0,
-      "w": 390,
-      "h": 1500,
-      "title": "單次報告（單一配速的課；從今天或紀錄點進）",
-      "is_interactive": true,
-      "radius": 28
-    },
-    "Proposal-TodayA.dc.html": {
+    "reportTitle": {
+      "kind": "title1",
+      "maxW": 2740,
+      "text": "報告頁 · 組合課：配速只看重點段，每公里只在那幾公里畫目標帶（單一配速版在第一排）",
+      "w": 240,
       "x": 0,
-      "y": 1880,
-      "w": 390,
-      "h": 844,
-      "title": "今天 A · 還沒跑",
-      "radius": 28
+      "y": 2860
     },
-    "Proposal-TodayB.dc.html": {
-      "x": 470,
-      "y": 1880,
-      "w": 390,
-      "h": 844,
-      "title": "今天 B · Strava 已同步、未記錄",
-      "radius": 28
-    },
-    "Proposal-LogSession.dc.html": {
-      "x": 940,
-      "y": 1880,
-      "w": 390,
-      "h": 844,
-      "title": "記錄訓練（選活動＋感受）",
-      "radius": 28
-    },
-    "Proposal-TodayC.dc.html": {
-      "x": 1410,
-      "y": 1880,
-      "w": 390,
-      "h": 844,
-      "title": "今天 C · 教練分析中",
-      "radius": 28
-    },
-    "Proposal-TodayD.dc.html": {
-      "x": 1880,
-      "y": 1880,
-      "w": 390,
-      "h": 844,
-      "title": "今天 D · 完成",
-      "radius": 28
-    },
-    "Proposal-TodayE.dc.html": {
-      "x": 2350,
-      "y": 1880,
-      "w": 390,
-      "h": 844,
-      "title": "今天 E · 休息日但有活動",
-      "radius": 28
-    },
-    "Proposal-ReportMP.dc.html": {
+    "title": {
+      "kind": "title1",
+      "maxW": 3210,
+      "text": "training-web · 登入 ＋ 四個 tab（今天／課表／紀錄／教練）＋ 設定 ＋ 報告頁",
+      "w": 240,
       "x": 0,
-      "y": 3180,
-      "w": 390,
-      "h": 1560,
-      "title": "單次報告 · 組合課（2 km Easy + 3 km @ MP + 2 km Easy）",
-      "radius": 28
+      "y": -340
     }
   },
   "order": [
@@ -127,6 +177,7 @@
     "Main.dc.html",
     "Weeks.dc.html",
     "History.dc.html",
+    "Coach.dc.html",
     "Settings.dc.html",
     "Report.dc.html",
     "Proposal-TodayA.dc.html",
@@ -137,47 +188,6 @@
     "Proposal-TodayE.dc.html",
     "Proposal-ReportMP.dc.html"
   ],
-  "notes": {
-    "title": {
-      "x": 0,
-      "y": -340,
-      "w": 240,
-      "text": "training-web · 登入 ＋ 四個 tab ＋ 報告頁",
-      "kind": "title1",
-      "maxW": 2740
-    },
-    "palette": {
-      "x": 2820,
-      "y": 0,
-      "w": 340,
-      "maxH": 900,
-      "fill": "blue",
-      "text": "視覺：Threads 式極簡\n\n純白底、墨色 #14161B、次要文字 #5C6370、淡灰 #6B7180（白底 4.9:1，過 WCAG AA），1px 分隔線 #ECEDF0。沒有卡片。\n\n顏色只給需要一眼區分的符號：\n• 訓練類型 → 頭像圓圈：Easy／Recovery 藍 #2B5BD7、Long 紫 #6B3FC9、MP／坡跑／快步 橘 #C25A00、比賽 紅 #B3261E、休息／肌力 空心灰。\n• 判定 → 小色點：達成 綠 #1B7A48、達成但有提醒 琥珀 #9A5B00、未達成 紅、跳過 灰；分析中是空心點。\n• 超出目標的數字本身變紅（10/08 的 6:15 與 169）。\n• 進度條：進行中灰、達標綠。\n\n元件：\n• 區塊標題 13px 粗體、次要文字色。\n• 小動作（編輯、記錄、重新整理、換一個活動）一律外框膠囊按鈕，高 32px。\n• 主要動作是全寬黑色按鈕，一個畫面最多一個。\n• 底部 tab：圖示加文字。\n\n字體：Noto Sans TC 內文；數字 Barlow Condensed。"
-    },
-    "data": {
-      "x": 2820,
-      "y": 960,
-      "w": 340,
-      "maxH": 760,
-      "fill": "gray",
-      "text": "導覽：底部四個 tab\n今天 ／ 課表 ／ 紀錄 ／ 設定\n\n今天頁：頂部是本週里程一行；今天的課只出現一次，跟著狀態變（見下排）。今天其他沒算進課表的活動有「記錄」按鈕；下次練習每堂一行。\n\n課表頁：上方 11 週跑量長條，點一條切換下面那一週，‹ › 前後翻。長條下面是最近一次的教練回顧（每週日 Sonnet 產生）：總結加調整建議，按「採用」才會改課表（舊課表留著，新版本 version+1）。\n\n設定頁：帳號、Strava 連結狀態與連結按鈕（開 API 的 /strava/oauth/start）、登出。資料來自 GET /me。\n\n報告頁不在 tab 裡，從「今天」的貼文或「紀錄」列表點進去。判定旁有「重新分析」；Claude 失敗時顯示「分析失敗」＋原因＋重新分析；分析中最多自動等 3 分鐘。\n\n教練判定只看數據，心得和最近 14 天、同類型上 5 次的歷史只影響評語和提醒。\n\n登入走 Cognito（可直接開 Apple）。"
-    },
-    "proposalTitle": {
-      "x": 0,
-      "y": 1560,
-      "w": 240,
-      "text": "今天頁的狀態：同一堂課只出現一次（A 還沒跑 → B 已同步 → 記錄訓練 → C 分析中 → D 完成；E 休息日）",
-      "kind": "title1",
-      "maxW": 2740
-    },
-    "reportTitle": {
-      "x": 0,
-      "y": 2860,
-      "w": 240,
-      "text": "報告頁 · 組合課：配速只看重點段，每公里只在那幾公里畫目標帶（單一配速版在第一排）",
-      "kind": "title1",
-      "maxW": 2740
-    }
-  },
-  "designSystems": []
+  "pages": [],
+  "title": "training-web 設計稿"
 }

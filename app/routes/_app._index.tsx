@@ -1,6 +1,6 @@
 import { Link, useRevalidator } from "react-router";
 import type { Route } from "./+types/_app._index";
-import { MountainIcon } from "../components/icons";
+import { GearIcon, MountainIcon } from "../components/icons";
 import { PlanPost, RestPost } from "../components/posts";
 import { Avatar, Bar, SectionH, TopBar, VerdictTag } from "../components/ui";
 import { md, mdDow, relativeDay, timeJst } from "../lib/date";
@@ -108,7 +108,10 @@ export default function Today() {
     <>
       <TopBar
         title={<><MountainIcon />富士山マラソン 2026</>}
-        aside={daysToRace > 0 ? <>倒數 <span className="num">{daysToRace}</span> 天</> : daysToRace === 0 ? "比賽日" : "已完賽"}
+        aside={<>
+          <span>{daysToRace > 0 ? <>倒數 <span className="num">{daysToRace}</span> 天</> : daysToRace === 0 ? "比賽日" : "已完賽"}</span>
+          <Link to="/settings" className="gear" aria-label="設定"><GearIcon /></Link>
+        </>}
       />
       <main>
         {currentWeek ? (

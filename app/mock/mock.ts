@@ -3,7 +3,7 @@
 // results become an activity + manual review on the same local date.
 
 import plans from "./plans.json";
-import type { ActivitiesResponse, ApiActivity, ApiSession, ApiSplit, ApiWeek, ApiWeeklyReview, MatchStatus, MeResponse, PlanResponse, PostAdjustmentRequest, PostAdjustmentResponse, PutMemoRequest, PutMemoResponse, PutSessionRequest, PutSessionResponse, RereviewResponse, Verdict, WeeklyResponse } from "../types/api";
+import type { ActivitiesResponse, ApiActivity, ApiCoachMessage, ApiSession, ApiSplit, ApiWeek, ApiWeeklyReview, CoachResponse, PostCoachMessageRequest, PostCoachMessageResponse, MatchStatus, MeResponse, PlanResponse, PostAdjustmentRequest, PostAdjustmentResponse, PutMemoRequest, PutMemoResponse, PutSessionRequest, PutSessionResponse, RereviewResponse, Verdict, WeeklyResponse } from "../types/api";
 import { todayJst } from "../lib/date";
 const MOCK_USER_ID = "7d1c3a0e-4f7b-4d2e-9c1a-5b8e2f6a1c01"; // ww in training-api seed
 
@@ -238,4 +238,36 @@ export function mockPostAdjustment(weeklyId: string, index: number, body: PostAd
   item.status = body.action === "apply" ? "applied" : "dismissed";
   item.decided_at = new Date().toISOString();
   return { review: { ...w, adjustments: w.adjustments.map((a) => ({ ...a })) } };
+}
+
+// ---- the coach's thread (demo) ------------------------------------------------
+let thread: ApiCoachMessage[] | undefined;
+const at = (iso: string) => new Date(iso).toISOString();
+function threadData(): ApiCoachMessage[] {
+  if (thread) return thread;
+  const w = weeklyData()[0];
+  thread = [
+    { id: "c1", role: "coach", kind: "weekly", text: w.summary ?? "", activity_id: null, weekly_review_id: w.id, status: "sent", review: null, quote: null, error: null, created_at: at("2026-10-12T12:00:00Z") },
+    { id: "c2", role: "coach", kind: "review", text: "心拍整段壓在 140，是四次 Easy 裡最穩的一次。第 1 km 6:35 偏快是錶的心拍延遲，不是真的用力；第 6 km 8:01 是坡後自然放慢，正常。", activity_id: "a-2026-10-13", weekly_review_id: null, status: "sent", review: { label: "Easy 6 km", verdict: "達成", reminder: "第 1 km 前 3 分鐘用呼吸不用錶", date: "2026-10-13" }, quote: null, error: null, created_at: at("2026-10-12T22:52:00Z") },
+    { id: "c3", role: "athlete", kind: "chat", text: "第一公里又衝太快了，有什麼辦法壓住？", activity_id: "a-2026-10-13", weekly_review_id: null, status: "sent", review: null, quote: "10/13 Easy 6.01 km · 7:25/km · 心拍 140（最高 148） · 達成", error: null, created_at: at("2026-10-12T23:10:00Z") },
+    { id: "c4", role: "coach", kind: "chat", text: "這是連續第二次了。前 3 分鐘不要看錶，用鼻子呼吸能撐住的速度就是對的；第 1 km 跑到 7:30 以上才算成功。明天 MP 課的前 2 km Easy 也照這個來。", activity_id: null, weekly_review_id: null, status: "sent", review: null, quote: null, error: null, created_at: at("2026-10-12T23:10:20Z") },
+  ];
+  return thread;
+}
+export function mockCoach(): CoachResponse {
+  return { coach: { name: "Woo" }, messages: threadData().map((m) => ({ ...m })) };
+}
+/** Demo mode: Woo answers after ~3 s, off-topic gets the one-liner. */
+export function mockPostCoachMessage(body: PostCoachMessageRequest): PostCoachMessageResponse {
+  const t = threadData();
+  const quoted = body.activity_id ? findActivity(body.activity_id) : undefined;
+  const quote = quoted ? `${quoted.start_time.slice(5, 10).replace("-", "/")} ${quoted.session_id ? "課表" : "未排課"} ${(quoted.distance_m / 1000).toFixed(2)} km` : null;
+  const m: ApiCoachMessage = { id: `c${t.length + 1}`, role: "athlete", kind: "chat", text: body.text, activity_id: body.activity_id ?? null, weekly_review_id: null, status: "pending", review: null, quote, error: null, created_at: new Date().toISOString() };
+  t.push(m);
+  setTimeout(() => {
+    const offTopic = /吃|電影|天氣|股票|工作/.test(body.text) && !/跑|課表|心拍|配速|腿/.test(body.text);
+    t.push({ id: `c${t.length + 1}`, role: "coach", kind: "chat", text: offTopic ? "這個不歸我管，我們回到課表。週五恢復跑完記得寫一下腿的感覺。" : "（示範）收到。以你最近 14 天的心拍來看，這個問題先用降速處理，不要先想拿掉課。週五恢復跑完再跟我說腿的狀況。", activity_id: null, weekly_review_id: null, status: "sent", review: null, quote: null, error: null, created_at: new Date().toISOString() });
+    m.status = "sent";
+  }, 3000);
+  return { message: { ...m } };
 }

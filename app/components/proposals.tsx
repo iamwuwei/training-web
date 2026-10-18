@@ -22,7 +22,7 @@ function fmt(field: ApiAdjustment["field"], v: string | number | null): string {
  * 教練建議: the latest weekly review's summary and its adjustment proposals. Nothing
  * changes until the athlete taps 採用; 略過 just records the decision.
  */
-export function CoachProposals({ review, sessions, onChanged }: { review: ApiWeeklyReview; sessions: ApiSession[]; onChanged: () => void }) {
+export function CoachProposals({ review, sessions, onChanged, embedded }: { review: ApiWeeklyReview; sessions: ApiSession[]; onChanged: () => void; embedded?: boolean }) {
   const [open, setOpen] = useState(false);
   const [state, setState] = useState<Record<number, ApiAdjustment["status"]>>({});
   const [busy, setBusy] = useState<number | null>(null);
@@ -47,16 +47,23 @@ export function CoachProposals({ review, sessions, onChanged }: { review: ApiWee
 
   if (!review.summary && !pending.length) return null;
 
+  // Inside Woo's weekly message every proposal shows, with what was decided.
+  const shown = embedded ? review.adjustments : pending;
+  if (embedded && !shown.length) return null;
+
   return (
-    <section className="coach">
-      <div className="head">
-        <h2 className="section-h" style={{ margin: 0 }}>教練回顧 · {md(review.week_start)} 那週</h2>
-        {pending.length ? <span className="count">{pending.length} 個建議</span> : decided ? <span className="count muted">已處理</span> : null}
-      </div>
-      {review.summary ? (
+    <section className={embedded ? "coach embedded" : "coach"}>
+      {embedded ? null : (
+        <div className="head">
+          <h2 className="section-h" style={{ margin: 0 }}>教練回顧 · {md(review.week_start)} 那週</h2>
+          {pending.length ? <span className="count">{pending.length} 個建議</span> : decided ? <span className="count muted">已處理</span> : null}
+        </div>
+      )}
+      {!embedded && review.summary ? (
         <p className={`summary${open ? "" : " clamp"}`} onClick={() => setOpen((v) => !v)}>{review.summary}</p>
       ) : null}
-      {pending.map((a) => {
+      {shown.map((a) => {
+        const status = state[a.index] ?? a.status;
         const s = sessions.find((x) => x.id === a.session_id || x.id === a.applied_session_id) ?? null;
         return (
           <div key={a.index} className="proposal">
@@ -76,8 +83,14 @@ export function CoachProposals({ review, sessions, onChanged }: { review: ApiWee
               </div>
             </div>
             <div className="actions">
-              <button type="button" className="chip primary" disabled={busy != null} onClick={() => void decide(a, "apply")}>{busy === a.index ? "…" : "採用"}</button>
-              <button type="button" className="chip" disabled={busy != null} onClick={() => void decide(a, "dismiss")}>略過</button>
+              {status === "pending" ? (
+                <>
+                  <button type="button" className="chip primary" disabled={busy != null} onClick={() => void decide(a, "apply")}>{busy === a.index ? "…" : "採用"}</button>
+                  <button type="button" className="chip" disabled={busy != null} onClick={() => void decide(a, "dismiss")}>略過</button>
+                </>
+              ) : (
+                <span className={`decided ${status}`}>{status === "applied" ? "✓ 已採用" : "已略過"}</span>
+              )}
             </div>
           </div>
         );

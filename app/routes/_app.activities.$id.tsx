@@ -4,10 +4,10 @@ import { useReviewPolling } from "../lib/use-review-polling";
 import type { Route } from "./+types/_app.activities.$id";
 import { BackIcon } from "../components/icons";
 import { MemoEditor } from "../components/memo";
-import { Avatar, Reminders, TopBar } from "../components/ui";
+import { Avatar, CoachAvatar, Reminders, TopBar } from "../components/ui";
 import { ApiError, getActivities, rereview } from "../lib/api";
 import { hasSession } from "../lib/auth";
-import { mdDow } from "../lib/date";
+import { mdDow, timeJst } from "../lib/date";
 import { duration, int, km, kmPlan, pace } from "../lib/format";
 import { labelStyle, shortName, sportName, verdictKind } from "../lib/labels";
 import { activityDate, isRunSport } from "../lib/plan";
@@ -255,8 +255,8 @@ export default function Report({ loaderData }: Route.ComponentProps) {
             {r.comment ? <p className="comment">{r.comment}</p> : null}
             {r.reminders.length ? <Reminders items={r.reminders} /> : null}
             <div className="src">
-              <span>{r.source === "claude" ? "教練判定 · 自動" : "教練判定 · 手動"}{waitingReview ? " · 正在依你的心得重新評…" : ""}</span>
-              {r.source === "claude" && !waitingReview ? retryChip : null}
+              <span className="who">{r.source === "claude" ? <><CoachAvatar size={20} />Woo · {mdDow(r.created_at.slice(0, 10)).split(" ")[0]} {timeJst(r.created_at)}</> : "教練判定 · 手動"}{waitingReview ? " · 正在依你的心得重新評…" : ""}</span>
+              {!waitingReview ? <span className="acts"><Link to={`/coach?quote=${a.id}`} className="chip">問教練</Link>{r.source === "claude" ? retryChip : null}</span> : null}
             </div>
             {rereviewError ? <p className="hint" style={{ color: "var(--v-bad)" }}>{rereviewError}</p> : null}
           </section>
@@ -264,7 +264,7 @@ export default function Report({ loaderData }: Route.ComponentProps) {
           <section className="verdict-block bad">
             <h2>分析失敗</h2>
             <p className="comment" style={{ color: "var(--ink-2)" }}>教練這次沒有回應{r.error ? `：${r.error}` : ""}。數據和心得都已經存好，可以再試一次。</p>
-            <div className="src"><span>教練判定 · 自動</span>{retryChip}</div>
+            <div className="src"><span className="who"><CoachAvatar size={20} />Woo</span><span className="acts"><Link to={`/coach?quote=${a.id}`} className="chip">問教練</Link>{retryChip}</span></div>
             {rereviewError ? <p className="hint" style={{ color: "var(--v-bad)" }}>{rereviewError}</p> : null}
           </section>
         ) : waitingReview ? (
@@ -273,11 +273,11 @@ export default function Report({ loaderData }: Route.ComponentProps) {
               <>
                 <h2 className="pending-h">分析比較久</h2>
                 <p className="comment" style={{ color: "var(--ink-2)" }}>已經等了 3 分鐘還沒有結果。可能是資料庫剛喚醒或教練那邊塞車，稍後再回來看，或直接重新分析。</p>
-                <div className="src"><span>教練判定 · 自動</span>{retryChip}</div>
+                <div className="src"><span className="who"><CoachAvatar size={20} />Woo</span>{retryChip}</div>
                 {rereviewError ? <p className="hint" style={{ color: "var(--v-bad)" }}>{rereviewError}</p> : null}
               </>
             ) : (
-              <div className="src"><span className="pending">教練分析中，通常 10 秒到 1 分鐘</span></div>
+              <div className="src"><span className="pending">Woo 分析中，通常 10 秒到 1 分鐘</span></div>
             )}
           </section>
         ) : null}

@@ -17,6 +17,18 @@ export const BarsIcon = (p: SVGProps<SVGSVGElement>) => (
 export const UserIcon = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><circle cx="13" cy="9" r="4.5" /><path d="M4.5 22c.8-4.2 4.3-6.5 8.5-6.5s7.7 2.3 8.5 6.5" /></svg>
 );
+export const ChatIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="M5 6h16a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-9l-5 4v-4H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1z" /><path d="M9 11h8M9 14h5" /></svg>
+);
+export const GearIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base({ width: 22, height: 22, viewBox: "0 0 24 24", strokeWidth: 2, ...p })}>
+    <circle cx="12" cy="12" r="3" />
+    <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
+  </svg>
+);
+export const SendIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base({ width: 20, height: 20, viewBox: "0 0 24 24", ...p })}><path d="M12 19V5M5 12l7-7 7 7" /></svg>
+);
 export const BackIcon = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base({ width: 22, height: 22, viewBox: "0 0 22 22", strokeWidth: 2, ...p })}><path d="M13.5 5l-6 6 6 6" /></svg>
 );
