@@ -56,7 +56,7 @@ export default function AppLayout({ loaderData }: Route.ComponentProps) {
   return (
     <div className="shell">
       <Outlet />
-      <TabBar />
+      <TabBar coachUnread={(loaderData.data?.coach_unread ?? 0) > 0} />
     </div>
   );
 }

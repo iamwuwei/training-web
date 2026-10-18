@@ -44,14 +44,22 @@ export function Reminders({ items }: { items: string[] }) {
   );
 }
 
-export function TabBar() {
+/** `coachUnread`: Woo has posted since the thread was last opened; a dot on the 教練 tab until it is. */
+export function TabBar({ coachUnread = false }: { coachUnread?: boolean }) {
   return (
     <div className="tabbar">
       <nav aria-label="主選單">
         <NavLink to="/" end><HomeIcon /><span>今天</span></NavLink>
         <NavLink to="/plan"><CalendarIcon /><span>課表</span></NavLink>
         <NavLink to="/history"><BarsIcon /><span>紀錄</span></NavLink>
-        <NavLink to="/coach"><ChatIcon /><span>教練</span></NavLink>
+        <NavLink to="/coach">
+          {({ isActive }) => (
+            <>
+              <span className="icon"><ChatIcon />{coachUnread && !isActive ? <i className="unread" aria-hidden="true" /> : null}</span>
+              <span>{coachUnread && !isActive ? <span className="sr-only">有新訊息 · </span> : null}教練</span>
+            </>
+          )}
+        </NavLink>
       </nav>
     </div>
   );

@@ -67,6 +67,9 @@ ul { padding: 0; list-style: none; }
 .tabbar a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 48px; color: var(--tab-off); font-size: 11px; }
 .tabbar a svg { width: 24px; height: 24px; }
 .tabbar a[aria-current="page"] { color: var(--ink); font-weight: 700; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.tabbar a .icon { position: relative; display: flex; }
+.tabbar a .unread { position: absolute; top: -2px; right: -5px; width: 8px; height: 8px; border-radius: 50%; background: var(--ink); box-shadow: 0 0 0 2px var(--bg); }
 
 /* ---- sections / feed -------------------------------------------------------- */
 .section-h { margin: 22px 0 4px; font-size: 13px; font-weight: 700; color: var(--ink-2); letter-spacing: 0.04em; }

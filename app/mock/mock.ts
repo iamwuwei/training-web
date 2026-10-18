@@ -3,7 +3,8 @@
 // results become an activity + manual review on the same local date.
 
 import plans from "./plans.json";
-import type { ActivitiesResponse, ApiActivity, ApiCoachMessage, ApiSession, ApiSplit, ApiWeek, ApiWeeklyReview, CoachResponse, PostCoachMessageRequest, PostCoachMessageResponse, MatchStatus, MeResponse, PlanResponse, PostAdjustmentRequest, PostAdjustmentResponse, PutMemoRequest, PutMemoResponse, PutSessionRequest, PutSessionResponse, RereviewResponse, Verdict, WeeklyResponse } from "../types/api";
+import type { ActivitiesResponse, ApiActivity, ApiCoachMessage, ApiSession, ApiSplit, ApiWeek, ApiWeeklyReview, CoachResponse, PostCoachMessageRequest, PostCoachMessageResponse,
+  PutCoachSeenResponse, MatchStatus, MeResponse, PlanResponse, PostAdjustmentRequest, PostAdjustmentResponse, PutMemoRequest, PutMemoResponse, PutSessionRequest, PutSessionResponse, RereviewResponse, Verdict, WeeklyResponse } from "../types/api";
 import { todayJst } from "../lib/date";
 const MOCK_USER_ID = "7d1c3a0e-4f7b-4d2e-9c1a-5b8e2f6a1c01"; // ww in training-api seed
 
@@ -108,6 +109,7 @@ function build(): PlanResponse {
   ];
 
   return {
+    coach_unread: 0,
     plan: {
       id: PLAN_ID,
       user_id: MOCK_USER_ID,
@@ -127,9 +129,16 @@ function build(): PlanResponse {
 let cache: PlanResponse | undefined;
 const data = () => (cache ??= build());
 
+let coachUnread = 1; // the demo thread has one unread post from Woo until the coach page is opened
+
+export function mockPutCoachSeen(): PutCoachSeenResponse {
+  coachUnread = 0;
+  return { seen_at: new Date().toISOString() };
+}
+
 export function mockPlan(): PlanResponse {
   const d = data();
-  return { ...d, activities: d.activities.filter((a) => a.session_id), unassigned: d.unassigned.filter((a) => !a.session_id) };
+  return { ...d, coach_unread: coachUnread, activities: d.activities.filter((a) => a.session_id), unassigned: d.unassigned.filter((a) => !a.session_id) };
 }
 
 export function mockMe(): MeResponse {

@@ -3,7 +3,7 @@
 設計稿（Claude Design canvas）的原始檔，給改畫面時對照用。**畫面的真相仍是 `app/`**；這裡是「想要長成什麼樣」。
 
 - 來源：https://claude.ai/artifact/4Lc98VDehARXEZpFUfBZ7h（`training-web 設計稿`）
-- 這份快照：artifact version `1792332288-f783`
+- 這份快照：artifact version `1792335506-2f6a`
 - 每個 `*.dc.html` 是一個 390 px 寬的手機畫面（artboard），數字是 2026-10-14 視角的範例資料；`canvas.json` 是畫布索引（位置、尺寸、旁註）。
 - `*.dc.html` 引用的 `support.js` 是 Design canvas 的 runtime，沒有放進來，所以直接用瀏覽器開不會正常渲染；看樣式與結構就好，或回到上面的連結看。
 
@@ -28,6 +28,7 @@
 - 顏色只給需要一眼區分的符號；對應的實作在 `app/lib/labels.ts` 與 `app/app.css`（README 的「顏色規則」有完整清單）。
 - 字體：Noto Sans TC 內文，數字 Barlow Condensed。
 - 導覽：底部 tab（今天 / 課表 / 紀錄 / 教練）；設定在「今天」右上的齒輪；報告頁不在 tab 裡，從「今天」、「紀錄」或教練訊息點進去。課表頁點長條切換週。
+- 教練 tab：Woo 有新訊息（週回顧、判定、回話）時圖示右上角一個 8px 墨點，打開教練頁就消；`Main.dc.html` 畫的是有新訊息的狀態。
 - 教練頁：Woo 的頭像是墨色圓盤「W」；他的訊息沒有氣泡（像 Threads 的貼文），跑者的訊息是右側淡灰氣泡（整個 app 唯一的氣泡）；輸入框固定在 tab 上方，引用的活動以細線 chip 顯示。
 
 ## 更新這份快照

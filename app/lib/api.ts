@@ -16,12 +16,14 @@ import type {
   PostAdjustmentResponse,
   PostCoachMessageRequest,
   PostCoachMessageResponse,
+  PutCoachSeenResponse,
   RereviewResponse,
   WeeklyResponse,
 } from "../types/api";
 import { clearSession, getIdToken } from "./auth";
 import { config, useMock } from "./config";
-import { mockActivities, mockCoach, mockMe, mockPlan, mockPostAdjustment, mockPostCoachMessage, mockPutMemo, mockPutSession, mockRereview, mockWeekly } from "../mock/mock";
+import { mockActivities, mockCoach, mockMe, mockPlan, mockPostAdjustment, mockPostCoachMessage,
+  mockPutCoachSeen, mockPutMemo, mockPutSession, mockRereview, mockWeekly } from "../mock/mock";
 
 /** 401: API Gateway rejected the token. 403: token fine, but this account is not in the users table. */
 export class ApiError extends Error {
@@ -111,6 +113,12 @@ export function postAdjustment(weeklyId: string, index: number, body: PostAdjust
 export function getCoach(): Promise<CoachResponse> {
   if (useMock) return Promise.resolve(mockCoach());
   return request<CoachResponse>("/coach");
+}
+
+/** The thread was opened: clears `coach_unread` on the next GET /plan. */
+export function putCoachSeen(): Promise<PutCoachSeenResponse> {
+  if (useMock) return Promise.resolve(mockPutCoachSeen());
+  return request<PutCoachSeenResponse>("/coach/seen", { method: "PUT" });
 }
 
 /** Say something to the coach; the reply arrives later on getCoach (poll while the message is pending). */

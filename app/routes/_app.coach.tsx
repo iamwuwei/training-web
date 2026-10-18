@@ -4,7 +4,7 @@ import type { Route } from "./+types/_app.coach";
 import { SendIcon } from "../components/icons";
 import { CoachProposals } from "../components/proposals";
 import { CoachAvatar, VerdictTag } from "../components/ui";
-import { ApiError, getActivities, getCoach, getWeekly, postCoachMessage } from "../lib/api";
+import { ApiError, getActivities, getCoach, getWeekly, postCoachMessage, putCoachSeen } from "../lib/api";
 import { hasSession } from "../lib/auth";
 import { md, mdDow, timeJst, toJstDate } from "../lib/date";
 import { km, pace } from "../lib/format";
@@ -26,6 +26,7 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
       getWeekly().catch(() => ({ reviews: [] })),
       quoteId ? getActivities().then((r) => r.activities.find((a) => a.id === quoteId) ?? null).catch(() => null) : Promise.resolve(null),
     ]);
+    putCoachSeen().catch(() => { /* the badge just stays until next time */ });
     return { ...coach, reviews: weekly.reviews, quoted };
   } catch (e) {
     if (e instanceof ApiError && e.status === 401) throw redirect("/login");
@@ -109,6 +110,11 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
       setBusy(false);
     }
   }
+
+  // The layout's plan still says "unread" from before this page marked the thread
+  // seen; reload it once so the tab's dot is gone when the athlete leaves.
+  const unread = view?.data.coach_unread ?? 0;
+  useEffect(() => { if (unread > 0) void revalidator.revalidate(); }, [unread, revalidator]);
 
   const sessions = view?.data.sessions ?? [];
 
