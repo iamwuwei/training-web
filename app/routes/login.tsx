@@ -6,7 +6,7 @@ import { AuthError, hasSession, startLogin } from "../lib/auth";
 import { config, useMock } from "../lib/config";
 import { dayDiff, todayJst } from "../lib/date";
 
-const RACE_DAY = "2026-12-14";
+const RACE_DAY = "2026-12-13";
 
 export function clientLoader() {
   if (hasSession()) throw redirect("/");
@@ -41,7 +41,7 @@ export default function Login() {
       <div className="mid">
         <MountainIcon width={72} height={72} strokeWidth={1.6} />
         <div>
-          <div className="eyebrow">2026 · 12 / 14</div>
+          <div className="eyebrow">2026 · 12 / 13</div>
           <h1>富士山マラソン</h1>
           <p className="sub">訓練課表與每次練習紀錄</p>
         </div>
