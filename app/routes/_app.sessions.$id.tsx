@@ -48,7 +48,8 @@ export default function LogSession() {
     );
   }
 
-  // Form values start from what is stored (editing an already-logged session) or the default pick.
+  // Form values start from what is stored on the picked activity (editing an already-logged
+  // session); once the athlete types or taps an RPE, that input is kept when they switch activity.
   const selectedId = picked !== undefined ? picked : defaultPick(session, candidates)?.id ?? null;
   const selected = candidates.find((a) => a.id === selectedId) ?? null;
   const memoValue = memo ?? selected?.memo ?? "";
@@ -88,7 +89,7 @@ export default function LogSession() {
                 activity={a}
                 checked={a.id === selectedId}
                 sessionDate={session.scheduled_date}
-                onPick={() => { setPicked(a.id); setMemo(undefined); setRpe(undefined); }}
+                onPick={() => setPicked(a.id)}
               />
             ))}
           </div>
