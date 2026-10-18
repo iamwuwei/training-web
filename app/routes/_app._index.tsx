@@ -8,6 +8,7 @@ import { duration, int, km, kmPlan, pace } from "../lib/format";
 import { shortName, sportName } from "../lib/labels";
 import { activityDate, hrOver, isLoggable, isLoggableNow, isRunSport, paceFast, sessionForExtra, type Day, type PlanView } from "../lib/plan";
 import { NoPlan, usePlan } from "../lib/use-plan";
+import { useReviewPolling } from "../lib/use-review-polling";
 import type { ApiActivity } from "../types/api";
 
 export function meta(): Route.MetaDescriptors {
@@ -28,7 +29,7 @@ function Stats({ a, day }: { a: ApiActivity; day: Day }) {
   );
 }
 
-function TodayPost({ day, view }: { day: Day; view: PlanView }) {
+function TodayPost({ day, view, slow }: { day: Day; view: PlanView; slow?: boolean }) {
   const { session, activity } = day;
 
   if (activity) {
@@ -39,7 +40,7 @@ function TodayPost({ day, view }: { day: Day; view: PlanView }) {
         <div className="body">
           <div className="head">
             <b>{shortName(session)}</b>
-            {r?.verdict ? <VerdictTag verdict={r.verdict} /> : <span className="pending">教練分析中…</span>}
+            {r?.verdict ? <VerdictTag verdict={r.verdict} /> : r?.failed ? <span className="pending failed">分析失敗，點進去重試</span> : <span className="pending">{slow ? "分析比較久，點進去看" : "教練分析中…"}</span>}
           </div>
           <Stats a={activity} day={day} />
           {r?.reminders[0] ? <p className="next">→ {r.reminders[0]}</p> : null}
@@ -91,6 +92,9 @@ function ExtraRow({ a, view }: { a: ApiActivity; view: PlanView }) {
 export default function Today() {
   const view = usePlan();
   const revalidator = useRevalidator();
+  const todayAct = view?.todayDay?.activity ?? null;
+  const analysing = !!(todayAct && !todayAct.review);
+  const { timedOut } = useReviewPolling(analysing);
   if (!view) return <NoPlan title="今天" />;
   const { todayDay, todayActivities, upcoming, currentWeek, daysToRace, data, today } = view;
 
@@ -123,7 +127,7 @@ export default function Today() {
           今天 · {mdDow(today)}
         </SectionH>
         {todayDay ? (
-          <TodayPost day={todayDay} view={view} />
+          <TodayPost day={todayDay} view={view} slow={timedOut} />
         ) : (
           <p className="empty">{today > data.plan.race_date ? "課表已結束，辛苦了。" : "課表還沒開始。"}</p>
         )}

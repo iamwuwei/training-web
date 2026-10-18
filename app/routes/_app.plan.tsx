@@ -1,12 +1,28 @@
 import { Fragment, useState } from "react";
 import type { Route } from "./+types/_app.plan";
-import { Link } from "react-router";
+import { Link, redirect, useRevalidator } from "react-router";
+import { CoachProposals } from "../components/proposals";
+import { ApiError, getWeekly } from "../lib/api";
+import { hasSession } from "../lib/auth";
 import { ActivityPost, PlanPost, RestPost } from "../components/posts";
 import { Bar, TopBar } from "../components/ui";
 import { md } from "../lib/date";
 import { km, kmPlan } from "../lib/format";
 import { isLoggable, isLoggableNow, type Week } from "../lib/plan";
 import { NoPlan, usePlan } from "../lib/use-plan";
+
+// The weekly coach review (summary + proposals) sits above the plan; the plan itself
+// comes from the parent route through usePlan().
+export async function clientLoader() {
+  if (!hasSession()) throw redirect("/login");
+  try {
+    return await getWeekly();
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 401) throw redirect("/login");
+    // No weekly review yet (or an older API): the plan page still works.
+    return { reviews: [] };
+  }
+}
 
 export function meta(): Route.MetaDescriptors {
   return [{ title: "課表 · 富士山マラソン 2026" }];
@@ -99,8 +115,9 @@ function PlanRow({ session, isToday, skipped, today }: { session: Week["days"][n
   );
 }
 
-export default function Plan() {
+export default function Plan({ loaderData }: Route.ComponentProps) {
   const view = usePlan();
+  const revalidator = useRevalidator();
   const [picked, setPicked] = useState<number | null>(null);
   if (!view) return <NoPlan title="課表" />;
   const { weeks, currentWeek } = view;
@@ -115,6 +132,9 @@ export default function Plan() {
       <TopBar title="課表" aside={currentWeek ? `第 ${currentWeek.week_no} 週 / ${weeks.length} 週 · ${currentWeek.phase?.split("｜")[0] ?? ""}` : `${weeks.length} 週`} />
       <main>
         <WeekBars weeks={weeks} selected={selected} onSelect={setPicked} />
+        {loaderData.reviews[0] ? (
+          <CoachProposals review={loaderData.reviews[0]} sessions={view.data.sessions} onChanged={() => void revalidator.revalidate()} />
+        ) : null}
         {week ? (
           <WeekSection
             key={week.week_no}

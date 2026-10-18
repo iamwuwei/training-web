@@ -11,10 +11,14 @@ import type {
   PutReviewResponse,
   PutSessionRequest,
   PutSessionResponse,
+  PostAdjustmentRequest,
+  PostAdjustmentResponse,
+  RereviewResponse,
+  WeeklyResponse,
 } from "../types/api";
 import { clearSession, getIdToken } from "./auth";
 import { config, useMock } from "./config";
-import { mockActivities, mockMe, mockPlan, mockPutMemo, mockPutSession } from "../mock/mock";
+import { mockActivities, mockMe, mockPlan, mockPostAdjustment, mockPutMemo, mockPutSession, mockRereview, mockWeekly } from "../mock/mock";
 
 /** 401: API Gateway rejected the token. 403: token fine, but this account is not in the users table. */
 export class ApiError extends Error {
@@ -80,4 +84,22 @@ export function putSession(activityId: string, body: PutSessionRequest): Promise
 export function putReview(activityId: string, body: PutReviewRequest): Promise<PutReviewResponse> {
   if (useMock) return Promise.reject(new ApiError(501, "mock mode: reviews are read-only"));
   return request<PutReviewResponse>(`/activities/${activityId}/review`, { method: "PUT", body: JSON.stringify(body) });
+}
+
+/** Drop the coach's (failed or stale) review and queue a fresh one. */
+export function rereview(activityId: string): Promise<RereviewResponse> {
+  if (useMock) return Promise.resolve(mockRereview(activityId));
+  return request<RereviewResponse>(`/activities/${activityId}/rereview`, { method: "POST" });
+}
+
+/** Weekly coach reviews with their adjustment proposals, newest first. */
+export function getWeekly(): Promise<WeeklyResponse> {
+  if (useMock) return Promise.resolve(mockWeekly());
+  return request<WeeklyResponse>("/weekly");
+}
+
+/** Apply or dismiss one proposal. Apply rewrites that planned session; reload /plan afterwards. */
+export function postAdjustment(weeklyId: string, index: number, body: PostAdjustmentRequest): Promise<PostAdjustmentResponse> {
+  if (useMock) return Promise.resolve(mockPostAdjustment(weeklyId, index, body));
+  return request<PostAdjustmentResponse>(`/weekly/${weeklyId}/adjustments/${index}`, { method: "POST", body: JSON.stringify(body) });
 }

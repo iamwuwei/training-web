@@ -178,7 +178,11 @@ ul { padding: 0; list-style: none; }
 .verdict-block h2::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
 .verdict-block.good h2 { color: var(--v-good); } .verdict-block.warn h2 { color: var(--v-warn); } .verdict-block.bad h2 { color: var(--v-bad); }
 .verdict-block .reminders { margin: 0; padding-left: 16px; gap: 4px; font-size: 14px; }
-.verdict-block .src { font-size: 11px; color: var(--ink-3); }
+.verdict-block .src { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 11px; color: var(--ink-3); }
+.verdict-block .pending-h { color: var(--ink-2); }
+.verdict-block .pending-h::before { background: transparent; border: 1.5px solid var(--ink-3); box-sizing: border-box; }
+.verdict-block .src .pending { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-2); }
+.verdict-block .src .pending::before { content: ""; width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid var(--ink-3); box-sizing: border-box; }
 
 .compare { padding: 16px 0; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
 .compare .rows { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
@@ -272,6 +276,8 @@ ul { padding: 0; list-style: none; }
 .today-post .head > b { font-size: 16px; font-weight: 700; }
 .today-post .pending { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: var(--ink-2); }
 .today-post .pending::before { content: ""; width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid var(--ink-3); box-sizing: border-box; }
+.today-post .pending.failed { color: var(--v-bad); }
+.today-post .pending.failed::before { border-color: var(--v-bad); }
 .today-post .next { margin-top: 6px; font-size: 14px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .today-open { padding-bottom: 16px; border-bottom: 1px solid var(--line); }
 .today-open .post { border-bottom: none; padding-bottom: 4px; }
@@ -330,3 +336,22 @@ ul { padding: 0; list-style: none; }
 .dots .legend { display: flex; justify-content: space-between; gap: 12px; font-size: 11px; color: var(--ink-3); margin-top: 4px; }
 .compare .empty-line { margin: 0; font-size: 13px; color: var(--ink-3); }
 .swap-line { display: flex; align-items: center; gap: 8px; margin: 0; padding: 12px 0; font-size: 12px; color: var(--ink-3); }
+
+/* ---- 教練回顧 / 建議 (課表 top) ----------------------------------------------- */
+.coach { padding: 14px 0; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
+.coach .head { display: flex; justify-content: space-between; align-items: baseline; }
+.coach .count { font-size: 12px; font-weight: 600; color: var(--ink); }
+.coach .count.muted { color: var(--ink-3); font-weight: 400; }
+.coach .summary { margin: 0; font-size: 14px; line-height: 1.6; color: var(--ink-2); cursor: pointer; }
+.coach .summary.clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.proposal { display: flex; flex-direction: column; gap: 8px; padding: 10px 0 4px; border-top: 1px solid var(--line); }
+.proposal .who { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 12px; }
+.proposal .txt { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.proposal .t { font-size: 13px; color: var(--ink-3); }
+.proposal .change { font-size: 15px; font-weight: 600; }
+.proposal .change s { color: var(--ink-3); font-weight: 400; }
+.proposal .old { font-size: 12px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.proposal .why { font-size: 13px; color: var(--ink-2); line-height: 1.55; }
+.proposal .actions { display: flex; gap: 8px; margin-left: 52px; }
+.chip.primary { background: var(--ink); border-color: var(--ink); color: var(--bg); font-weight: 600; }
+.coach .hint { margin: 0; font-size: 12px; }

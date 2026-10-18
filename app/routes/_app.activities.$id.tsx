@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, redirect, useNavigate, useRevalidator } from "react-router";
+import { useReviewPolling } from "../lib/use-review-polling";
 import type { Route } from "./+types/_app.activities.$id";
 import { BackIcon } from "../components/icons";
 import { MemoEditor } from "../components/memo";
 import { Avatar, Reminders, TopBar } from "../components/ui";
-import { ApiError, getActivities } from "../lib/api";
+import { ApiError, getActivities, rereview } from "../lib/api";
 import { hasSession } from "../lib/auth";
 import { mdDow } from "../lib/date";
 import { duration, int, km, kmPlan, pace } from "../lib/format";
@@ -201,19 +202,30 @@ export default function Report({ loaderData }: Route.ComponentProps) {
   const plan = s ? planFor(s) : null;
   const r = a.review;
   const vk = verdictKind(r?.verdict);
-  const waitingReview = !!(a.session_id && a.memo_updated_at && (!r || (r.source === "claude" && r.created_at < a.memo_updated_at)));
-
-  // Claude's review arrives a few seconds after the memo / session is sent: check back every 5 s, up to 40 s.
-  const { revalidate } = revalidator;
-  useEffect(() => {
-    if (!waitingReview) return;
-    let n = 0;
-    const t = window.setInterval(() => {
-      void revalidate();
-      if (++n >= 8) window.clearInterval(t);
-    }, 5000);
-    return () => window.clearInterval(t);
-  }, [waitingReview, revalidate]);
+  // No review yet with a session assigned, or a Claude review older than the memo = being written.
+  const waitingReview = !!(a.session_id && !r?.failed && (!r || (r.source === "claude" && a.memo_updated_at != null && r.created_at < a.memo_updated_at)));
+  const { timedOut, restart } = useReviewPolling(waitingReview);
+  const [rereviewBusy, setRereviewBusy] = useState(false);
+  const [rereviewError, setRereviewError] = useState<string | null>(null);
+  async function askAgain() {
+    setRereviewBusy(true);
+    setRereviewError(null);
+    try {
+      await rereview(a.id);
+      setOverride(null);
+      await revalidator.revalidate();
+      restart();
+    } catch (e) {
+      setRereviewError(e instanceof ApiError ? e.message : "送出失敗，再試一次");
+    } finally {
+      setRereviewBusy(false);
+    }
+  }
+  const retryChip = (
+    <button type="button" className="chip" onClick={() => void askAgain()} disabled={rereviewBusy}>
+      {rereviewBusy ? "送出中…" : "重新分析"}
+    </button>
+  );
 
   const date = mdDow(activityDate(a));
   const meta = s ? [date, s.week_no != null ? `第 ${s.week_no} 週` : null, s.target ? `目標 ${s.target}` : null].filter(Boolean).join(" · ") : `${date} · 未排課`;
@@ -243,12 +255,31 @@ export default function Report({ loaderData }: Route.ComponentProps) {
             {r.comment ? <p className="comment">{r.comment}</p> : null}
             {r.reminders.length ? <Reminders items={r.reminders} /> : null}
             <div className="src">
-              {r.source === "claude" ? "教練判定 · 自動" : "教練判定 · 手動"}
-              {waitingReview ? " · 正在依你的心得重新評…" : ""}
+              <span>{r.source === "claude" ? "教練判定 · 自動" : "教練判定 · 手動"}{waitingReview ? " · 正在依你的心得重新評…" : ""}</span>
+              {r.source === "claude" && !waitingReview ? retryChip : null}
             </div>
+            {rereviewError ? <p className="hint" style={{ color: "var(--v-bad)" }}>{rereviewError}</p> : null}
+          </section>
+        ) : r?.failed ? (
+          <section className="verdict-block bad">
+            <h2>分析失敗</h2>
+            <p className="comment" style={{ color: "var(--ink-2)" }}>教練這次沒有回應{r.error ? `：${r.error}` : ""}。數據和心得都已經存好，可以再試一次。</p>
+            <div className="src"><span>教練判定 · 自動</span>{retryChip}</div>
+            {rereviewError ? <p className="hint" style={{ color: "var(--v-bad)" }}>{rereviewError}</p> : null}
           </section>
         ) : waitingReview ? (
-          <section className="verdict-block"><div className="src">教練判定產生中，幾秒後更新…</div></section>
+          <section className="verdict-block">
+            {timedOut ? (
+              <>
+                <h2 className="pending-h">分析比較久</h2>
+                <p className="comment" style={{ color: "var(--ink-2)" }}>已經等了 3 分鐘還沒有結果。可能是資料庫剛喚醒或教練那邊塞車，稍後再回來看，或直接重新分析。</p>
+                <div className="src"><span>教練判定 · 自動</span>{retryChip}</div>
+                {rereviewError ? <p className="hint" style={{ color: "var(--v-bad)" }}>{rereviewError}</p> : null}
+              </>
+            ) : (
+              <div className="src"><span className="pending">教練分析中，通常 10 秒到 1 分鐘</span></div>
+            )}
+          </section>
         ) : null}
 
         {s && plan ? <TargetVsActual a={a} s={s} plan={plan} /> : (

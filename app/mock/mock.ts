@@ -3,7 +3,7 @@
 // results become an activity + manual review on the same local date.
 
 import plans from "./plans.json";
-import type { ActivitiesResponse, ApiActivity, ApiSession, ApiSplit, ApiWeek, MatchStatus, MeResponse, PlanResponse, PutMemoRequest, PutMemoResponse, PutSessionRequest, PutSessionResponse, Verdict } from "../types/api";
+import type { ActivitiesResponse, ApiActivity, ApiSession, ApiSplit, ApiWeek, ApiWeeklyReview, MatchStatus, MeResponse, PlanResponse, PostAdjustmentRequest, PostAdjustmentResponse, PutMemoRequest, PutMemoResponse, PutSessionRequest, PutSessionResponse, RereviewResponse, Verdict, WeeklyResponse } from "../types/api";
 import { todayJst } from "../lib/date";
 const MOCK_USER_ID = "7d1c3a0e-4f7b-4d2e-9c1a-5b8e2f6a1c01"; // ww in training-api seed
 
@@ -88,9 +88,11 @@ function build(): PlanResponse {
         verdict: r.verdict,
         comment: null,
         reminders: r.reminders ?? [],
-        rpe: null,
         source: "manual",
         model: null,
+        adjust_hint: null,
+        failed: false,
+        error: null,
         created_at: new Date(`${r.date}T12:00:00+09:00`).toISOString(),
       },
     };
@@ -167,7 +169,7 @@ export function mockPutSession(activityId: string, body: PutSessionRequest): Put
       a.memo_updated_at = new Date().toISOString();
     }
     setTimeout(() => {
-      a.review = { verdict: "達成", comment: "（示範）數據落在課表目標內，感受也一致。", reminders: ["第 1 km 先走 2 分鐘再起跑"], source: "claude", model: "claude-haiku-4-5", created_at: new Date().toISOString() };
+      a.review = { verdict: "達成", comment: "（示範）數據落在課表目標內，感受也一致。", reminders: ["第 1 km 先走 2 分鐘再起跑"], source: "claude", model: "claude-haiku-4-5", adjust_hint: null, failed: false, error: null, created_at: new Date().toISOString() };
     }, 4000);
   } else {
     a.session_id = null;
@@ -185,4 +187,55 @@ export function mockPutSession(activityId: string, body: PutSessionRequest): Put
 export function mockActivities(status?: MatchStatus): ActivitiesResponse {
   const all = [...data().activities, ...data().unassigned].sort((a, b) => b.start_time.localeCompare(a.start_time));
   return { activities: status ? all.filter((a) => a.match_status === status) : all };
+}
+
+/** Demo mode: the coach answers again after ~4 s. */
+export function mockRereview(activityId: string): RereviewResponse {
+  const a = findActivity(activityId);
+  if (!a) throw new Error("not found");
+  a.review = null;
+  setTimeout(() => {
+    a.review = { verdict: "達成但有提醒", comment: "（示範）重新分析：配速在區間內，但第 3 km 心拍衝到 166。", reminders: ["MP 第 3 公里開始看心拍"], source: "claude", model: "claude-haiku-4-5", adjust_hint: null, failed: false, error: null, created_at: new Date().toISOString() };
+  }, 4000);
+  return { queued: true };
+}
+
+// Demo weekly review: one summary with two proposals (pending) against next week's sessions.
+let weekly: ApiWeeklyReview[] | undefined;
+function weeklyData(): ApiWeeklyReview[] {
+  if (weekly) return weekly;
+  const d = data();
+  const long = d.sessions.find((s) => s.scheduled_date === "2026-10-18");
+  const rec = d.sessions.find((s) => s.scheduled_date === "2026-10-16");
+  weekly = [{
+    id: "w-2026-10-12",
+    week_start: "2026-10-12",
+    summary: "（示範）第 2 週完成 3/4，Easy 心拍守得比第 1 週好（150→140）。10/14 MP 段配速到位但第 5 km 心拍 166 超過上限，體感也說第三公里開始腿重。長跑前一天排 Hyrox，建議把長跑目標心拍再壓低一點。",
+    model: "claude-sonnet-5-5",
+    adjustments: ([
+      long ? { index: 0, session_id: long.id, field: "note" as const, old: long.note, new: "前日 Hyrox。心拍 ≤150 為最高優先，配速掉到 8:00 也可；超過 155 就走 1 分鐘。", reason: "10/14 MP 段心拍已衝到 166，長跑前一天又是 Hyrox，疲勞疊加時心拍容易失控。", status: "pending" as const, decided_at: null, applied_session_id: null } : null,
+      rec ? { index: 1, session_id: rec.id, field: "target_distance_m" as const, old: rec.target_distance_m, new: 3000, reason: "本週已經有一次高強度，恢復跑縮短到 3 km 讓腿在 Hyrox 前多休一點。", status: "pending" as const, decided_at: null, applied_session_id: null } : null,
+    ] as (ApiWeeklyReview["adjustments"][number] | null)[]).filter((x): x is ApiWeeklyReview["adjustments"][number] => !!x),
+    created_at: new Date("2026-10-12T12:00:00Z").toISOString(),
+  }];
+  return weekly!;
+}
+export function mockWeekly(): WeeklyResponse {
+  return { reviews: weeklyData().map((w) => ({ ...w, adjustments: w.adjustments.map((a) => ({ ...a })) })) };
+}
+export function mockPostAdjustment(weeklyId: string, index: number, body: PostAdjustmentRequest): PostAdjustmentResponse {
+  const w = weeklyData().find((x) => x.id === weeklyId);
+  const item = w?.adjustments[index];
+  if (!w || !item) throw new Error("not found");
+  if (body.action === "apply") {
+    const s = data().sessions.find((x) => x.id === item.session_id);
+    if (s) {
+      (s as unknown as Record<string, unknown>)[item.field] = item.new;
+      if (item.field === "target_distance_m" && typeof item.new === "number") s.content = s.content?.replace(/\d+(?:〜\d+)?\s*km/, `${item.new / 1000} km`) ?? s.content;
+    }
+    item.applied_session_id = item.session_id;
+  }
+  item.status = body.action === "apply" ? "applied" : "dismissed";
+  item.decided_at = new Date().toISOString();
+  return { review: { ...w, adjustments: w.adjustments.map((a) => ({ ...a })) } };
 }
