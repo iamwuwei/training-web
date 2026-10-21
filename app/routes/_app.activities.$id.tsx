@@ -61,16 +61,20 @@ function RangeRow({ label, value, text, band, fmt, note }: {
   );
 }
 
-function DistRow({ actual, plan }: { actual: number; plan: number }) {
-  const ok = actual >= plan * 0.9;
+/** `approx`: reps-and-seconds sessions (hills, intervals, strides) only estimate a distance, so no pass/fail colour. */
+function DistRow({ actual, plan, approx }: { actual: number; plan: number; approx?: boolean }) {
+  const ok = !approx && actual >= plan * 0.9;
   return (
     <div className="range">
       <span className="k">距離</span>
       <div className="bar"><i style={{ width: `${Math.min(100, (actual / plan) * 100)}%`, background: ok ? "var(--v-good)" : "var(--ink-3)" }} /></div>
-      <span className="v"><b className="num">{km(actual)}</b> <span className="of">/ {kmPlan(plan)} km</span></span>
+      <span className="v"><b className="num">{km(actual)}</b> <span className="of">/ {approx ? "約 " : ""}{kmPlan(plan)} km</span></span>
     </div>
   );
 }
+
+/** Hill repeats, intervals and strides are written in reps and seconds; their planned distance is an estimate. */
+const approxDistance = (s: ApiSession) => s.type === "interval" || /×|秒/.test(s.content ?? "");
 
 /** "Target vs actual": pace and HR against the session's ranges, plus distance. */
 function TargetVsActual({ a, s, plan }: { a: ApiActivity; s: ApiSession; plan: SessionPlan }) {
@@ -89,7 +93,7 @@ function TargetVsActual({ a, s, plan }: { a: ApiActivity; s: ApiSession; plan: S
     if (f && band) rows.push(<RangeRow key="p" label={focusLabel(s)} value={f.pace} text={pace(f.pace)} band={band} fmt={pace} note={`${range}平均`} />);
     if (f && hrBand && f.hrTop != null) rows.push(<RangeRow key="h" label="心拍" value={f.hrTop} text={String(f.hrTop)} band={hrBand} fmt={String} note={`${range}裡心拍最高的一公里`} />);
   }
-  if (s.target_distance_m && isRunSport(a.sport_type)) rows.push(<DistRow key="d" actual={a.distance_m} plan={s.target_distance_m} />);
+  if (s.target_distance_m && isRunSport(a.sport_type)) rows.push(<DistRow key="d" actual={a.distance_m} plan={s.target_distance_m} approx={approxDistance(s)} />);
   if (!rows.length) return null;
   return (
     <section className="targets">
