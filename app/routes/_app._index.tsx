@@ -209,6 +209,7 @@ export default function Today() {
           <div>
             <div className="k">倒數</div>
             <div className="v">{daysToRace > 0 ? <><span className="num big">{daysToRace}</span><span className="unit">天</span></> : <span className="num mid">{daysToRace === 0 ? "比賽日" : "已完賽"}</span>}</div>
+            <i aria-hidden="true" />
           </div>
           {currentWeek ? (
             <Link to="/plan" className="week-line" aria-label={`第 ${currentWeek.week_no} 週 ${km(currentWeek.actual_m)} / ${kmPlan(currentWeek.plan_m)} km`}>
