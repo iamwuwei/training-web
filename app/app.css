@@ -282,7 +282,6 @@ ul { padding: 0; list-style: none; }
 .pick[aria-checked="true"] .radio { border-color: var(--ink); background: radial-gradient(circle, var(--ink) 0 5px, transparent 5.5px); }
 
 /* ---- 今天頁：one post for today's session ---------------------------------- */
-.week-line { display: flex; color: var(--ink); border-bottom: 1px solid var(--line); }
 .today-post .head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .today-post .head > b { font-size: 16px; font-weight: 700; }
 .today-post .pending { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: var(--ink-2); }
@@ -437,14 +436,15 @@ ul { padding: 0; list-style: none; }
 .btn.primary.woo .w { width: 22px; height: 22px; border-radius: 50%; background: var(--bg); color: var(--ink); display: inline-flex; align-items: center; justify-content: center; font-family: "Barlow Condensed", sans-serif; font-size: 12px; font-weight: 700; }
 
 /* ---- lively: one accent for good news, big numbers, a little motion ---- */
-.hero2 { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 24px; padding: 10px 0 16px; border-bottom: 1px solid var(--line); color: var(--ink); }
-.hero2 .k { font-size: 12px; color: var(--ink-3); letter-spacing: 0.04em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hero2 { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: auto auto auto; column-gap: 16px; row-gap: 4px; align-items: baseline; padding: 10px 0 16px; border-bottom: 1px solid var(--line); color: var(--ink); }
+.hero2 > * { display: grid; grid-template-rows: subgrid; grid-row: span 3; align-items: baseline; min-width: 0; }
+.hero2 .k { align-self: start; font-size: 12px; color: var(--ink-3); letter-spacing: 0.04em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hero2 .v { display: flex; align-items: baseline; gap: 4px; white-space: nowrap; }
 .hero2 .v .unit { font-size: 14px; color: var(--ink-2); }
 .hero2 .big { font-size: 56px; color: var(--accent); letter-spacing: -0.01em; }
 .hero2 .mid { font-size: 40px; line-height: 1.15; }
 .hero2 .mid.done { color: var(--accent); }
-.hero2 .bar { height: 4px; margin-top: 6px; }
+.hero2 .bar { height: 4px; margin-top: 0; align-self: start; }
 .wooline { display: flex; align-items: flex-start; gap: 8px; margin-top: 10px; font-size: 14px; color: var(--ink-2); line-height: 1.5; }
 .wooline .avatar.coach { margin-top: 1px; }
 .wooline a { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
