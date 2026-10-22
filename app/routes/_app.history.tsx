@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, redirect } from "react-router";
 import type { Route } from "./+types/_app.history";
+import { SessionSheet } from "../components/session-sheet";
 import { Avatar, TopBar, VerdictTag } from "../components/ui";
 import { ApiError, getActivities } from "../lib/api";
 import { hasSession } from "../lib/auth";
@@ -9,7 +10,7 @@ import { duration, int, km, pace } from "../lib/format";
 import { FILTERS, labelStyle, shortName, sportName } from "../lib/labels";
 import { activityDate, hrOver, isRunSport, paceFast } from "../lib/plan";
 import { usePlan } from "../lib/use-plan";
-import type { ApiActivity, ApiSession } from "../types/api";
+import type { ApiActivity, ApiRoutine, ApiSession } from "../types/api";
 
 // Reads /activities (not /plan) so unplanned runs show up too.
 
@@ -46,10 +47,31 @@ function Row({ a, s }: { a: ApiActivity; s: ApiSession | null }) {
   );
 }
 
+/** A completed 肌力 checklist: items done, minutes, RPE. Opens the session sheet. */
+function RoutineRow({ r, s, onOpen }: { r: ApiRoutine; s: ApiSession; onOpen: (s: ApiSession) => void }) {
+  const n = r.items.filter((i) => i.done).length;
+  return (
+    <button type="button" className="hrow" onClick={() => onOpen(s)}>
+      <Avatar session={s} />
+      <span className="txt">
+        <span className="l1"><b>{mdDow(s.scheduled_date)}</b><span className="name">肌力{s.label === "肌力" && s.content ? ` · ${s.content}` : ""}</span><span className="verdict good">完成</span></span>
+        <span className="l2">
+          <span><b className="num">{n}/{r.items.length}</b> 項</span>
+          {r.minutes ? <span><b className="num">{r.minutes}</b> 分</span> : null}
+          {r.rpe ? <span><b className="num">{r.rpe}</b> RPE</span> : null}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+type Entry = { date: string; a?: ApiActivity; r?: ApiRoutine; s: ApiSession | null };
+
 export default function History({ loaderData }: Route.ComponentProps) {
   const view = usePlan();
   const [filter, setFilter] = useState("all");
   const [onlyReminded, setOnlyReminded] = useState(false);
+  const [open, setOpen] = useState<ApiSession | null>(null);
 
   const all = loaderData.activities.filter((a) => a.match_status !== "ignored");
   const sessionOf = (id: string | null) => (id && view ? view.data.sessions.find((s) => s.id === id) ?? null : null);
@@ -60,19 +82,28 @@ export default function History({ loaderData }: Route.ComponentProps) {
   });
   const total_m = all.reduce((s, a) => s + a.distance_m, 0);
 
+  // Completed 肌力 checklists sit in the list too (on their session's date), under 全部 and 肌力.
+  const entries: Entry[] = shown.map((a) => ({ date: activityDate(a), a, s: sessionOf(a.session_id) }));
+  if (view && !onlyReminded && (filter === "all" || filter === "strength")) {
+    for (const r of view.data.routines ?? []) {
+      const s = view.data.sessions.find((x) => x.id === r.session_id);
+      if (r.completed_at && s && !entries.some((e) => e.a?.session_id === s.id)) entries.push({ date: s.scheduled_date, r, s });
+    }
+  }
+  entries.sort((x, y) => y.date.localeCompare(x.date));
+
   // Group by plan week, newest week first; anything outside the plan's weeks goes under 其他.
   const weeks = view?.weeks ?? [];
-  const groups: { key: string; title: string; dates: string; items: ApiActivity[] }[] = [];
-  for (const a of shown) {
-    const d = activityDate(a);
-    const w = weeks.find((x) => d >= x.week_start && d <= x.week_end);
+  const groups: { key: string; title: string; dates: string; items: Entry[] }[] = [];
+  for (const e of entries) {
+    const w = weeks.find((x) => e.date >= x.week_start && e.date <= x.week_end);
     const key = w ? `w${w.week_no}` : "other";
     let g = groups.find((x) => x.key === key);
     if (!g) {
       g = { key, title: w ? `第 ${w.week_no} 週` : "其他", dates: w ? `${md(w.week_start)}–${md(w.week_end)}` : "", items: [] };
       groups.push(g);
     }
-    g.items.push(a);
+    g.items.push(e);
   }
 
   return (
@@ -89,12 +120,13 @@ export default function History({ loaderData }: Route.ComponentProps) {
         </div>
         {groups.length ? groups.map((g) => (
           <section key={g.key} className="hgroup">
-            <div className="wk"><span>{g.title}{g.dates ? ` · ${g.dates}` : ""}</span><span className="kms">{km(g.items.reduce((n, a) => n + a.distance_m, 0))} km</span></div>
-            {g.items.map((a) => <Row key={a.id} a={a} s={sessionOf(a.session_id)} />)}
+            <div className="wk"><span>{g.title}{g.dates ? ` · ${g.dates}` : ""}</span><span className="kms">{km(g.items.reduce((n, e) => n + (e.a?.distance_m ?? 0), 0))} km</span></div>
+            {g.items.map((e) => e.a ? <Row key={e.a.id} a={e.a} s={e.s} /> : <RoutineRow key={e.r!.id} r={e.r!} s={e.s!} onOpen={setOpen} />)}
           </section>
         )) : <p className="empty">{all.length ? "沒有符合的紀錄" : "還沒有紀錄"}</p>}
         {view ? <p className="note">課表從 {md(view.data.sessions[0]?.scheduled_date ?? "")} 開始</p> : null}
       </main>
+      {view ? <SessionSheet session={open} view={view} onClose={() => setOpen(null)} /> : null}
     </>
   );
 }

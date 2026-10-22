@@ -8,7 +8,7 @@ import { duration, km, kmPlan, pace } from "../lib/format";
 import { isStrengthDay, rowName, verdictKind } from "../lib/labels";
 import { isRunSport, type Day, type Week } from "../lib/plan";
 import { NoPlan, usePlan } from "../lib/use-plan";
-import type { ApiSession } from "../types/api";
+import type { ApiRoutine, ApiSession } from "../types/api";
 
 export function meta(): Route.MetaDescriptors {
   return [{ title: "課表 · 富士山マラソン 2026" }];
@@ -60,7 +60,7 @@ function firstSentence(t: string | null): string | null {
 
 const DOW = ["日", "一", "二", "三", "四", "五", "六"];
 
-function DayRow({ day, isToday, onOpen }: { day: Day; isToday: boolean; onOpen: (s: ApiSession) => void }) {
+function DayRow({ day, isToday, onOpen, routine }: { day: Day; isToday: boolean; onOpen: (s: ApiSession) => void; routine: ApiRoutine | null }) {
   const { session: s, activity: a, status } = day;
   const date = new Date(`${s.scheduled_date}T00:00:00Z`);
   const rest = s.type === "rest";
@@ -76,13 +76,17 @@ function DayRow({ day, isToday, onOpen }: { day: Day; isToday: boolean; onOpen: 
       </>
     );
     dot = verdictKind(a.review?.verdict) ?? "none";
+  } else if (routine?.completed_at) {
+    const n = routine.items.filter((i) => i.done).length;
+    right = <><b className="num">{n}/{routine.items.length}</b> 項{routine.rpe ? <> · RPE <b className="num">{routine.rpe}</b></> : null}</>;
+    dot = "good";
   } else if (status === "skipped") {
     right = <span className="grey">跳過</span>;
     dot = "skip";
   } else if (!rest && s.target) {
     right = <span className="grey">{s.target.replace(/\s*\/\s*/g, " · ")}</span>;
   }
-  const sub = !a && !rest && status !== "skipped" ? firstSentence(s.note) : null;
+  const sub = !a && !rest && status !== "skipped" ? s.brief ?? firstSentence(s.note) : null;
   const inner = (
     <>
       <div className="d"><span className="dow">{DOW[date.getUTCDay()]}</span><span className="num dom">{date.getUTCDate()}</span></div>
@@ -93,7 +97,7 @@ function DayRow({ day, isToday, onOpen }: { day: Day; isToday: boolean; onOpen: 
   );
   const cls = `dayrow${isToday ? " today" : ""}${status === "skipped" ? " skipped" : ""}`;
   if (a) return <Link to={`/activities/${a.id}`} className={cls}>{inner}</Link>;
-  if (rest && !s.note) return <div className={cls}>{inner}</div>;
+  if (rest && !s.note && !s.brief) return <div className={cls}>{inner}</div>;
   return <button type="button" className={cls} onClick={() => onOpen(s)}>{inner}</button>;
 }
 
@@ -139,7 +143,7 @@ export default function Plan() {
             </div>
             {!week.isFuture ? <Bar value={week.actual_m} max={week.plan_m} tone={week.isComplete ? "good" : "ink"} /> : null}
             <div className="dayrows">
-              {week.days.map((d) => <DayRow key={d.session.id} day={d} isToday={d.session.scheduled_date === today} onOpen={setOpen} />)}
+              {week.days.map((d) => <DayRow key={d.session.id} day={d} isToday={d.session.scheduled_date === today} onOpen={setOpen} routine={view.routineBySession.get(d.session.id) ?? null} />)}
             </div>
           </>
         ) : null}

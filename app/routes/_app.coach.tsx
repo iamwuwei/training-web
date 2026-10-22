@@ -4,7 +4,7 @@ import type { Route } from "./+types/_app.coach";
 import { SendIcon } from "../components/icons";
 import { CoachProposals } from "../components/proposals";
 import { CoachAvatar, VerdictTag, verdictBadge } from "../components/ui";
-import { ApiError, getActivities, getCoach, getWeekly, postCheckinPick, postCoachMessage, putCoachSeen } from "../lib/api";
+import { ApiError, getActivities, getCoach, getWeekly, postCheckinPick, postCheckinReset, postCoachMessage, putCoachSeen } from "../lib/api";
 import { hasSession } from "../lib/auth";
 import { md, mdDow, timeJst, toJstDate } from "../lib/date";
 import { km, pace } from "../lib/format";
@@ -56,7 +56,7 @@ function CoachMessage({ m, children, badge }: { m: ApiCoachMessage; children: Re
   );
 }
 
-function AthleteMessage({ m, onRetry }: { m: ApiCoachMessage; onRetry?: () => void }) {
+function AthleteMessage({ m, onRetry, onReset, busy }: { m: ApiCoachMessage; onRetry?: () => void; onReset?: () => void; busy?: boolean }) {
   return (
     <div className="msg me">
       <div className={`bubble${m.kind === "pick" ? " pick" : ""}`}>
@@ -67,6 +67,7 @@ function AthleteMessage({ m, onRetry }: { m: ApiCoachMessage; onRetry?: () => vo
       </div>
       <span className="when">
         {m.status === "failed" ? <>Woo 沒收到{m.error ? `（${m.error}）` : ""} · {onRetry ? <button type="button" onClick={onRetry}>再送一次</button> : null}</> : timeJst(m.created_at)}
+        {onReset ? <> · <button type="button" onClick={onReset} disabled={busy}>選錯了 ›</button></> : null}
       </span>
     </div>
   );
@@ -148,6 +149,24 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
     }
   }
 
+  // 選錯了 / 重新選: only the newest check-in can be undone.
+  const lastCheckinIdx = messages.map((m) => m.kind).lastIndexOf("checkin");
+  const lastCheckin = lastCheckinIdx >= 0 ? messages[lastCheckinIdx] : null;
+  const lastPickIdx = messages.map((m) => m.kind).lastIndexOf("pick");
+  async function reset() {
+    if (!lastCheckin || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await postCheckinReset(lastCheckin.id);
+      await revalidator.revalidate();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "送出失敗，再試一次");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function pick(checkinId: string, body: { activity_id?: string; session_id?: string; none?: boolean }) {
     if (busy) return;
     setBusy(true);
@@ -191,7 +210,8 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
           const rule = i === 0 || toJstDate(messages[i - 1].created_at) !== day ? <DayRule date={day} /> : null;
           let node: React.ReactNode;
           if (m.role === "athlete") {
-            node = <AthleteMessage m={m} onRetry={m.kind === "chat" && !m.rpe ? () => void send(m.text, m.activity_id ?? undefined) : undefined} />;
+            const resettable = m.kind === "pick" && i === lastPickIdx && i > lastCheckinIdx && lastCheckin?.checkin?.state === "picked";
+            node = <AthleteMessage m={m} busy={busy} onReset={resettable ? () => void reset() : undefined} onRetry={m.kind === "chat" && !m.rpe ? () => void send(m.text, m.activity_id ?? undefined) : undefined} />;
           } else if (m.kind === "weekly") {
             const w = reviews.find((r) => r.id === m.weekly_review_id) ?? null;
             node = (
@@ -216,6 +236,7 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
               <CoachMessage m={m}>
                 <p className="text">{m.text}</p>
                 <CheckinChips m={m} busy={busy} onPick={(body) => void pick(m.id, body)} />
+                {i === lastCheckinIdx && m.checkin?.state === "dismissed" ? <button type="button" className="relink" onClick={() => void reset()} disabled={busy}>重新選 ›</button> : null}
               </CoachMessage>
             );
           } else {

@@ -3,9 +3,14 @@
 // results become an activity + manual review on the same local date.
 
 import plans from "./plans.json";
-import type { ActivitiesResponse, ApiActivity, ApiCoachMessage, ApiSession, ApiSplit, ApiWeek, ApiWeeklyReview, CoachResponse, PostCoachMessageRequest, PostCoachMessageResponse,
+import type { ActivitiesResponse, ApiActivity, ApiCoachMessage, ApiRoutine, ApiSession, ApiSplit, ApiWeek, ApiWeeklyReview, CoachResponse, PostCoachMessageRequest, PostCoachMessageResponse,
   PostCheckinPickRequest,
   PostCheckinPickResponse,
+  PostCheckinResetResponse,
+  PostRoutineRequest,
+  PostRoutineResponse,
+  PutRoutineRequest,
+  PutRoutineResponse,
   PutCoachSeenResponse, MatchStatus, MeResponse, PlanResponse, PostAdjustmentRequest, PostAdjustmentResponse, PutMemoRequest, PutMemoResponse, PutSessionRequest, PutSessionResponse, RereviewResponse, Verdict, WeeklyResponse } from "../types/api";
 import { todayJst } from "../lib/date";
 const MOCK_USER_ID = "7d1c3a0e-4f7b-4d2e-9c1a-5b8e2f6a1c01"; // ww in training-api seed
@@ -34,6 +39,16 @@ const demoSplits = (rows: [number, number][]): ApiSplit[] =>
   rows.map(([p, hr], i) => ({ split: i + 1, distance: 1000, moving_time: p, elapsed_time: p, elevation_difference: 0, average_speed: 1000 / p, average_heartrate: hr }));
 const PLAN_ID = "mock-plan";
 
+/** Woo's one line per session (the worker writes these in production). */
+const DEMO_BRIEFS: Record<string, string> = {
+  "2026-10-21": "第 1 趟當熱身，從第 2 趟才用力，下坡真的慢",
+  "2026-10-22": "腿留給明天的輕鬆跑和週日的長跑",
+  "2026-10-23": "前 3 分鐘用呼吸不用錶",
+  "2026-10-25": "找有起伏的路線，心拍比配速重要",
+  "2026-10-27": "跑完 Hyrox 隔天，心拍壓住就好",
+  "2026-10-28": "MP 段看心拍，過 165 就放慢",
+};
+
 function build(): PlanResponse {
   const sessions: ApiSession[] = seed.sessions.map((s) => ({
     id: `s-${s.date}`,
@@ -52,6 +67,7 @@ function build(): PlanResponse {
     target_pace_max_sec_km: s.pace_max_sec_km,
     target_hr_min: s.hr_min,
     target_hr_max: s.hr_max,
+    brief: DEMO_BRIEFS[s.date] ?? null,
     version: 1,
     superseded: false,
   }));
@@ -126,7 +142,47 @@ function build(): PlanResponse {
     sessions,
     activities,
     unassigned,
+    routines: [],
   };
+}
+
+// ---- 肌力 day: Woo's checklist (demo) ----
+const routines: ApiRoutine[] = [];
+const STOCK_ITEMS = [
+  { name: "平板支撐 3 × 40 秒", how: "手肘在肩膀下，臀部夾緊，身體一直線，不要塌腰。" },
+  { name: "側棒式 每邊 2 × 30 秒", how: "手肘撐地，骨盆抬高不下沉，眼睛看前方。" },
+  { name: "臀橋 3 × 15", how: "仰躺屈膝，腳跟推地把臀部抬到跟身體一直線，頂端停 1 秒。" },
+  { name: "單腳硬舉（徒手）每邊 2 × 10", how: "單腳站，上身往前傾、另一腳往後伸，背打直，感覺後側臀腿。" },
+  { name: "死蟲式 3 × 10", how: "仰躺，雙手朝天、膝蓋 90 度抬起。對側的手和腳慢慢往外伸直到接近地面，腰全程貼緊地板，再換邊。" },
+  { name: "小腿提踵 2 × 20", how: "站在台階邊，腳跟懸空，慢慢踮起再放到比台階低。" },
+];
+export function mockPostRoutine(sessionId: string, body: PostRoutineRequest): PostRoutineResponse {
+  const existing = routines.find((r) => r.session_id === sessionId);
+  if (existing && !body.regenerate) return { routine: { ...existing } };
+  if (existing) routines.splice(routines.indexOf(existing), 1);
+  const r: ApiRoutine = { id: `r-${sessionId}-${Date.now()}`, session_id: sessionId, place: body.place, status: "pending", minutes: null, rules: null, items: [], error: null, rpe: null, note: null, completed_at: null, created_at: new Date().toISOString() };
+  routines.push(r);
+  setTimeout(() => {
+    r.status = "ready";
+    r.minutes = 15;
+    r.rules = `${body.place === "home" ? "在家" : "健身房"} · 組間休息 45 秒 · 動作之間 1 分鐘 · 全程 RPE 6〜7`;
+    r.items = STOCK_ITEMS.map((i) => ({ ...i, done: false }));
+  }, 1500);
+  return { routine: { ...r } };
+}
+export function mockPutRoutine(sessionId: string, body: PutRoutineRequest): PutRoutineResponse {
+  const r = routines.find((x) => x.session_id === sessionId);
+  if (!r) throw new Error("no routine yet");
+  if (body.done) r.items = r.items.map((i, idx) => ({ ...i, done: body.done![idx] }));
+  if (body.rpe !== undefined) r.rpe = body.rpe;
+  if (body.note !== undefined) r.note = body.note;
+  if (body.complete && !r.completed_at) {
+    r.completed_at = new Date().toISOString();
+    const t = threadData();
+    const done = r.items.filter((i) => i.done).length;
+    t.push({ ...BLANK, id: `c${t.length + 1}`, role: "coach", kind: "chat", text: `肌力 ${done}/${r.items.length} 項做完${r.rpe ? `，RPE ${r.rpe}` : ""}${r.note ? `，${r.note}` : ""}。明天 Easy 6 km，腿留一點給它。`, created_at: new Date().toISOString() });
+  }
+  return { routine: { ...r, items: r.items.map((i) => ({ ...i })) } };
 }
 
 let cache: PlanResponse | undefined;
@@ -141,7 +197,7 @@ export function mockPutCoachSeen(): PutCoachSeenResponse {
 
 export function mockPlan(): PlanResponse {
   const d = data();
-  return { ...d, coach_unread: coachUnread, coach_checkin_open: threadData().some((m) => (m.kind === "checkin" && m.checkin?.state === "open") || (m.kind === "ask" && m.ask?.state === "open")), activities: [...d.activities, ...d.unassigned].filter((a) => a.session_id), unassigned: d.unassigned.filter((a) => !a.session_id) };
+  return { ...d, coach_unread: coachUnread, coach_checkin_open: threadData().some((m) => (m.kind === "checkin" && m.checkin?.state === "open") || (m.kind === "ask" && m.ask?.state === "open")), activities: [...d.activities, ...d.unassigned].filter((a) => a.session_id), unassigned: d.unassigned.filter((a) => !a.session_id), routines: routines.map((r) => ({ ...r, items: r.items.map((i) => ({ ...i })) })) };
 }
 
 export function mockMe(): MeResponse {
@@ -285,7 +341,7 @@ export function mockPostCheckinPick(checkinId: string, body: PostCheckinPickRequ
   if (body.none) {
     c.checkin = { ...c.checkin, state: "dismissed" };
     const pick: ApiCoachMessage = { ...BLANK, id: `c${t.length + 1}`, role: "athlete", kind: "pick", text: "都不是", created_at: new Date().toISOString() };
-    t.push(pick, { ...BLANK, id: `c${t.length + 2}`, role: "coach", kind: "chat", text: "好，這趟不算。要記到別堂課的話，今天頁的表單可以選。", created_at: new Date().toISOString() });
+    t.push(pick, { ...BLANK, id: `c${t.length + 2}`, role: "coach", kind: "chat", text: "好，這趟不算。改變主意的話按「重新選」。", created_at: new Date().toISOString() });
     return { checkin: { ...c }, pick };
   }
   const cand = c.checkin.candidates.find((x) => x.activity_id === body.activity_id || x.session_id === body.session_id);
@@ -304,6 +360,26 @@ export function mockPostCheckinPick(checkinId: string, body: PostCheckinPickRequ
   }, 2000);
   return { checkin: { ...c }, pick: { ...pick } };
 }
+/** Demo: undo the pick / dismissal and ask again. */
+export function mockPostCheckinReset(checkinId: string): PostCheckinResetResponse {
+  const t = threadData();
+  const c = t.find((m) => m.id === checkinId && m.kind === "checkin");
+  if (!c?.checkin || c.checkin.state === "open" || c.checkin.state === "reset") throw new Error("check-in cannot be reset");
+  if (c.checkin.state === "picked") {
+    const d = data();
+    for (const m of t) if (m.kind === "pick" && m.activity_id) {
+      const a = d.activities.find((x) => x.id === m.activity_id);
+      if (a) { a.session_id = null; a.match_status = "unplanned"; a.review = null; a.memo = null; a.rpe = null; }
+    }
+    for (const m of t) if (m.kind === "ask" && m.ask?.state === "open") m.ask = { ...m.ask, state: "answered" };
+    for (const m of t) if (m.role === "athlete" && m.status === "pending") m.status = "sent";
+  }
+  c.checkin = { ...c.checkin, state: "reset" };
+  const fresh: ApiCoachMessage = { ...BLANK, id: `c${t.length + 1}`, role: "coach", kind: "checkin", text: `好，那是哪一個？今天的課是 ${c.checkin.session_label ?? ""}。`, activity_id: c.activity_id, checkin: { ...c.checkin, state: "open" }, created_at: new Date().toISOString() };
+  t.push(fresh);
+  return { checkin: { ...fresh } };
+}
+
 export function mockCoach(): CoachResponse {
   return { coach: { name: "Woo" }, messages: threadData().map((m) => ({ ...m })) };
 }

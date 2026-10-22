@@ -4,6 +4,7 @@ import type { Route } from "./+types/_app._index";
 import { GearIcon, MountainIcon } from "../components/icons";
 import { PlanPost } from "../components/posts";
 import { SessionSheet } from "../components/session-sheet";
+import { StrengthDay } from "../components/strength-day";
 import { Avatar, Bar, CoachAvatar, SectionH, TopBar, VerdictTag } from "../components/ui";
 import { md, mdDow, relativeDay, timeJst } from "../lib/date";
 import { duration, int, km, kmPlan, pace } from "../lib/format";
@@ -48,7 +49,9 @@ function RestDay({ session }: { session: ApiSession }) {
   const [open, setOpen] = useState(false);
   const strength = isStrengthDay(session);
   const title = strength ? `今天肌力日${session.label === "肌力" && session.content && !/^肌力$/.test(session.content) ? ` · ${session.content}` : ""}` : /完全/.test(`${session.label ?? ""} ${session.content ?? ""}`) ? "今天完全休息" : "今天休息";
-  const note = splitNote(strength ? (session.note ?? "").replace(/^肌力日[：:]\s*/, "") : session.note);
+  const raw = strength ? (session.note ?? "").replace(/^肌力日[：:]\s*/, "") : session.note;
+  // Woo's one line leads; the note itself sits behind 為什麼.
+  const note = session.brief ? { first: session.brief, rest: raw?.trim() ?? "" } : splitNote(raw);
   return (
     <div className={`rest-day${strength ? " strength" : ""}`}>
       {strength ? <Avatar session={session} /> : (
@@ -122,6 +125,15 @@ function TodayPost({ day, view, slow, onOpen }: { day: Day; view: PlanView; slow
   }
 
   if (!isLoggable(session)) return <RestDay session={session} />;
+  if (isStrengthDay(session)) {
+    const title = `今天肌力日${session.label === "肌力" && session.content && !/^肌力$/.test(session.content) ? ` · ${session.content}` : ""}`;
+    return (
+      <>
+        <StrengthDay session={session} routine={view.routineBySession.get(session.id) ?? null} title={title} />
+        {view.data.coach_checkin_open ? <Link to="/coach" className="btn primary woo"><span className="w" aria-hidden="true">W</span>Woo 在問這趟練得怎麼樣</Link> : null}
+      </>
+    );
+  }
 
   const synced = view.todayActivities.filter((a) => !a.session_id);
   const first = synced.find((a) => isRunSport(a.sport_type)) ?? synced[0];

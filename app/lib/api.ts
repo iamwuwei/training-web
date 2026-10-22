@@ -18,13 +18,18 @@ import type {
   PostCoachMessageResponse,
   PostCheckinPickRequest,
   PostCheckinPickResponse,
+  PostCheckinResetResponse,
+  PostRoutineRequest,
+  PostRoutineResponse,
+  PutRoutineRequest,
+  PutRoutineResponse,
   PutCoachSeenResponse,
   RereviewResponse,
   WeeklyResponse,
 } from "../types/api";
 import { clearSession, getIdToken } from "./auth";
 import { config, useMock } from "./config";
-import { mockActivities, mockCoach, mockMe, mockPlan, mockPostAdjustment, mockPostCheckinPick,
+import { mockActivities, mockCoach, mockMe, mockPlan, mockPostAdjustment, mockPostCheckinPick, mockPostCheckinReset, mockPostRoutine, mockPutRoutine,
   mockPostCoachMessage,
   mockPutCoachSeen, mockPutMemo, mockPutSession, mockRereview, mockWeekly } from "../mock/mock";
 
@@ -122,6 +127,24 @@ export function getCoach(): Promise<CoachResponse> {
 export function postCheckinPick(checkinId: string, body: PostCheckinPickRequest): Promise<PostCheckinPickResponse> {
   if (useMock) return Promise.resolve(mockPostCheckinPick(checkinId, body));
   return request<PostCheckinPickResponse>(`/coach/checkins/${checkinId}/pick`, { method: "POST", body: JSON.stringify(body) });
+}
+
+/** 選錯了 / 重新選: the pick is undone and Woo asks again (a new open check-in). */
+export function postCheckinReset(checkinId: string): Promise<PostCheckinResetResponse> {
+  if (useMock) return Promise.resolve(mockPostCheckinReset(checkinId));
+  return request<PostCheckinResetResponse>(`/coach/checkins/${checkinId}/reset`, { method: "POST" });
+}
+
+/** 肌力 day: ask Woo for the checklist (home / gym). Pending until the worker writes it; poll getPlan. */
+export function postRoutine(sessionId: string, body: PostRoutineRequest): Promise<PostRoutineResponse> {
+  if (useMock) return Promise.resolve(mockPostRoutine(sessionId, body));
+  return request<PostRoutineResponse>(`/sessions/${sessionId}/routine`, { method: "POST", body: JSON.stringify(body) });
+}
+
+/** Tick items, set RPE / note, complete the checklist (Woo posts one line). */
+export function putRoutine(sessionId: string, body: PutRoutineRequest): Promise<PutRoutineResponse> {
+  if (useMock) return Promise.resolve(mockPutRoutine(sessionId, body));
+  return request<PutRoutineResponse>(`/sessions/${sessionId}/routine`, { method: "PUT", body: JSON.stringify(body) });
 }
 
 /** The thread was opened: clears `coach_unread` on the next GET /plan. */

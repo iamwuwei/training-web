@@ -433,8 +433,8 @@ ul { padding: 0; list-style: none; }
 .composer .rpe-row .k { flex: none; font-size: 12px; color: var(--ink-3); margin-right: 4px; }
 .composer .rpe { flex: none; width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--chip-line); background: var(--bg); color: var(--ink); font-family: "Barlow Condensed", sans-serif; font-size: 14px; font-weight: 700; }
 .composer .rpe.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
-.today-open .btn.primary.woo { gap: 8px; }
-.today-open .btn.primary.woo .w { width: 22px; height: 22px; border-radius: 50%; background: var(--bg); color: var(--ink); display: inline-flex; align-items: center; justify-content: center; font-family: "Barlow Condensed", sans-serif; font-size: 12px; font-weight: 700; }
+.btn.primary.woo { gap: 8px; }
+.btn.primary.woo .w { width: 22px; height: 22px; border-radius: 50%; background: var(--bg); color: var(--ink); display: inline-flex; align-items: center; justify-content: center; font-family: "Barlow Condensed", sans-serif; font-size: 12px; font-weight: 700; }
 
 /* ---- lively: one accent for good news, big numbers, a little motion ---- */
 .hero2 { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 24px; padding: 10px 0 16px; border-bottom: 1px solid var(--line); color: var(--ink); }
@@ -603,3 +603,42 @@ main > .bar { height: 4px; margin: 6px 0 6px; }
 /* ---- today: rows that open the session sheet ---- */
 .today-open .open-plan { display: block; width: 100%; text-align: left; border-radius: 0; }
 button.next-row { width: 100%; text-align: left; border-radius: 0; }
+
+/* ---- 肌力 day: Woo's checklist ---- */
+.strength-day { padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.strength-head { border-bottom: none; padding-bottom: 4px; }
+.strength-head .t { font-size: 16px; font-weight: 600; }
+.strength-head .sub { margin-top: 2px; font-size: 13px; color: var(--ink-3); }
+.strength-ask { padding-left: 52px; }
+.strength-ask .wooline { margin-top: 4px; }
+.chips-row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.strength-ask .hint, .routine .hint, .strength-done .memo-line { margin: 8px 0 0; font-size: 13px; color: var(--ink-3); }
+.link { color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; font-size: inherit; }
+.routine { padding-left: 52px; }
+.routine .rules { font-size: 12px; color: var(--ink-3); margin: 2px 0 4px; }
+.routine .items li { border-bottom: 1px solid var(--line); position: relative; }
+.routine .items label { display: flex; align-items: center; gap: 12px; min-height: 48px; padding-right: 36px; font-size: 15px; cursor: pointer; }
+.routine .items input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.routine .items .box { flex: none; width: 22px; height: 22px; border-radius: 6px; border: 1.5px solid var(--chip-line); display: inline-flex; align-items: center; justify-content: center; color: transparent; transition: background 0.2s, border-color 0.2s; }
+.routine .items li.done .box { background: var(--accent); border-color: var(--accent); color: #fff; animation: pop 0.25s ease-out; }
+.routine .items li.done .name { color: var(--ink-3); text-decoration: line-through; }
+.routine .items input:focus-visible + .box { outline: 2px solid var(--ink); outline-offset: 2px; }
+.routine .items .how { position: absolute; right: 0; top: 13px; width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--chip-line); font-size: 12px; font-weight: 700; color: var(--ink-3); background: var(--bg); }
+.routine .items .how.on { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+.routine .items .howtext { margin: -6px 0 10px 34px; font-size: 13px; color: var(--ink-2); line-height: 1.55; }
+.routine .foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 12px; font-size: 12px; color: var(--ink-3); }
+.routine .foot > span { display: inline-flex; align-items: center; gap: 6px; }
+.routine .foot .link { font-size: 12px; color: var(--ink-3); }
+.strength-done { padding-left: 52px; }
+.strength-done .stats { display: flex; gap: 16px; font-size: 13px; color: var(--ink-2); }
+.strength-done .stats .num { font-size: 26px; color: var(--ink); }
+.done-head { display: flex; align-items: center; gap: 10px; padding: 4px 0 6px; }
+.done-head .t { font-size: 16px; font-weight: 700; }
+.done-head .s { font-size: 13px; color: var(--ink-3); }
+.sheet-body .rpe-k { margin-top: 16px; font-size: 13px; font-weight: 700; color: var(--ink-2); letter-spacing: 0.04em; }
+.sheet-body .rpe { margin-top: 8px; }
+.sheet-body .rpe-scale { margin-top: 4px; }
+.sheet-body .oneline { width: 100%; margin-top: 14px; height: 44px; padding: 0 14px; border: 1px solid var(--chip-line); border-radius: 12px; font: inherit; font-size: 15px; color: var(--ink); background: var(--bg); }
+.sheet-body .oneline:focus { outline: none; border-color: var(--ink-2); }
+.sheet-body .btn.primary { margin-top: 14px; }
+.msg.coach .relink { margin-top: 8px; font-size: 13px; color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; }

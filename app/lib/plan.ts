@@ -1,7 +1,7 @@
 // Everything the screens show is derived here from one PlanResponse + "today" (JST).
 // "跳過" is not an API state: a past, non-rest session with no matched activity.
 
-import type { ApiActivity, ApiSession, ApiWeek, PlanResponse, Verdict } from "../types/api";
+import type { ApiActivity, ApiRoutine, ApiSession, ApiWeek, PlanResponse, Verdict } from "../types/api";
 import { dayDiff, toJstDate } from "./date";
 import { isStrengthDay } from "./labels";
 
@@ -33,6 +33,8 @@ export interface PlanView {
   weeks: Week[];
   byDate: Map<string, Day>;
   activityById: Map<string, ApiActivity>;
+  /** Woo's 肌力 checklist per session, where one was asked for. */
+  routineBySession: Map<string, ApiRoutine>;
   /** Today's row, if the plan covers today. */
   todayDay: Day | null;
   /** Next runs after today, rest days skipped. */
@@ -112,6 +114,7 @@ export function buildPlanView(data: PlanResponse, today: string): PlanView {
     weeks,
     byDate,
     activityById,
+    routineBySession: new Map((data.routines ?? []).map((r) => [r.session_id, r])),
     unassigned: data.unassigned ?? [],
     todayActivities: [...data.activities, ...(data.unassigned ?? [])]
       .filter((a) => toJstDate(a.start_time) === today)

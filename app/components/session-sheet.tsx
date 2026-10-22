@@ -30,7 +30,7 @@ export function lastOfKind(view: PlanView, session: ApiSession): { a: ApiActivit
 export function SessionSheet({ session, view, onClose }: { session: ApiSession | null; view: PlanView; onClose: () => void }) {
   const s = session;
   const rows = s ? segmentRows(s, easyTarget(view)) : [];
-  const woo = s ? lastReminderFor(view, s) : null;
+  const woo = s ? lastReminderFor(view, s) ?? s.brief : null;
   const last = s ? lastOfKind(view, s) : null;
   const isRest = s?.type === "rest";
   return (

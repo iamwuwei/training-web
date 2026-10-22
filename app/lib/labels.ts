@@ -64,6 +64,8 @@ export function labelStyle(session: Pick<ApiSession, "label" | "type"> | null | 
     const sp = sport ? SPORTS[sport] : undefined;
     return { kind: "rest", short: sp?.short ?? "動", name: sp?.name ?? "未排課" };
   }
+  // A rest day whose note opens with 肌力日 is a strength day: the 肌 ring, not 休.
+  if (session.type === "rest" && "note" in session && isStrengthDay(session as Pick<ApiSession, "label" | "type" | "content" | "note">)) return BY_LABEL.肌力;
   return (session.label && BY_LABEL[session.label]) || BY_TYPE[session.type] || BY_TYPE.easy;
 }
 
