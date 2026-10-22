@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, useRevalidator } from "react-router";
 import type { Route } from "./+types/_app._index";
 import { GearIcon, MountainIcon } from "../components/icons";
@@ -30,14 +31,21 @@ function WooLine({ text, to }: { text: string; to?: string }) {
 }
 
 function RestDay({ session }: { session: ApiSession }) {
+  const [open, setOpen] = useState(false);
+  const label = session.label ?? "";
+  const title = /肌力|重訓|Hyrox/i.test(label) ? "今天可以做肌力訓練" : /完全/.test(label) ? "今天完全休息" : "今天休息";
   return (
     <div className="rest-day">
       <svg width="120" height="64" viewBox="0 0 120 64" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" aria-hidden="true">
         <path d="M4 58 L40 12 L52 26 L62 18 L96 58 Z" /><path d="M34 22 L40 28 L46 22 L52 26" />
         <path d="M100 30c6 0 9-4 9-8s-3-8-9-8-9 4-9 8 3 8 9 8z" stroke="var(--accent)" /><path d="M2 58h116" stroke="var(--line)" />
       </svg>
-      <p className="t">{session.content ?? session.label ?? "今天休息"}</p>
-      {session.note ? <p className="note">{session.note}</p> : null}
+      <p className="t">{title}</p>
+      {session.note ? (
+        open
+          ? <p className="note">{session.note}</p>
+          : <button type="button" className="more" onClick={() => setOpen(true)} aria-expanded={false}>看細節 ›</button>
+      ) : null}
     </div>
   );
 }
