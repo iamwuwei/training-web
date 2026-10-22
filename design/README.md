@@ -20,7 +20,7 @@
 | `Settings.dc.html` | `/settings` 設定（從「今天」的齒輪進） | `app/routes/_app.settings.tsx` |
 | `Coach.dc.html` | `/coach` 教練 Woo 的時間軸與輸入框 | `app/routes/_app.coach.tsx`、`app/components/proposals.tsx` |
 | `Checkin-0/1/2.dc.html` | 跑完的流程：今天頁入口 → Woo 問哪一個活動（chip）→ 接著問感受（RPE 列） | `app/routes/_app._index.tsx`、`app/routes/_app.coach.tsx` |
-| `Lively-*.dc.html` | 活潑版（主色只在好事上、大數字、Woo 的狀態與一句話、慶祝色帶），全部畫面 | `app/app.css`（`--accent`、`.hero2`、`.wooline`、`.celebrate`、動態）、今天／教練／報告三個 route；報告頁的趨勢圖另做 |
+| `Lively-*.dc.html` | 活潑版（主色只在好事上、大數字、Woo 的狀態與一句話、慶祝色帶），全部畫面 | `app/app.css`（`--accent`、`.hero2`、`.wooline`、`.celebrate`、動態）、今天／教練／報告三個 route；報告頁的「同類型比較」改成趨勢折線（Easy：心拍區間內的配速；其他：重點段配速） |
 | `Report.dc.html`、`Proposal-ReportMP.dc.html` | `/activities/:id` 單次報告（單一配速／組合課） | `app/routes/_app.activities.$id.tsx`、`app/components/memo.tsx` |
 
 ## 設計規則（canvas 旁註）

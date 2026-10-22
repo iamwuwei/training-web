@@ -143,49 +143,69 @@ function SplitDots({ a, s, plan }: { a: ApiActivity; s: ApiSession | null; plan:
   );
 }
 
-function Compare({ current, session, all, sessions }: { current: ApiActivity; session: ApiSession; all: ApiActivity[]; sessions: ApiSession[] }) {
+/** Pace of the km splits run inside the session's HR band (aerobic efficiency); null without enough of them. */
+function paceInBand(a: ApiActivity, lo: number, hi: number): number | null {
+  const inBand = fullSplits(a.splits).filter((sp) => sp.average_heartrate != null && sp.average_heartrate >= lo && sp.average_heartrate <= hi && sp.distance > 500);
+  if (inBand.length < 2) return null;
+  const dist = inBand.reduce((n, sp) => n + sp.distance, 0);
+  const time = inBand.reduce((n, sp) => n + sp.moving_time, 0);
+  return Math.round(time / (dist / 1000));
+}
+
+/**
+ * The same kind of session over its last six runs, as a line: for Easy / Recovery
+ * the pace while the heart rate sat in the target band (fitness, not effort);
+ * for MP and the rest the focus-block pace. Faster is higher.
+ */
+function Trend({ current, session, all, sessions }: { current: ApiActivity; session: ApiSession; all: ApiActivity[]; sessions: ApiSession[] }) {
   const kind = labelStyle(session);
-  const single = planFor(session).single;
-  const peers = all
+  const aerobic = kind.kind === "easy" && session.target_hr_min != null && session.target_hr_max != null;
+  const lo = session.target_hr_min ?? 0, hi = session.target_hr_max ?? 0;
+  const points = all
     .map((a) => {
       const s = sessions.find((x) => x.id === a.session_id) ?? null;
       if (!s || labelStyle(s).name !== kind.name) return null;
-      const c = comparablePace(a, s);
-      return c ? { a, s, ...c } : null;
+      const v = aerobic ? (paceInBand(a, lo, hi) ?? (a.avg_hr != null && a.avg_hr >= lo && a.avg_hr <= hi ? a.avg_pace_sec_km : null)) : comparablePace(a, s)?.pace ?? null;
+      return v ? { a, v } : null;
     })
     .filter((x): x is NonNullable<typeof x> => !!x)
     .sort((x, y) => x.a.start_time.localeCompare(y.a.start_time))
-    .slice(-5);
-  const title = `同類型比較 · ${kind.name}${single ? "" : `（${focusLabel(session)}）`}`;
-  if (peers.length < 2) {
+    .slice(-6);
+  const title = aerobic ? `${kind.name} 的有氧效率` : `${kind.name} 的配速趨勢`;
+  const sub = aerobic ? `心拍 ${lo}〜${hi} 時的配速` : planFor(session).single ? "整趟平均" : `${focusLabel(session)}平均`;
+  if (points.length < 2) {
     return (
-      <section className="compare">
-        <h2 className="section-h" style={{ margin: 0 }}>{title}</h2>
-        <p className="empty-line">{peers.length ? `這是第一次 ${kind.name} 課，下一次之後就會出現比較。` : "還沒有可以比較的紀錄。"}</p>
+      <section className="trend">
+        <div className="head"><h2 className="section-h" style={{ margin: 0 }}>{title}</h2><span className="sub">{sub}</span></div>
+        <p className="empty-line">{points.length ? `這是第一次 ${kind.name} 課，下一次之後就會出現趨勢。` : aerobic ? `還沒有心拍落在 ${lo}〜${hi} 的紀錄。` : "還沒有可以比較的紀錄。"}</p>
       </section>
     );
   }
-  const fastest = Math.min(...peers.map((p) => p.pace));
+  const W = 220, H = 56, PAD = 8;
+  const vs = points.map((p) => p.v);
+  const min = Math.min(...vs), max = Math.max(...vs), span = Math.max(20, max - min);
+  const x = (i: number) => PAD + (i / (points.length - 1)) * (W - PAD * 2);
+  const y = (v: number) => PAD + ((v - min) / span) * (H - PAD * 2); // slower (bigger) sits lower
+  const curIdx = points.findIndex((p) => p.a.id === current.id);
+  const ref = points[0], cur = points[curIdx >= 0 ? curIdx : points.length - 1];
+  const delta = cur.v - ref.v;
+  const weeks = Math.max(1, Math.round((Date.parse(cur.a.start_time) - Date.parse(ref.a.start_time)) / (7 * 86_400_000)));
   return (
-    <section className="compare">
-      <h2 className="section-h" style={{ margin: 0 }}>{title}</h2>
-      <div className="rows">
-        {peers.map(({ a, s, pace: p, hr }) => {
-          const cur = a.id === current.id;
-          const band = single ? sessionBand(s) : null;
-          const paceOut = band ? p < band.lo || p > band.hi : false;
-          const hrOut = hr != null && s.target_hr_max != null && hr > s.target_hr_max;
-          return (
-            <div key={a.id} className={`row${cur ? " cur" : ""}`}>
-              <span className="d">{activityDate(a).slice(5).replace("-", "/")}</span>
-              <div className="bar"><i style={{ width: `${(fastest / p) * 100}%`, background: cur ? `var(--t-${kind.kind})` : "var(--chip-line)" }} /></div>
-              <span className={`num${paceOut ? " over" : ""}`}>{pace(p)}</span>
-              <span className={`num${hrOut ? " over" : ""}`}>{hr != null ? Math.round(hr) : "–"}</span>
-            </div>
-          );
-        })}
+    <section className="trend">
+      <div className="head"><h2 className="section-h" style={{ margin: 0 }}>{title}</h2><span className="sub">{sub}</span></div>
+      <div className="body">
+        <div className="chart">
+          <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${points.map((p) => `${activityDate(p.a).slice(5)} ${pace(p.v)}`).join("，")}`}>
+            <polyline points={points.map((p, i) => `${x(i)},${y(p.v)}`).join(" ")} fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+            {points.map((p, i) => <circle key={p.a.id} cx={x(i)} cy={y(p.v)} r="3.5" fill={p.a.id === cur.a.id ? "var(--accent)" : "var(--bg)"} stroke={p.a.id === cur.a.id ? "var(--accent)" : "currentColor"} strokeWidth="2" />)}
+          </svg>
+          <div className="dates"><span>{activityDate(ref.a).slice(5).replace("-", "/")}</span><span>{activityDate(cur.a).slice(5).replace("-", "/")}</span></div>
+        </div>
+        <div className="delta">
+          <div className={`num${delta < 0 ? " good" : delta > 0 ? " slow" : ""}`}>{delta === 0 ? "持平" : <>{delta < 0 ? "−" : "+"}{Math.abs(delta)}<span>秒</span></>}</div>
+          <div className="sub">{delta === 0 ? `跟 ${weeks} 週前一樣` : `每公里，比 ${weeks} 週前${delta < 0 ? "快" : "慢"}`}</div>
+        </div>
       </div>
-      <div className="legend"><span>配速</span><span>心拍</span></div>
     </section>
   );
 }
@@ -310,7 +330,7 @@ export default function Report({ loaderData }: Route.ComponentProps) {
         {showSplits ? <SplitDots a={a} s={s} plan={plan} /> : (a.splits?.length ? (
           <button type="button" className="fold" onClick={() => setShowSplits(true)}><b>每公里 · {a.splits.length} 段</b><span>展開 ›</span></button>
         ) : null)}
-        {s ? <Compare current={a} session={s} all={all} sessions={sessions} /> : null}
+        {s ? <Trend current={a} session={s} all={all} sessions={sessions} /> : null}
 
         <section className="gear">
           {extra}
