@@ -90,7 +90,7 @@ function TodayPost({ day, view, slow }: { day: Day; view: PlanView; slow?: boole
   return (
     <div className="today-open">
       <PlanPost session={session} big />
-      {prep && !first ? <WooLine text={`上次${session.label ?? ""}之後我說的：${prep}`} /> : null}
+      {prep && !first ? <WooLine text={prep} /> : null}
       {first ? (
         <>
           <p className="synced">

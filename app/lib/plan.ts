@@ -211,5 +211,10 @@ export function lastReminderFor(view: PlanView, session: ApiSession): string | n
   const runs = view.data.activities
     .filter((a) => a.review?.reminders?.length && a.session_id && byId.get(a.session_id)?.label === label && a.session_id !== session.id)
     .sort((a, b) => b.start_time.localeCompare(a.start_time));
-  return runs[0]?.review?.reminders[0] ?? null;
+  const r = runs[0]?.review?.reminders[0];
+  if (!r) return null;
+  // A reminder may open with the observation ("第 1 km 6:35 起跑偏快；前 3 分鐘用呼吸不用錶"):
+  // before the run only the instruction matters.
+  const action = r.split(/[；;]/).map((x) => x.trim()).filter(Boolean).pop() ?? r;
+  return `這次記得：${action}`;
 }
