@@ -141,7 +141,7 @@ export function mockPutCoachSeen(): PutCoachSeenResponse {
 
 export function mockPlan(): PlanResponse {
   const d = data();
-  return { ...d, coach_unread: coachUnread, coach_checkin_open: threadData().some((m) => m.kind === "checkin" && m.checkin?.state === "open"), activities: d.activities.filter((a) => a.session_id), unassigned: d.unassigned.filter((a) => !a.session_id) };
+  return { ...d, coach_unread: coachUnread, coach_checkin_open: threadData().some((m) => (m.kind === "checkin" && m.checkin?.state === "open") || (m.kind === "ask" && m.ask?.state === "open")), activities: [...d.activities, ...d.unassigned].filter((a) => a.session_id), unassigned: d.unassigned.filter((a) => !a.session_id) };
 }
 
 export function mockMe(): MeResponse {

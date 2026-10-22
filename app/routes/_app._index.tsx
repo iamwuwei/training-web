@@ -40,7 +40,7 @@ function TodayPost({ day, view, slow }: { day: Day; view: PlanView; slow?: boole
         <div className="body">
           <div className="head">
             <b>{shortName(session)}</b>
-            {r?.verdict ? <VerdictTag verdict={r.verdict} /> : r?.failed ? <span className="pending failed">分析失敗，點進去重試</span> : <span className="pending">{slow ? "分析比較久，點進去看" : "教練分析中…"}</span>}
+            {r?.verdict ? <VerdictTag verdict={r.verdict} /> : r?.failed ? <span className="pending failed">分析失敗，點進去重試</span> : view.data.coach_checkin_open ? <span className="pending">Woo 在等你回感受</span> : <span className="pending">{slow ? "分析比較久，點進去看" : "教練分析中…"}</span>}
           </div>
           <Stats a={activity} day={day} />
           {r?.reminders[0] ? <p className="next">→ {r.reminders[0]}</p> : null}
@@ -100,7 +100,8 @@ export default function Today() {
   const view = usePlan();
   const revalidator = useRevalidator();
   const todayAct = view?.todayDay?.activity ?? null;
-  const analysing = !!(todayAct && !todayAct.review);
+  // No review yet and Woo isn't waiting on an answer: the worker is writing one.
+  const analysing = !!(todayAct && !todayAct.review) && !view?.data.coach_checkin_open;
   const { timedOut } = useReviewPolling(analysing);
   if (!view) return <NoPlan title="今天" />;
   const { todayDay, todayActivities, upcoming, currentWeek, daysToRace, data, today } = view;
