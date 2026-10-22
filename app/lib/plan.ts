@@ -199,3 +199,17 @@ export function sessionForExtra(view: PlanView, date: string): ApiSession | null
   });
   return open[0]?.session ?? null;
 }
+
+/**
+ * Woo's line before a session: the first reminder from the last reviewed run of
+ * the same type (label), e.g. "第 1 km 前 3 分鐘用呼吸不用錶" before the next Easy.
+ */
+export function lastReminderFor(view: PlanView, session: ApiSession): string | null {
+  const label = session.label;
+  if (!label) return null;
+  const byId = new Map(view.data.sessions.map((s) => [s.id, s]));
+  const runs = view.data.activities
+    .filter((a) => a.review?.reminders?.length && a.session_id && byId.get(a.session_id)?.label === label && a.session_id !== session.id)
+    .sort((a, b) => b.start_time.localeCompare(a.start_time));
+  return runs[0]?.review?.reminders[0] ?? null;
+}

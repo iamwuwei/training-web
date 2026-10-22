@@ -4,13 +4,13 @@ import { useReviewPolling } from "../lib/use-review-polling";
 import type { Route } from "./+types/_app.activities.$id";
 import { BackIcon } from "../components/icons";
 import { MemoEditor } from "../components/memo";
-import { Avatar, CoachAvatar, Reminders, TopBar } from "../components/ui";
+import { Avatar, CoachAvatar, Reminders, TopBar, verdictBadge } from "../components/ui";
 import { ApiError, getActivities, rereview } from "../lib/api";
 import { hasSession } from "../lib/auth";
 import { mdDow, timeJst } from "../lib/date";
 import { duration, int, km, kmPlan, pace } from "../lib/format";
 import { labelStyle, shortName, sportName, verdictKind } from "../lib/labels";
-import { activityDate, isRunSport } from "../lib/plan";
+import { activityDate, hrOver, isRunSport, paceFast } from "../lib/plan";
 import { comparablePace, focusLabel, focusStats, fullSplits, planFor, sessionBand, splitPace, type Band, type SessionPlan } from "../lib/segments";
 import type { ApiActivity, ApiSession } from "../types/api";
 import { usePlan } from "../lib/use-plan";
@@ -225,6 +225,7 @@ export default function Report({ loaderData }: Route.ComponentProps) {
       setRereviewBusy(false);
     }
   }
+  const [showSplits, setShowSplits] = useState(false);
   const retryChip = (
     <button type="button" className="chip" onClick={() => void askAgain()} disabled={rereviewBusy}>
       {rereviewBusy ? "送出中…" : "重新分析"}
@@ -253,13 +254,20 @@ export default function Report({ loaderData }: Route.ComponentProps) {
           </div>
         </article>
 
+        <div className="report-top">
+          {run || a.distance_m > 0 ? <span><b className="num">{km(a.distance_m)}</b> km</span> : <span><b className="num">{duration(a.moving_time_sec)}</b></span>}
+          {run && a.avg_pace_sec_km ? <span><b className={`num${paceFast(a, s) ? " over" : ""}`}>{pace(a.avg_pace_sec_km)}</b> /km</span> : null}
+          {a.avg_hr != null ? <span><b className={`num${hrOver(a, s) ? " over" : ""}`}>{int(a.avg_hr)}</b> bpm</span> : null}
+        </div>
+
         {r?.verdict ? (
           <section className={`verdict-block ${vk ?? ""}`}>
             <h2>{r.verdict}</h2>
             {r.comment ? <p className="comment">{r.comment}</p> : null}
-            {r.reminders.length ? <Reminders items={r.reminders} /> : null}
+            {r.reminders[0] ? <div className="next-band"><b>下次：</b>{r.reminders[0]}</div> : null}
+            {r.reminders.length > 1 ? <Reminders items={r.reminders.slice(1)} /> : null}
             <div className="src">
-              <span className="who">{r.source === "claude" ? <><CoachAvatar size={20} />Woo · {mdDow(r.created_at.slice(0, 10)).split(" ")[0]} {timeJst(r.created_at)}</> : "教練判定 · 手動"}{waitingReview ? " · 正在依你的心得重新評…" : ""}</span>
+              <span className="who">{r.source === "claude" ? <><CoachAvatar size={20} badge={verdictBadge(r.verdict)} />Woo · {mdDow(r.created_at.slice(0, 10)).split(" ")[0]} {timeJst(r.created_at)}</> : "教練判定 · 手動"}{waitingReview ? " · 正在依你的心得重新評…" : ""}</span>
               {!waitingReview ? <span className="acts"><Link to={`/coach?quote=${a.id}`} className="chip">問教練</Link>{r.source === "claude" ? retryChip : null}</span> : null}
             </div>
             {rereviewError ? <p className="hint" style={{ color: "var(--v-bad)" }}>{rereviewError}</p> : null}
@@ -299,7 +307,9 @@ export default function Report({ loaderData }: Route.ComponentProps) {
         <MemoEditor key={a.id} activity={a} onSaved={setOverride} />
         {!a.memo && a.description ? <p className="text" style={{ margin: "10px 0 0", color: "var(--ink-2)" }}>Strava 描述：{a.description}</p> : null}
 
-        <SplitDots a={a} s={s} plan={plan} />
+        {showSplits ? <SplitDots a={a} s={s} plan={plan} /> : (a.splits?.length ? (
+          <button type="button" className="fold" onClick={() => setShowSplits(true)}><b>每公里 · {a.splits.length} 段</b><span>展開 ›</span></button>
+        ) : null)}
         {s ? <Compare current={a} session={s} all={all} sessions={sessions} /> : null}
 
         <section className="gear">

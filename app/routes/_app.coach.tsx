@@ -3,7 +3,7 @@ import { Link, redirect, useRevalidator, useSearchParams } from "react-router";
 import type { Route } from "./+types/_app.coach";
 import { SendIcon } from "../components/icons";
 import { CoachProposals } from "../components/proposals";
-import { CoachAvatar, VerdictTag } from "../components/ui";
+import { CoachAvatar, VerdictTag, verdictBadge } from "../components/ui";
 import { ApiError, getActivities, getCoach, getWeekly, postCheckinPick, postCoachMessage, putCoachSeen } from "../lib/api";
 import { hasSession } from "../lib/auth";
 import { md, mdDow, timeJst, toJstDate } from "../lib/date";
@@ -44,10 +44,10 @@ function DayRule({ date }: { date: string }) {
   return <div className="day-rule"><span />{mdDow(date)}<span /></div>;
 }
 
-function CoachMessage({ m, children }: { m: ApiCoachMessage; children: React.ReactNode }) {
+function CoachMessage({ m, children, badge }: { m: ApiCoachMessage; children: React.ReactNode; badge?: "check" | "warn" | null }) {
   return (
     <article className="msg coach">
-      <CoachAvatar />
+      <CoachAvatar badge={badge} />
       <div className="body">
         <div className="meta"><b>Woo</b><span className="grey">· {timeJst(m.created_at)}</span></div>
         {children}
@@ -165,6 +165,17 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
 
   const sessions = view?.data.sessions ?? [];
 
+  // A long run farther than any run before it is worth a line of its own.
+  const allRuns = (view ? [...view.data.activities, ...view.data.unassigned] : []).filter((a) => !a.sport_type || ["Run", "TrailRun", "VirtualRun"].includes(a.sport_type));
+  function firstTime(activityId: string | null): number | null {
+    if (!activityId) return null;
+    const a = allRuns.find((x) => x.id === activityId);
+    if (!a || a.distance_m < 10_000) return null;
+    const before = allRuns.filter((x) => x.start_time < a.start_time);
+    if (before.some((x) => x.distance_m >= a.distance_m)) return null;
+    return Math.round(a.distance_m / 1000);
+  }
+
   return (
     <>
       <header className="topbar coach-head">
@@ -190,9 +201,11 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
               </CoachMessage>
             );
           } else if (m.kind === "review") {
+            const first = firstTime(m.activity_id);
             node = (
-              <CoachMessage m={m}>
+              <CoachMessage m={m} badge={verdictBadge(m.review?.verdict)}>
                 <div className="head"><b>{m.review?.label}</b><VerdictTag verdict={m.review?.verdict} /></div>
+                {first ? <div className="celebrate"><div className="k">第一次</div><div className="v"><span className="num">{first}</span><span>km 長跑</span></div></div> : null}
                 <p className="text">{m.text}</p>
                 {m.review?.reminder ? <p className="next">→ {m.review.reminder}</p> : null}
                 {m.activity_id ? <Link to={`/activities/${m.activity_id}`} className="chip" style={{ marginTop: 8 }}>看報告</Link> : null}
@@ -212,7 +225,7 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
         })}
         {waiting ? (
           <article className="msg coach typing">
-            <CoachAvatar />
+            <CoachAvatar badge="typing" />
             <div className="body">{timedOut ? "Woo 回得比較慢，稍後再回來看。" : <><span className="typing-dots"><i /><i /><i /></span>Woo 輸入中…</>}</div>
           </article>
         ) : null}

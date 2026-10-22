@@ -20,12 +20,13 @@
 | `Settings.dc.html` | `/settings` 設定（從「今天」的齒輪進） | `app/routes/_app.settings.tsx` |
 | `Coach.dc.html` | `/coach` 教練 Woo 的時間軸與輸入框 | `app/routes/_app.coach.tsx`、`app/components/proposals.tsx` |
 | `Checkin-0/1/2.dc.html` | 跑完的流程：今天頁入口 → Woo 問哪一個活動（chip）→ 接著問感受（RPE 列） | `app/routes/_app._index.tsx`、`app/routes/_app.coach.tsx` |
-| `Lively-*.dc.html` | 活潑版提案（主色只在好事上、大數字、Woo 的狀態與一句話、慶祝色帶），全部畫面 | 實作中：先樣式，再報告頁的趨勢圖 |
+| `Lively-*.dc.html` | 活潑版（主色只在好事上、大數字、Woo 的狀態與一句話、慶祝色帶），全部畫面 | `app/app.css`（`--accent`、`.hero2`、`.wooline`、`.celebrate`、動態）、今天／教練／報告三個 route；報告頁的趨勢圖另做 |
 | `Report.dc.html`、`Proposal-ReportMP.dc.html` | `/activities/:id` 單次報告（單一配速／組合課） | `app/routes/_app.activities.$id.tsx`、`app/components/memo.tsx` |
 
 ## 設計規則（canvas 旁註）
 
 - 視覺：Threads 式極簡。純白底、墨色 `#14161B`、次要文字 `#5C6370`、淡灰 `#6B7180`（白底 4.9:1），1 px 分隔線 `#ECEDF0`，沒有卡片。
+- 活潑感：一個主色珊瑚 `#F0553A`（`--accent`）只用在好事上：達成、倒數數字、達標的週、慶祝色帶、Woo 頭像的勾；琥珀與紅不變。大數字一個畫面一個主角（倒數 56px、本週 40px、貼文 26px、報告頂部 40px）。動態 200〜400ms：進度條長到位、判定色點彈一下、新訊息滑進來，都遵守 `prefers-reduced-motion`。
 - 元件：區塊標題 13px 粗體；小動作一律外框膠囊按鈕（高 32px）；主要動作是全寬黑色按鈕，一個畫面最多一個；底部 tab 有文字。
 - 顏色只給需要一眼區分的符號；對應的實作在 `app/lib/labels.ts` 與 `app/app.css`（README 的「顏色規則」有完整清單）。
 - 字體：Noto Sans TC 內文，數字 Barlow Condensed。

@@ -16,8 +16,20 @@ export function Avatar({ session, sport }: { session: Pick<ApiSession, "label" |
 }
 
 /** The coach: an ink disc with a W. The only dark avatar in the app, so it reads as a person, not a session type. */
-export function CoachAvatar({ size = 36 }: { size?: number }) {
-  return <div className="avatar coach" style={{ width: size, height: size, fontSize: Math.round(size * 0.44) }} aria-hidden="true">W</div>;
+export function CoachAvatar({ size = 36, badge }: { size?: number; badge?: "check" | "warn" | "typing" | null }) {
+  return (
+    <div className="avatar coach" style={{ width: size, height: size, fontSize: Math.round(size * 0.44) }} aria-hidden="true">
+      W
+      {badge === "check" ? <span className="badge check"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12l5 5L20 7" /></svg></span> : null}
+      {badge === "warn" ? <span className="badge warn">!</span> : null}
+      {badge === "typing" ? <span className="badge typing"><i /><i /><i /></span> : null}
+    </div>
+  );
+}
+
+/** Woo's avatar state for a verdict: a check for 達成, an exclamation for 達成但有提醒. */
+export function verdictBadge(verdict: Verdict | null | undefined): "check" | "warn" | null {
+  return verdict === "達成" ? "check" : verdict === "達成但有提醒" ? "warn" : null;
 }
 
 export function VerdictTag({ verdict }: { verdict: Verdict | "跳過" | null | undefined }) {

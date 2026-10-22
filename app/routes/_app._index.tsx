@@ -1,15 +1,15 @@
 import { Link, useRevalidator } from "react-router";
 import type { Route } from "./+types/_app._index";
 import { GearIcon, MountainIcon } from "../components/icons";
-import { PlanPost, RestPost } from "../components/posts";
-import { Avatar, Bar, SectionH, TopBar, VerdictTag } from "../components/ui";
+import { PlanPost } from "../components/posts";
+import { Avatar, Bar, CoachAvatar, SectionH, TopBar, VerdictTag } from "../components/ui";
 import { md, mdDow, relativeDay, timeJst } from "../lib/date";
 import { duration, int, km, kmPlan, pace } from "../lib/format";
 import { shortName, sportName } from "../lib/labels";
-import { activityDate, hrOver, isLoggable, isLoggableNow, isRunSport, paceFast, sessionForExtra, type Day, type PlanView } from "../lib/plan";
+import { activityDate, hrOver, isLoggable, isLoggableNow, isRunSport, lastReminderFor, paceFast, sessionForExtra, type Day, type PlanView } from "../lib/plan";
 import { NoPlan, usePlan } from "../lib/use-plan";
 import { useReviewPolling } from "../lib/use-review-polling";
-import type { ApiActivity } from "../types/api";
+import type { ApiActivity, ApiSession } from "../types/api";
 
 export function meta(): Route.MetaDescriptors {
   return [{ title: "今天 · 富士山マラソン 2026" }];
@@ -18,10 +18,34 @@ export function meta(): Route.MetaDescriptors {
 // One post per state for today's session: not run → synced (log it) → coach analysing → verdict.
 // Everything else (full comment, memo, splits) lives on the report page.
 
-function Stats({ a, day }: { a: ApiActivity; day: Day }) {
+/** The first sentence of the coach's comment, for the one-line summary under today's run. */
+function firstSentence(text: string | null | undefined): string | null {
+  if (!text) return null;
+  const m = /^[^。！？!?]+[。！？!?]?/.exec(text.trim());
+  return m ? m[0] : text;
+}
+
+function WooLine({ text, to }: { text: string; to?: string }) {
+  return <div className="wooline"><CoachAvatar size={20} /><span>{text}{to ? <> <Link to={to}>看報告</Link></> : null}</span></div>;
+}
+
+function RestDay({ session }: { session: ApiSession }) {
+  return (
+    <div className="rest-day">
+      <svg width="120" height="64" viewBox="0 0 120 64" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" aria-hidden="true">
+        <path d="M4 58 L40 12 L52 26 L62 18 L96 58 Z" /><path d="M34 22 L40 28 L46 22 L52 26" />
+        <path d="M100 30c6 0 9-4 9-8s-3-8-9-8-9 4-9 8 3 8 9 8z" stroke="var(--accent)" /><path d="M2 58h116" stroke="var(--line)" />
+      </svg>
+      <p className="t">{session.content ?? session.label ?? "今天休息"}</p>
+      {session.note ? <p className="note">{session.note}</p> : null}
+    </div>
+  );
+}
+
+function Stats({ a, day, big }: { a: ApiActivity; day: Day; big?: boolean }) {
   const run = isRunSport(a.sport_type);
   return (
-    <div className="stats">
+    <div className={`stats${big ? " big" : ""}`}>
       {run || a.distance_m > 0 ? <span><b className="num">{km(a.distance_m)}</b> km</span> : <span><b className="num">{duration(a.moving_time_sec)}</b></span>}
       {run ? <span><b className={`num${paceFast(a, day.session) ? " over" : ""}`}>{pace(a.avg_pace_sec_km)}</b> /km</span> : null}
       {a.avg_hr != null ? <span><b className={`num${hrOver(a, day.session) ? " over" : ""}`}>{int(a.avg_hr)}</b> bpm</span> : null}
@@ -34,6 +58,7 @@ function TodayPost({ day, view, slow }: { day: Day; view: PlanView; slow?: boole
 
   if (activity) {
     const r = activity.review;
+    const line = r?.reminders[0] ? `→ ${r.reminders[0]}` : firstSentence(r?.comment);
     return (
       <Link to={`/activities/${activity.id}`} className="post link today-post">
         <Avatar session={session} />
@@ -42,20 +67,22 @@ function TodayPost({ day, view, slow }: { day: Day; view: PlanView; slow?: boole
             <b>{shortName(session)}</b>
             {r?.verdict ? <VerdictTag verdict={r.verdict} /> : r?.failed ? <span className="pending failed">分析失敗，點進去重試</span> : view.data.coach_checkin_open ? <span className="pending">Woo 在等你回感受</span> : <span className="pending">{slow ? "分析比較久，點進去看" : "教練分析中…"}</span>}
           </div>
-          <Stats a={activity} day={day} />
-          {r?.reminders[0] ? <p className="next">→ {r.reminders[0]}</p> : null}
+          <Stats a={activity} day={day} big />
+          {line ? <div className="wooline"><CoachAvatar size={20} /><span>{line}</span></div> : null}
         </div>
       </Link>
     );
   }
 
-  if (!isLoggable(session)) return <RestPost session={session} />;
+  if (!isLoggable(session)) return <RestDay session={session} />;
 
   const synced = view.todayActivities.filter((a) => !a.session_id);
   const first = synced.find((a) => isRunSport(a.sport_type)) ?? synced[0];
+  const prep = lastReminderFor(view, session);
   return (
     <div className="today-open">
       <PlanPost session={session} big />
+      {prep && !first ? <WooLine text={`上次${session.label ?? ""}之後我說的：${prep}`} /> : null}
       {first ? (
         <>
           <p className="synced">
@@ -116,21 +143,22 @@ export default function Today() {
     <>
       <TopBar
         title={<><MountainIcon />富士山マラソン 2026</>}
-        aside={<>
-          <span>{daysToRace > 0 ? <>倒數 <span className="num">{daysToRace}</span> 天</> : daysToRace === 0 ? "比賽日" : "已完賽"}</span>
-          <Link to="/settings" className="gear" aria-label="設定"><GearIcon /></Link>
-        </>}
+        aside={<Link to="/settings" className="gear" aria-label="設定"><GearIcon /></Link>}
       />
       <main>
-        {currentWeek ? (
-          <Link to="/plan" className="week-row week-line">
-            <div className="line">
-              <span><b>第 {currentWeek.week_no} 週</b> <span className="grey">· {md(currentWeek.week_start)}–{md(currentWeek.week_end)}</span></span>
-              <span className="num">{km(currentWeek.actual_m)} <span className="of">/ {kmPlan(currentWeek.plan_m)} km</span></span>
-            </div>
-            <Bar value={currentWeek.actual_m} max={currentWeek.plan_m} tone={currentWeek.isComplete ? "good" : undefined} />
-          </Link>
-        ) : null}
+        <div className="hero2">
+          <div>
+            <div className="k">倒數</div>
+            <div className="v">{daysToRace > 0 ? <><span className="num big">{daysToRace}</span><span className="unit">天</span></> : <span className="num mid">{daysToRace === 0 ? "比賽日" : "已完賽"}</span>}</div>
+          </div>
+          {currentWeek ? (
+            <Link to="/plan" className="week-line" aria-label={`第 ${currentWeek.week_no} 週 ${km(currentWeek.actual_m)} / ${kmPlan(currentWeek.plan_m)} km`}>
+              <div className="k">第 {currentWeek.week_no} 週 · {md(currentWeek.week_start)}–{md(currentWeek.week_end)}</div>
+              <div className="v"><span className={`num mid${currentWeek.isComplete ? " done" : ""}`}>{km(currentWeek.actual_m)}</span><span className="unit">/ {kmPlan(currentWeek.plan_m)} km</span></div>
+              <Bar value={currentWeek.actual_m} max={currentWeek.plan_m} tone={currentWeek.isComplete ? "good" : "ink"} />
+            </Link>
+          ) : null}
+        </div>
 
         <SectionH
           action={<button type="button" className="chip" onClick={() => void revalidator.revalidate()} disabled={revalidator.state === "loading"}>{revalidator.state === "loading" ? "更新中…" : "重新整理"}</button>}
@@ -151,17 +179,28 @@ export default function Today() {
         ) : null}
 
         <SectionH>下次練習</SectionH>
-        {upcoming.length ? upcoming.map((d) => {
-          const row = (
+        {upcoming.length ? upcoming.map((d, i) => {
+          const first = i === 0;
+          const prep = first ? lastReminderFor(view, d.session) : null;
+          const row = first ? (
+            <>
+              <Avatar session={d.session} />
+              <span className="t">{d.session.content ?? shortName(d.session)}</span>
+              <span className="when">{md(d.session.scheduled_date)} · {relativeDay(d.session.scheduled_date, today)}</span>
+              {d.session.target ? <span className="sub">{d.session.target}</span> : null}
+              {prep ? <WooLine text={prep} /> : null}
+            </>
+          ) : (
             <>
               <Avatar session={d.session} />
               <span className="t">{d.session.content ?? shortName(d.session)}</span>
               <span className="when">{md(d.session.scheduled_date)} · {relativeDay(d.session.scheduled_date, today)}</span>
             </>
           );
+          const cls = `next-row${first ? " first" : ""}`;
           return isLoggableNow(d.session, today)
-            ? <Link key={d.session.id} to={`/sessions/${d.session.id}`} className="next-row">{row}</Link>
-            : <div key={d.session.id} className="next-row">{row}</div>;
+            ? <Link key={d.session.id} to={`/sessions/${d.session.id}`} className={cls}>{row}</Link>
+            : <div key={d.session.id} className={cls}>{row}</div>;
         }) : <p className="empty">沒有後續課表</p>}
       </main>
     </>
