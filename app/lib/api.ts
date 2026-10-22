@@ -16,13 +16,16 @@ import type {
   PostAdjustmentResponse,
   PostCoachMessageRequest,
   PostCoachMessageResponse,
+  PostCheckinPickRequest,
+  PostCheckinPickResponse,
   PutCoachSeenResponse,
   RereviewResponse,
   WeeklyResponse,
 } from "../types/api";
 import { clearSession, getIdToken } from "./auth";
 import { config, useMock } from "./config";
-import { mockActivities, mockCoach, mockMe, mockPlan, mockPostAdjustment, mockPostCoachMessage,
+import { mockActivities, mockCoach, mockMe, mockPlan, mockPostAdjustment, mockPostCheckinPick,
+  mockPostCoachMessage,
   mockPutCoachSeen, mockPutMemo, mockPutSession, mockRereview, mockWeekly } from "../mock/mock";
 
 /** 401: API Gateway rejected the token. 403: token fine, but this account is not in the users table. */
@@ -113,6 +116,12 @@ export function postAdjustment(weeklyId: string, index: number, body: PostAdjust
 export function getCoach(): Promise<CoachResponse> {
   if (useMock) return Promise.resolve(mockCoach());
   return request<CoachResponse>("/coach");
+}
+
+/** A chip on Woo's check-in: which activity (or session) it was, or none. */
+export function postCheckinPick(checkinId: string, body: PostCheckinPickRequest): Promise<PostCheckinPickResponse> {
+  if (useMock) return Promise.resolve(mockPostCheckinPick(checkinId, body));
+  return request<PostCheckinPickResponse>(`/coach/checkins/${checkinId}/pick`, { method: "POST", body: JSON.stringify(body) });
 }
 
 /** The thread was opened: clears `coach_unread` on the next GET /plan. */

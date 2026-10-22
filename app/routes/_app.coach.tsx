@@ -4,7 +4,7 @@ import type { Route } from "./+types/_app.coach";
 import { SendIcon } from "../components/icons";
 import { CoachProposals } from "../components/proposals";
 import { CoachAvatar, VerdictTag } from "../components/ui";
-import { ApiError, getActivities, getCoach, getWeekly, postCoachMessage, putCoachSeen } from "../lib/api";
+import { ApiError, getActivities, getCoach, getWeekly, postCheckinPick, postCoachMessage, putCoachSeen } from "../lib/api";
 import { hasSession } from "../lib/auth";
 import { md, mdDow, timeJst, toJstDate } from "../lib/date";
 import { km, pace } from "../lib/format";
@@ -12,10 +12,12 @@ import { useReviewPolling } from "../lib/use-review-polling";
 import { usePlan } from "../lib/use-plan";
 import type { ApiActivity, ApiCoachMessage } from "../types/api";
 
-// Woo's thread: weekly reviews (with their proposals), each run's verdict, and the
-// conversation. The athlete writes at the bottom; the reply is polled for.
+// Woo's thread: weekly reviews (with their proposals), each run's verdict, his
+// post-run check-in (which activity → how did it feel → verdict), and the
+// conversation. The athlete writes at the bottom; replies are polled for.
 
 const MAX_CHARS = 500;
+const RPE_WORDS = ["", "很輕鬆", "輕鬆", "輕鬆", "適中", "適中", "適中", "有點累", "累", "很累", "極限"];
 
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   if (!hasSession()) throw redirect("/login");
@@ -57,13 +59,37 @@ function CoachMessage({ m, children }: { m: ApiCoachMessage; children: React.Rea
 function AthleteMessage({ m, onRetry }: { m: ApiCoachMessage; onRetry?: () => void }) {
   return (
     <div className="msg me">
-      <div className="bubble">
+      <div className={`bubble${m.kind === "pick" ? " pick" : ""}`}>
         {m.quote ? <div className="quote">{m.quote}</div> : null}
+        {m.kind === "pick" && m.text !== "都不是" ? <i className="strava-dot" aria-hidden="true" /> : null}
         {m.text}
+        {m.rpe ? <span className="rpe-tag">RPE {m.rpe}</span> : null}
       </div>
       <span className="when">
-        {m.status === "failed" ? <>Woo 沒收到{m.error ? `（${m.error}）` : ""} · <button type="button" onClick={onRetry}>再送一次</button></> : timeJst(m.created_at)}
+        {m.status === "failed" ? <>Woo 沒收到{m.error ? `（${m.error}）` : ""} · {onRetry ? <button type="button" onClick={onRetry}>再送一次</button> : null}</> : timeJst(m.created_at)}
       </span>
+    </div>
+  );
+}
+
+/** Woo's "which activity was today's session?" with the candidates as a scrolling chip row. */
+function CheckinChips({ m, busy, onPick }: { m: ApiCoachMessage; busy: boolean; onPick: (body: { activity_id?: string; session_id?: string; none?: boolean }) => void }) {
+  const c = m.checkin;
+  if (!c || c.state !== "open") return null;
+  return (
+    <div className="chips-scroll" role="group" aria-label="選擇">
+      {c.candidates.map((cand, i) => (
+        <div key={cand.activity_id ?? cand.session_id ?? i} className="chip-col">
+          <span className={`tag${i === 0 ? "" : " blank"}`}>{i === 0 ? "Woo 猜這個" : "·"}</span>
+          <button type="button" className={`chip tall${i === 0 ? " primary" : ""}`} disabled={busy} onClick={() => onPick(cand.activity_id ? { activity_id: cand.activity_id } : { session_id: cand.session_id })}>
+            {cand.activity_id ? <i className="strava-dot" aria-hidden="true" /> : null}{cand.label}
+          </button>
+        </div>
+      ))}
+      <div className="chip-col">
+        <span className="tag blank">·</span>
+        <button type="button" className="chip tall muted" disabled={busy} onClick={() => onPick({ none: true })}>{c.mode === "activity" ? "都不是 ›" : "不算課表"}</button>
+      </div>
     </div>
   );
 }
@@ -80,17 +106,27 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
   const [, setSearch] = useSearchParams();
 
   const [text, setText] = useState("");
+  const [rpe, setRpe] = useState<number | null>(null);
   const [quote, setQuote] = useState<ApiActivity | null>(quoted);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // The reply is on its way while the newest athlete message is still pending.
+  // The reply is on its way while the newest athlete message is still pending
+  // (a chat reply, Woo's question after a pick, or the verdict after an answer).
   const last = messages[messages.length - 1];
   const waiting = !!last && last.role === "athlete" && last.status === "pending";
   const { timedOut, restart } = useReviewPolling(waiting);
 
-    const count = messages.length;
+  // Woo's open question (the last message) turns the composer into the answer box.
+  const openAsk = last && last.kind === "ask" && last.ask?.state === "open" ? last : null;
+
+  const count = messages.length;
   useEffect(() => { window.scrollTo({ top: document.documentElement.scrollHeight }); }, [count, waiting]);
+
+  // The layout's plan still says "unread" from before this page marked the thread
+  // seen; reload it once so the tab's dot is gone when the athlete leaves.
+  const unread = view?.data.coach_unread ?? 0;
+  useEffect(() => { if (unread > 0) void revalidator.revalidate(); }, [unread, revalidator]);
 
   async function send(body: string, activityId?: string) {
     const t = body.trim();
@@ -98,8 +134,9 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
     setBusy(true);
     setError(null);
     try {
-      await postCoachMessage({ text: t, activity_id: activityId });
+      await postCoachMessage(openAsk ? { text: t, answer_to: openAsk.id, rpe: rpe ?? undefined } : { text: t, activity_id: activityId });
       setText("");
+      setRpe(null);
       setQuote(null);
       setSearch({}, { replace: true });
       await revalidator.revalidate();
@@ -111,10 +148,20 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
     }
   }
 
-  // The layout's plan still says "unread" from before this page marked the thread
-  // seen; reload it once so the tab's dot is gone when the athlete leaves.
-  const unread = view?.data.coach_unread ?? 0;
-  useEffect(() => { if (unread > 0) void revalidator.revalidate(); }, [unread, revalidator]);
+  async function pick(checkinId: string, body: { activity_id?: string; session_id?: string; none?: boolean }) {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await postCheckinPick(checkinId, body);
+      await revalidator.revalidate();
+      restart();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "送出失敗，再試一次");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   const sessions = view?.data.sessions ?? [];
 
@@ -133,7 +180,7 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
           const rule = i === 0 || toJstDate(messages[i - 1].created_at) !== day ? <DayRule date={day} /> : null;
           let node: React.ReactNode;
           if (m.role === "athlete") {
-            node = <AthleteMessage m={m} onRetry={() => void send(m.text, m.activity_id ?? undefined)} />;
+            node = <AthleteMessage m={m} onRetry={m.kind === "chat" && !m.rpe ? () => void send(m.text, m.activity_id ?? undefined) : undefined} />;
           } else if (m.kind === "weekly") {
             const w = reviews.find((r) => r.id === m.weekly_review_id) ?? null;
             node = (
@@ -151,6 +198,13 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
                 {m.activity_id ? <Link to={`/activities/${m.activity_id}`} className="chip" style={{ marginTop: 8 }}>看報告</Link> : null}
               </CoachMessage>
             );
+          } else if (m.kind === "checkin") {
+            node = (
+              <CoachMessage m={m}>
+                <p className="text">{m.text}</p>
+                <CheckinChips m={m} busy={busy} onPick={(body) => void pick(m.id, body)} />
+              </CoachMessage>
+            );
           } else {
             node = <CoachMessage m={m}><p className="text">{m.text}</p></CoachMessage>;
           }
@@ -164,10 +218,18 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
         ) : null}
       </main>
       <form className="composer" onSubmit={(e) => { e.preventDefault(); void send(text, quote?.id); }}>
-        {quote ? (
+        {quote && !openAsk ? (
           <div className="quote-chip">
             <span>引用 {quoteLine(quote)}</span>
             <button type="button" aria-label="移除引用" onClick={() => { setQuote(null); setSearch({}, { replace: true }); }}>×</button>
+          </div>
+        ) : null}
+        {openAsk ? (
+          <div className="rpe-row" role="radiogroup" aria-label="累的程度 1 到 10">
+            <span className="k">RPE</span>
+            {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+              <button key={n} type="button" role="radio" aria-checked={rpe === n} className={`rpe${rpe === n ? " on" : ""}`} onClick={() => setRpe(rpe === n ? null : n)} title={RPE_WORDS[n]}>{n}</button>
+            ))}
           </div>
         ) : null}
         <div className="row">
@@ -176,8 +238,8 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
             rows={1}
             value={text}
             maxLength={MAX_CHARS}
-            placeholder="跟 Woo 聊跑步、課表…"
-            aria-label="問 Woo"
+            placeholder={openAsk ? "回 Woo：感覺怎麼樣…" : "跟 Woo 聊跑步、課表…"}
+            aria-label={openAsk ? "回 Woo" : "問 Woo"}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send(text, quote?.id); } }}
           />

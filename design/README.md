@@ -3,7 +3,7 @@
 設計稿（Claude Design canvas）的原始檔，給改畫面時對照用。**畫面的真相仍是 `app/`**；這裡是「想要長成什麼樣」。
 
 - 來源：https://claude.ai/artifact/4Lc98VDehARXEZpFUfBZ7h（`training-web 設計稿`）
-- 這份快照：artifact version `1792335506-2f6a`
+- 這份快照：artifact version `1792598525-0fc0`
 - 每個 `*.dc.html` 是一個 390 px 寬的手機畫面（artboard），數字是 2026-10-14 視角的範例資料；`canvas.json` 是畫布索引（位置、尺寸、旁註）。
 - `*.dc.html` 引用的 `support.js` 是 Design canvas 的 runtime，沒有放進來，所以直接用瀏覽器開不會正常渲染；看樣式與結構就好，或回到上面的連結看。
 
@@ -19,6 +19,8 @@
 | `History.dc.html` | `/history` 紀錄 | `app/routes/_app.history.tsx` |
 | `Settings.dc.html` | `/settings` 設定（從「今天」的齒輪進） | `app/routes/_app.settings.tsx` |
 | `Coach.dc.html` | `/coach` 教練 Woo 的時間軸與輸入框 | `app/routes/_app.coach.tsx`、`app/components/proposals.tsx` |
+| `Checkin-0/1/2.dc.html` | 跑完的流程：今天頁入口 → Woo 問哪一個活動（chip）→ 接著問感受（RPE 列） | `app/routes/_app._index.tsx`、`app/routes/_app.coach.tsx` |
+| `Lively-*.dc.html` | 活潑版提案（主色只在好事上、大數字、Woo 的狀態與一句話、慶祝色帶），全部畫面 | 實作中：先樣式，再報告頁的趨勢圖 |
 | `Report.dc.html`、`Proposal-ReportMP.dc.html` | `/activities/:id` 單次報告（單一配速／組合課） | `app/routes/_app.activities.$id.tsx`、`app/components/memo.tsx` |
 
 ## 設計規則（canvas 旁註）

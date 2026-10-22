@@ -4,6 +4,8 @@
 
 import plans from "./plans.json";
 import type { ActivitiesResponse, ApiActivity, ApiCoachMessage, ApiSession, ApiSplit, ApiWeek, ApiWeeklyReview, CoachResponse, PostCoachMessageRequest, PostCoachMessageResponse,
+  PostCheckinPickRequest,
+  PostCheckinPickResponse,
   PutCoachSeenResponse, MatchStatus, MeResponse, PlanResponse, PostAdjustmentRequest, PostAdjustmentResponse, PutMemoRequest, PutMemoResponse, PutSessionRequest, PutSessionResponse, RereviewResponse, Verdict, WeeklyResponse } from "../types/api";
 import { todayJst } from "../lib/date";
 const MOCK_USER_ID = "7d1c3a0e-4f7b-4d2e-9c1a-5b8e2f6a1c01"; // ww in training-api seed
@@ -110,6 +112,7 @@ function build(): PlanResponse {
 
   return {
     coach_unread: 0,
+    coach_checkin_open: false,
     plan: {
       id: PLAN_ID,
       user_id: MOCK_USER_ID,
@@ -138,7 +141,7 @@ export function mockPutCoachSeen(): PutCoachSeenResponse {
 
 export function mockPlan(): PlanResponse {
   const d = data();
-  return { ...d, coach_unread: coachUnread, activities: d.activities.filter((a) => a.session_id), unassigned: d.unassigned.filter((a) => !a.session_id) };
+  return { ...d, coach_unread: coachUnread, coach_checkin_open: threadData().some((m) => m.kind === "checkin" && m.checkin?.state === "open"), activities: d.activities.filter((a) => a.session_id), unassigned: d.unassigned.filter((a) => !a.session_id) };
 }
 
 export function mockMe(): MeResponse {
@@ -252,16 +255,54 @@ export function mockPostAdjustment(weeklyId: string, index: number, body: PostAd
 // ---- the coach's thread (demo) ------------------------------------------------
 let thread: ApiCoachMessage[] | undefined;
 const at = (iso: string) => new Date(iso).toISOString();
+const BLANK = { activity_id: null, weekly_review_id: null, status: "sent" as const, review: null, quote: null, rpe: null, checkin: null, ask: null, error: null };
 function threadData(): ApiCoachMessage[] {
   if (thread) return thread;
   const w = weeklyData()[0];
+  const today = todayJst();
   thread = [
     { id: "c1", role: "coach", kind: "weekly", text: w.summary ?? "", activity_id: null, weekly_review_id: w.id, status: "sent", review: null, quote: null, error: null, created_at: at("2026-10-12T12:00:00Z") },
     { id: "c2", role: "coach", kind: "review", text: "心拍整段壓在 140，是四次 Easy 裡最穩的一次。第 1 km 6:35 偏快是錶的心拍延遲，不是真的用力；第 6 km 8:01 是坡後自然放慢，正常。", activity_id: "a-2026-10-13", weekly_review_id: null, status: "sent", review: { label: "Easy 6 km", verdict: "達成", reminder: "第 1 km 前 3 分鐘用呼吸不用錶", date: "2026-10-13" }, quote: null, error: null, created_at: at("2026-10-12T22:52:00Z") },
     { id: "c3", role: "athlete", kind: "chat", text: "第一公里又衝太快了，有什麼辦法壓住？", activity_id: "a-2026-10-13", weekly_review_id: null, status: "sent", review: null, quote: "10/13 Easy 6.01 km · 7:25/km · 心拍 140（最高 148） · 達成", error: null, created_at: at("2026-10-12T23:10:00Z") },
     { id: "c4", role: "coach", kind: "chat", text: "這是連續第二次了。前 3 分鐘不要看錶，用鼻子呼吸能撐住的速度就是對的；第 1 km 跑到 7:30 以上才算成功。明天 MP 課的前 2 km Easy 也照這個來。", activity_id: null, weekly_review_id: null, status: "sent", review: null, quote: null, error: null, created_at: at("2026-10-12T23:10:20Z") },
-  ];
+    // Woo's check-in for today's run (demo: today's session is MP 7 km, two activities synced)
+    { ...BLANK, id: "c5", role: "coach", kind: "checkin", text: "今天的課是 MP 7 km：2 km Easy + 3 km @ MP + 2 km Easy。Strava 剛進來 2 個活動，哪一個是這堂？", activity_id: "u-run", created_at: new Date(`${today}T07:05:00+09:00`).toISOString(),
+      checkin: { state: "open", mode: "activity", date: today, session_id: todaySessionId(), session_label: "MP 7 km", candidates: [{ activity_id: "u-run", label: "跑步 06:40 · 7.00 km · 7:08/km" }, { activity_id: "u-hyrox", label: "重訓 18:30 · 58 分 · 心拍 152" }] } },
+  ].map((m) => ({ ...BLANK, ...m })) as ApiCoachMessage[];
   return thread;
+}
+
+function todaySessionId(): string | null {
+  const today = todayJst();
+  return data().sessions.find((s) => s.scheduled_date === today)?.id ?? null;
+}
+
+/** Demo: the pick assigns the activity, then Woo's question arrives after ~2 s. */
+export function mockPostCheckinPick(checkinId: string, body: PostCheckinPickRequest): PostCheckinPickResponse {
+  const t = threadData();
+  const c = t.find((m) => m.id === checkinId && m.kind === "checkin");
+  if (!c?.checkin || c.checkin.state !== "open") throw new Error("check-in is no longer open");
+  if (body.none) {
+    c.checkin = { ...c.checkin, state: "dismissed" };
+    const pick: ApiCoachMessage = { ...BLANK, id: `c${t.length + 1}`, role: "athlete", kind: "pick", text: "都不是", created_at: new Date().toISOString() };
+    t.push(pick, { ...BLANK, id: `c${t.length + 2}`, role: "coach", kind: "chat", text: "好，這趟不算。要記到別堂課的話，今天頁的表單可以選。", created_at: new Date().toISOString() });
+    return { checkin: { ...c }, pick };
+  }
+  const cand = c.checkin.candidates.find((x) => x.activity_id === body.activity_id || x.session_id === body.session_id);
+  if (!cand) throw new Error("not one of the candidates");
+  const activityId = cand.activity_id ?? c.activity_id!;
+  const sessionId = cand.session_id ?? c.checkin.session_id!;
+  const d = data();
+  const a = d.unassigned.find((x) => x.id === activityId) ?? d.activities.find((x) => x.id === activityId);
+  if (a) { a.session_id = sessionId; a.match_status = "confirmed"; }
+  c.checkin = { ...c.checkin, state: "picked" };
+  const pick: ApiCoachMessage = { ...BLANK, id: `c${t.length + 1}`, role: "athlete", kind: "pick", text: cand.label, status: "pending", activity_id: activityId, created_at: new Date().toISOString() };
+  t.push(pick);
+  setTimeout(() => {
+    t.push({ ...BLANK, id: `c${t.length + 1}`, role: "coach", kind: "ask", text: "收到，7.00 km 配到 MP 7 km。MP 段配速有守住，心拍第 5 km 到 166 超過上限。第 3 公里之後有撐住嗎？腿現在怎麼樣？", activity_id: activityId, ask: { state: "open", activity_id: activityId, session_id: sessionId }, created_at: new Date().toISOString() });
+    pick.status = "sent";
+  }, 2000);
+  return { checkin: { ...c }, pick: { ...pick } };
 }
 export function mockCoach(): CoachResponse {
   return { coach: { name: "Woo" }, messages: threadData().map((m) => ({ ...m })) };
@@ -269,13 +310,29 @@ export function mockCoach(): CoachResponse {
 /** Demo mode: Woo answers after ~3 s, off-topic gets the one-liner. */
 export function mockPostCoachMessage(body: PostCoachMessageRequest): PostCoachMessageResponse {
   const t = threadData();
+  if (body.answer_to) {
+    const ask = t.find((m) => m.id === body.answer_to && m.kind === "ask");
+    if (!ask?.ask) throw new Error("question not found");
+    ask.ask = { ...ask.ask, state: "answered" };
+    const d = data();
+    const a = d.unassigned.find((x) => x.id === ask.ask!.activity_id) ?? d.activities.find((x) => x.id === ask.ask!.activity_id);
+    if (a) { a.memo = body.text; a.rpe = body.rpe ?? null; }
+    const m: ApiCoachMessage = { ...BLANK, id: `c${t.length + 1}`, role: "athlete", kind: "chat", text: body.text, status: "pending", activity_id: ask.ask.activity_id, rpe: body.rpe ?? null, created_at: new Date().toISOString() };
+    t.push(m);
+    setTimeout(() => {
+      if (a) a.review = { verdict: "達成但有提醒", comment: "MP 段 6:46 守住了，第 5 km 心拍 166 超過上限。第三公里開始腿重跟數字對得上。", reminders: ["MP 第 3 公里開始看心拍，過 160 就稍微放慢"], source: "claude", model: null, adjust_hint: null, failed: false, error: null, created_at: new Date().toISOString() };
+      t.push({ ...BLANK, id: `c${t.length + 1}`, role: "coach", kind: "review", text: "MP 段 6:46 守住了，第 5 km 心拍 166 超過上限。第三公里開始腿重跟數字對得上。", activity_id: ask.ask!.activity_id, review: { label: "MP 7 km", verdict: "達成但有提醒", reminder: "MP 第 3 公里開始看心拍，過 160 就稍微放慢", date: todayJst() }, created_at: new Date().toISOString() });
+      m.status = "sent";
+    }, 3000);
+    return { message: { ...m } };
+  }
   const quoted = body.activity_id ? findActivity(body.activity_id) : undefined;
   const quote = quoted ? `${quoted.start_time.slice(5, 10).replace("-", "/")} ${quoted.session_id ? "課表" : "未排課"} ${(quoted.distance_m / 1000).toFixed(2)} km` : null;
-  const m: ApiCoachMessage = { id: `c${t.length + 1}`, role: "athlete", kind: "chat", text: body.text, activity_id: body.activity_id ?? null, weekly_review_id: null, status: "pending", review: null, quote, error: null, created_at: new Date().toISOString() };
+  const m: ApiCoachMessage = { ...BLANK, id: `c${t.length + 1}`, role: "athlete", kind: "chat", text: body.text, activity_id: body.activity_id ?? null, status: "pending", quote, created_at: new Date().toISOString() };
   t.push(m);
   setTimeout(() => {
     const offTopic = /吃|電影|天氣|股票|工作/.test(body.text) && !/跑|課表|心拍|配速|腿/.test(body.text);
-    t.push({ id: `c${t.length + 1}`, role: "coach", kind: "chat", text: offTopic ? "這個不歸我管，我們回到課表。週五恢復跑完記得寫一下腿的感覺。" : "（示範）收到。以你最近 14 天的心拍來看，這個問題先用降速處理，不要先想拿掉課。週五恢復跑完再跟我說腿的狀況。", activity_id: null, weekly_review_id: null, status: "sent", review: null, quote: null, error: null, created_at: new Date().toISOString() });
+    t.push({ ...BLANK, id: `c${t.length + 1}`, role: "coach", kind: "chat", text: offTopic ? "這個不歸我管，我們回到課表。週五恢復跑完記得寫一下腿的感覺。" : "（示範）收到。以你最近 14 天的心拍來看，這個問題先用降速處理，不要先想拿掉課。週五恢復跑完再跟我說腿的狀況。", created_at: new Date().toISOString() });
     m.status = "sent";
   }, 3000);
   return { message: { ...m } };

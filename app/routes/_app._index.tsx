@@ -63,7 +63,14 @@ function TodayPost({ day, view, slow }: { day: Day; view: PlanView; slow?: boole
             {first.distance_m > 0 ? <> <b className="num">{km(first.distance_m)}</b> km</> : null}
             {isRunSport(first.sport_type) ? <> · <b className="num">{pace(first.avg_pace_sec_km)}</b> /km</> : null}
           </p>
-          <Link to={`/sessions/${session.id}`} className="btn primary">記錄這次訓練</Link>
+          {view.data.coach_checkin_open ? (
+            <>
+              <Link to="/coach" className="btn primary woo"><span className="w" aria-hidden="true">W</span>Woo 在問這趟練得怎麼樣</Link>
+              <Link to={`/sessions/${session.id}`} className="alt">或自己填表單記錄</Link>
+            </>
+          ) : (
+            <Link to={`/sessions/${session.id}`} className="btn primary">記錄這次訓練</Link>
+          )}
         </>
       ) : (
         <p className="hint">跑完後 Strava 會自動同步到這裡</p>

@@ -405,3 +405,24 @@ ul { padding: 0; list-style: none; }
 .composer .quote-chip span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 2px solid var(--chip-line); padding-left: 8px; }
 .composer .quote-chip button { font-size: 16px; color: var(--ink-3); width: 28px; height: 28px; }
 .composer .hint { margin: 0; padding-bottom: 8px; font-size: 12px; }
+
+/* ---- Woo's post-run check-in ---- */
+.msg.coach .chips-scroll { display: flex; gap: 8px; margin: 10px 0 0 -52px; padding: 0 20px 6px 52px; overflow-x: auto; scrollbar-width: none; width: 100vw; max-width: 600px; box-sizing: border-box; }
+.msg.coach .chips-scroll::-webkit-scrollbar { display: none; }
+.msg.coach .chip-col { flex: none; display: flex; flex-direction: column; gap: 4px; }
+.msg.coach .chip-col .tag { font-size: 11px; color: var(--ink-3); padding-left: 4px; }
+.msg.coach .chip-col .tag.blank { color: transparent; }
+.msg.coach .chip.tall { height: 40px; padding: 0 14px 0 10px; font-size: 14px; white-space: nowrap; gap: 8px; }
+.msg.coach .chip.tall.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); font-weight: 600; }
+.msg.coach .chip.tall.muted { color: var(--ink-2); }
+.msg.coach .hint { margin: 6px 0 0; font-size: 12px; color: var(--ink-3); }
+.strava-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #FC5200; margin-right: 8px; vertical-align: middle; flex: none; }
+.msg.me .bubble.pick { display: inline-flex; align-items: center; }
+.msg.me .rpe-tag { display: inline-block; margin-left: 8px; font-family: "Barlow Condensed", sans-serif; font-weight: 700; font-size: 14px; color: var(--ink-2); }
+.composer .rpe-row { max-width: 600px; margin: 0 auto; padding: 8px 20px 0; display: flex; align-items: center; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+.composer .rpe-row .k { flex: none; font-size: 12px; color: var(--ink-3); margin-right: 4px; }
+.composer .rpe { flex: none; width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--chip-line); background: var(--bg); color: var(--ink); font-family: "Barlow Condensed", sans-serif; font-size: 14px; font-weight: 700; }
+.composer .rpe.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.today-open .btn.primary.woo { gap: 8px; }
+.today-open .btn.primary.woo .w { width: 22px; height: 22px; border-radius: 50%; background: var(--bg); color: var(--ink); display: inline-flex; align-items: center; justify-content: center; font-family: "Barlow Condensed", sans-serif; font-size: 12px; font-weight: 700; }
+.today-open .alt { display: block; margin-top: 10px; font-size: 12px; color: var(--ink-3); text-align: center; text-decoration: underline; text-underline-offset: 3px; }
