@@ -4,13 +4,15 @@ import { useReviewPolling } from "../lib/use-review-polling";
 import type { Route } from "./+types/_app.activities.$id";
 import { BackIcon } from "../components/icons";
 import { MemoEditor } from "../components/memo";
+import { SessionSheet } from "../components/session-sheet";
+import { BottomSheet } from "../components/sheet";
 import { Avatar, CoachAvatar, Reminders, TopBar, verdictBadge } from "../components/ui";
-import { ApiError, getActivities, rereview } from "../lib/api";
+import { ApiError, getActivities, putSession, rereview } from "../lib/api";
 import { hasSession } from "../lib/auth";
-import { mdDow, timeJst } from "../lib/date";
+import { dayDiff, md, mdDow, timeJst } from "../lib/date";
 import { duration, int, km, kmPlan, pace } from "../lib/format";
 import { labelStyle, shortName, sportName, verdictKind } from "../lib/labels";
-import { activityDate, hrOver, isRunSport, paceFast } from "../lib/plan";
+import { activityDate, hrOver, isRunSport, paceFast, type PlanView } from "../lib/plan";
 import { comparablePace, focusLabel, focusStats, fullSplits, planFor, sessionBand, splitPace, type Band, type SessionPlan } from "../lib/segments";
 import type { ApiActivity, ApiSession } from "../types/api";
 import { usePlan } from "../lib/use-plan";
@@ -210,6 +212,56 @@ function Trend({ current, session, all, sessions }: { current: ApiActivity; sess
   );
 }
 
+/** 換一個活動: the other Strava activities within a day of the session; picking one takes the session over. */
+function SwapSheet({ open, onClose, a, s, all, view }: { open: boolean; onClose: () => void; a: ApiActivity; s: ApiSession; all: ApiActivity[]; view: PlanView | null }) {
+  const navigate = useNavigate();
+  const revalidator = useRevalidator();
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const seen = new Set<string>();
+  const others = [...all, ...(view?.unassigned ?? [])]
+    .filter((x) => x.id !== a.id && x.match_status !== "ignored" && !seen.has(x.id) && seen.add(x.id) && Math.abs(dayDiff(s.scheduled_date, activityDate(x))) <= 1)
+    .sort((x, y) => y.start_time.localeCompare(x.start_time));
+  async function swap(x: ApiActivity) {
+    setBusy(x.id);
+    setError(null);
+    try {
+      await putSession(x.id, { session_id: s.id, replace: true });
+      await revalidator.revalidate();
+      onClose();
+      void navigate(`/activities/${x.id}`, { replace: true });
+    } catch (e) {
+      setError(e instanceof ApiError ? (e.status === 503 ? "資料庫還在啟動，幾秒後再按一次" : e.message) : "送出失敗，再試一次");
+    } finally {
+      setBusy(null);
+    }
+  }
+  return (
+    <BottomSheet open={open} onClose={onClose} label="換一個活動">
+      <h2 className="sheet-title">{md(s.scheduled_date)} 的 {shortName(s)} 是哪一個活動？</h2>
+      {others.length ? others.map((x) => {
+        const run = isRunSport(x.sport_type);
+        return (
+          <button key={x.id} type="button" className="swap-row" onClick={() => void swap(x)} disabled={busy != null}>
+            <Avatar session={null} sport={x.sport_type} />
+            <span className="txt">
+              <span className="l1"><i className="strava-dot" />{sportName(x.sport_type)}<span className="when">{activityDate(x) === s.scheduled_date ? timeJst(x.start_time) : `${md(activityDate(x))} ${timeJst(x.start_time)}`}</span></span>
+              <span className="l2">
+                {run || x.distance_m > 0 ? <span><b className="num">{km(x.distance_m)}</b> km</span> : <span><b className="num">{duration(x.moving_time_sec)}</b></span>}
+                {run && x.avg_pace_sec_km ? <span><b className="num">{pace(x.avg_pace_sec_km)}</b> /km</span> : null}
+                {x.avg_hr != null ? <span><b className="num">{int(x.avg_hr)}</b> bpm</span> : null}
+              </span>
+            </span>
+            <span className="chip">{busy === x.id ? "換成這趟…" : "換成這趟"}</span>
+          </button>
+        );
+      }) : <p className="empty">前後一天沒有別的活動。Strava 可能還沒同步。</p>}
+      {error ? <p className="hint" style={{ color: "var(--v-bad)" }}>{error}</p> : null}
+      <p className="sheet-foot">換了之後 Woo 會重新看這堂課。</p>
+    </BottomSheet>
+  );
+}
+
 export default function Report({ loaderData }: Route.ComponentProps) {
   const view = usePlan();
   const navigate = useNavigate();
@@ -245,7 +297,8 @@ export default function Report({ loaderData }: Route.ComponentProps) {
       setRereviewBusy(false);
     }
   }
-  const [showSplits, setShowSplits] = useState(false);
+  const [showPlan, setShowPlan] = useState(false);
+  const [showSwap, setShowSwap] = useState(false);
   const retryChip = (
     <button type="button" className="chip" onClick={() => void askAgain()} disabled={rereviewBusy}>
       {rereviewBusy ? "送出中…" : "重新分析"}
@@ -253,7 +306,7 @@ export default function Report({ loaderData }: Route.ComponentProps) {
   );
 
   const date = mdDow(activityDate(a));
-  const meta = s ? [date, s.week_no != null ? `第 ${s.week_no} 週` : null, s.target ? `目標 ${s.target}` : null].filter(Boolean).join(" · ") : `${date} · 未排課`;
+  const meta = s ? [date, s.week_no != null ? `第 ${s.week_no} 週` : null, s.phase].filter(Boolean).join(" · ") : `${date} · 未排課`;
   const run = isRunSport(a.sport_type);
   const extra = [
     duration(a.moving_time_sec),
@@ -273,6 +326,12 @@ export default function Report({ loaderData }: Route.ComponentProps) {
             <p className="meta-line">{meta}</p>
           </div>
         </article>
+        {s ? (
+          <button type="button" className="plan-row" onClick={() => setShowPlan(true)}>
+            <span>課表內容{s.content ? <span className="grey"> · {s.content.length > 22 ? `${s.content.slice(0, 22)}…` : s.content}</span> : null}</span>
+            <span className="open">打開 ›</span>
+          </button>
+        ) : null}
 
         <div className="report-top">
           {run || a.distance_m > 0 ? <span><b className="num">{km(a.distance_m)}</b> km</span> : <span><b className="num">{duration(a.moving_time_sec)}</b></span>}
@@ -327,9 +386,7 @@ export default function Report({ loaderData }: Route.ComponentProps) {
         <MemoEditor key={a.id} activity={a} onSaved={setOverride} />
         {!a.memo && a.description ? <p className="text" style={{ margin: "10px 0 0", color: "var(--ink-2)" }}>Strava 描述：{a.description}</p> : null}
 
-        {showSplits ? <SplitDots a={a} s={s} plan={plan} /> : (a.splits?.length ? (
-          <button type="button" className="fold" onClick={() => setShowSplits(true)}><b>每公里 · {a.splits.length} 段</b><span>展開 ›</span></button>
-        ) : null)}
+        <SplitDots a={a} s={s} plan={plan} />
         {s ? <Trend current={a} session={s} all={all} sessions={sessions} /> : null}
 
         <section className="gear">
@@ -340,11 +397,13 @@ export default function Report({ loaderData }: Route.ComponentProps) {
 
         {s ? (
           <p className="swap-line">
-            這筆活動算成 {s.scheduled_date.slice(5).replace("-", "/")} 的課
-            <Link to={`/sessions/${s.id}`} className="chip">換一個活動</Link>
+            <span className="act"><i className="strava-dot" />活動：{sportName(a.sport_type)} {timeJst(a.start_time)}{a.distance_m > 0 ? ` · ${km(a.distance_m)} km` : ""}</span>
+            <button type="button" className="link" onClick={() => setShowSwap(true)}>換一個活動 ›</button>
           </p>
         ) : null}
       </main>
+      {view && s ? <SessionSheet session={showPlan ? s : null} view={view} onClose={() => setShowPlan(false)} /> : null}
+      {s ? <SwapSheet open={showSwap} onClose={() => setShowSwap(false)} a={a} s={s} all={all} view={view} /> : null}
     </>
   );
 }

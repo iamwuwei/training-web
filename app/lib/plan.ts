@@ -3,6 +3,7 @@
 
 import type { ApiActivity, ApiSession, ApiWeek, PlanResponse, Verdict } from "../types/api";
 import { dayDiff, toJstDate } from "./date";
+import { isStrengthDay } from "./labels";
 
 export type DayStatus = "done" | "today" | "upcoming" | "skipped" | "rest";
 
@@ -150,48 +151,19 @@ export const isRunSport = (sport: string | null | undefined) => !!sport && RUN_S
 
 /** A session the athlete can log: any training day, plus 肌力 days (which the plan types as rest). */
 export function isLoggable(s: ApiSession): boolean {
-  return s.type !== "rest" || s.label === "肌力";
-}
-
-/** Can this session be logged today? Today, past ones, and the next two days (ran a day early). */
-export function isLoggableNow(s: ApiSession, today: string): boolean {
-  return isLoggable(s) && dayDiff(today, s.scheduled_date) <= 2;
-}
-
-/**
- * Activities the athlete can pick for a session: the unassigned ones within ±2 days
- * (same day first, then closest to the target distance), plus whatever already holds it.
- */
-export function candidatesFor(view: PlanView, session: ApiSession): ApiActivity[] {
-  const holder = view.byDate.get(session.scheduled_date)?.activity ?? null;
-  const near = view.unassigned.filter((a) => Math.abs(dayDiff(session.scheduled_date, activityDate(a))) <= 2);
-  const target = session.target_distance_m ?? 0;
-  const rank = (a: ApiActivity) => [
-    a.id === holder?.id ? 0 : 1,
-    activityDate(a) === session.scheduled_date ? 0 : 1,
-    target > 0 ? Math.abs(a.distance_m - target) : 0,
-  ];
-  return [...(holder ? [holder] : []), ...near].sort((a, b) => {
-    const ra = rank(a), rb = rank(b);
-    return ra[0] - rb[0] || ra[1] - rb[1] || ra[2] - rb[2] || a.start_time.localeCompare(b.start_time);
-  });
-}
-
-/** Pre-selected pick: the current holder, else the same-day run closest to the target distance. */
-export function defaultPick(session: ApiSession, candidates: ApiActivity[]): ApiActivity | null {
-  const held = candidates.find((a) => a.session_id === session.id);
-  if (held) return held;
-  if (session.type === "rest") return null;
-  return candidates.find((a) => isRunSport(a.sport_type) && activityDate(a) === session.scheduled_date) ?? null;
+  return s.type !== "rest" || isStrengthDay(s);
 }
 
 /**
  * Where an unassigned activity on `date` could be logged: a loggable session within ±2 days
  * that has nothing yet, same day first, then the nearest (later before earlier on ties).
  */
-export function sessionForExtra(view: PlanView, date: string): ApiSession | null {
+export function sessionForExtra(view: PlanView, a: ApiActivity): ApiSession | null {
+  const date = activityDate(a);
+  const run = isRunSport(a.sport_type);
   const open = view.days.filter(
-    (d) => !d.activity && isLoggable(d.session) && Math.abs(dayDiff(date, d.session.scheduled_date)) <= 2 && dayDiff(view.today, d.session.scheduled_date) <= 2,
+    (d) => !d.activity && isLoggable(d.session) && (run ? d.session.type !== "rest" : isStrengthDay(d.session))
+      && Math.abs(dayDiff(date, d.session.scheduled_date)) <= 2 && dayDiff(view.today, d.session.scheduled_date) <= 2,
   );
   open.sort((a, b) => {
     const da = dayDiff(date, a.session.scheduled_date), db = dayDiff(date, b.session.scheduled_date);

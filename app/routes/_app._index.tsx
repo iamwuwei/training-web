@@ -3,11 +3,13 @@ import { Link, useRevalidator } from "react-router";
 import type { Route } from "./+types/_app._index";
 import { GearIcon, MountainIcon } from "../components/icons";
 import { PlanPost } from "../components/posts";
+import { SessionSheet } from "../components/session-sheet";
 import { Avatar, Bar, CoachAvatar, SectionH, TopBar, VerdictTag } from "../components/ui";
 import { md, mdDow, relativeDay, timeJst } from "../lib/date";
 import { duration, int, km, kmPlan, pace } from "../lib/format";
-import { shortName, sportName } from "../lib/labels";
-import { activityDate, hrOver, isLoggable, isLoggableNow, isRunSport, lastReminderFor, paceFast, sessionForExtra, type Day, type PlanView } from "../lib/plan";
+import { isStrengthDay, shortName, sportName } from "../lib/labels";
+import { ApiError, putSession } from "../lib/api";
+import { activityDate, hrOver, isLoggable, isRunSport, lastReminderFor, paceFast, sessionForExtra, type Day, type PlanView } from "../lib/plan";
 import { NoPlan, usePlan } from "../lib/use-plan";
 import { useReviewPolling } from "../lib/use-review-polling";
 import type { ApiActivity, ApiSession } from "../types/api";
@@ -30,21 +32,37 @@ function WooLine({ text, to }: { text: string; to?: string }) {
   return <div className="wooline"><CoachAvatar size={20} /><span>{text}{to ? <> <Link to={to}>看報告</Link></> : null}</span></div>;
 }
 
+/** The first sentence of a note and the rest, split on the first full stop. */
+function splitNote(note: string | null): { first: string; rest: string } | null {
+  if (!note) return null;
+  const t = note.trim();
+  let m = /^([^。！？!?]+[。！？!?]?)([\s\S]*)$/.exec(t);
+  // No full stop and a long run-on line: break at the first comma instead.
+  if (m && !m[2].trim() && t.length > 24) m = /^([^，,]+[，,]?)([\s\S]*)$/.exec(t);
+  if (!m) return { first: t, rest: "" };
+  return { first: m[1].trim().replace(/[，,]$/, ""), rest: m[2].trim() };
+}
+
+/** A rest or strength day: one line, the note's first sentence, the rest behind 為什麼. */
 function RestDay({ session }: { session: ApiSession }) {
   const [open, setOpen] = useState(false);
-  const label = session.label ?? "";
-  const title = /肌力|重訓|Hyrox/i.test(label) ? "今天可以做肌力訓練" : /完全/.test(label) ? "今天完全休息" : "今天休息";
+  const strength = isStrengthDay(session);
+  const title = strength ? `今天肌力日${session.label === "肌力" && session.content && !/^肌力$/.test(session.content) ? ` · ${session.content}` : ""}` : /完全/.test(`${session.label ?? ""} ${session.content ?? ""}`) ? "今天完全休息" : "今天休息";
+  const note = splitNote(strength ? (session.note ?? "").replace(/^肌力日[：:]\s*/, "") : session.note);
   return (
-    <div className="rest-day">
-      <svg width="120" height="64" viewBox="0 0 120 64" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" aria-hidden="true">
-        <path d="M4 58 L40 12 L52 26 L62 18 L96 58 Z" /><path d="M34 22 L40 28 L46 22 L52 26" />
-        <path d="M100 30c6 0 9-4 9-8s-3-8-9-8-9 4-9 8 3 8 9 8z" stroke="var(--accent)" /><path d="M2 58h116" stroke="var(--line)" />
-      </svg>
+    <div className={`rest-day${strength ? " strength" : ""}`}>
+      {strength ? <Avatar session={session} /> : (
+        <svg width="120" height="64" viewBox="0 0 120 64" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" aria-hidden="true">
+          <path d="M4 58 L40 12 L52 26 L62 18 L96 58 Z" /><path d="M34 22 L40 28 L46 22 L52 26" />
+          <path d="M100 30c6 0 9-4 9-8s-3-8-9-8-9 4-9 8 3 8 9 8z" stroke="var(--accent)" /><path d="M2 58h116" stroke="var(--line)" />
+        </svg>
+      )}
       <p className="t">{title}</p>
-      {session.note ? (
-        open
-          ? <p className="note">{session.note}</p>
-          : <button type="button" className="more" onClick={() => setOpen(true)} aria-expanded={false}>看細節 ›</button>
+      {note ? (
+        <p className="note">
+          {note.first}
+          {note.rest ? (open ? <> {note.rest}</> : <> <button type="button" className="more" onClick={() => setOpen(true)} aria-expanded={false}>為什麼 ›</button></>) : null}
+        </p>
       ) : null}
     </div>
   );
@@ -61,8 +79,29 @@ function Stats({ a, day, big }: { a: ApiActivity; day: Day; big?: boolean }) {
   );
 }
 
-function TodayPost({ day, view, slow }: { day: Day; view: PlanView; slow?: boolean }) {
+/** One tap: this Strava activity is that session. Woo reviews it afterwards. */
+function useAssign() {
+  const revalidator = useRevalidator();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function assign(activityId: string, sessionId: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      await putSession(activityId, { session_id: sessionId, replace: true });
+      await revalidator.revalidate();
+    } catch (e) {
+      setError(e instanceof ApiError ? (e.status === 503 ? "資料庫還在啟動，幾秒後再按一次" : e.message) : "送出失敗，再試一次");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return { assign, busy, error };
+}
+
+function TodayPost({ day, view, slow, onOpen }: { day: Day; view: PlanView; slow?: boolean; onOpen: (s: ApiSession) => void }) {
   const { session, activity } = day;
+  const { assign, busy, error } = useAssign();
 
   if (activity) {
     const r = activity.review;
@@ -89,7 +128,7 @@ function TodayPost({ day, view, slow }: { day: Day; view: PlanView; slow?: boole
   const prep = lastReminderFor(view, session);
   return (
     <div className="today-open">
-      <PlanPost session={session} big />
+      <button type="button" className="open-plan" onClick={() => onOpen(session)}><PlanPost session={session} big /></button>
       {prep && !first ? <WooLine text={prep} /> : null}
       {first ? (
         <>
@@ -99,13 +138,11 @@ function TodayPost({ day, view, slow }: { day: Day; view: PlanView; slow?: boole
             {isRunSport(first.sport_type) ? <> · <b className="num">{pace(first.avg_pace_sec_km)}</b> /km</> : null}
           </p>
           {view.data.coach_checkin_open ? (
-            <>
-              <Link to="/coach" className="btn primary woo"><span className="w" aria-hidden="true">W</span>Woo 在問這趟練得怎麼樣</Link>
-              <Link to={`/sessions/${session.id}`} className="alt">或自己填表單記錄</Link>
-            </>
+            <Link to="/coach" className="btn primary woo"><span className="w" aria-hidden="true">W</span>Woo 在問這趟練得怎麼樣</Link>
           ) : (
-            <Link to={`/sessions/${session.id}`} className="btn primary">記錄這次訓練</Link>
+            <button type="button" className="btn primary" onClick={() => void assign(first.id, session.id)} disabled={busy}>{busy ? "送出中…" : "這趟就是今天的課"}</button>
           )}
+          {error ? <p className="hint" style={{ color: "var(--v-bad)" }}>{error}</p> : null}
         </>
       ) : (
         <p className="hint">跑完後 Strava 會自動同步到這裡</p>
@@ -115,8 +152,9 @@ function TodayPost({ day, view, slow }: { day: Day; view: PlanView; slow?: boole
 }
 
 function ExtraRow({ a, view }: { a: ApiActivity; view: PlanView }) {
-  const target = sessionForExtra(view, activityDate(a));
+  const target = sessionForExtra(view, a);
   const run = isRunSport(a.sport_type);
+  const { assign, busy } = useAssign();
   return (
     <div className="extra-row">
       <Link to={`/activities/${a.id}`} className="who">
@@ -126,7 +164,7 @@ function ExtraRow({ a, view }: { a: ApiActivity; view: PlanView }) {
           <span className="s">{[timeJst(a.start_time), run ? `${pace(a.avg_pace_sec_km)} /km` : null, a.avg_hr != null ? `${a.avg_hr} bpm` : null].filter(Boolean).join(" · ")}</span>
         </span>
       </Link>
-      {target ? <Link to={`/sessions/${target.id}`} className="chip">記錄</Link> : null}
+      {target ? <button type="button" className="chip" onClick={() => void assign(a.id, target.id)} disabled={busy}>{busy ? "…" : `算成 ${target.scheduled_date === activityDate(a) ? "今天" : md(target.scheduled_date)} 的課`}</button> : null}
     </div>
   );
 }
@@ -138,6 +176,7 @@ export default function Today() {
   // No review yet and Woo isn't waiting on an answer: the worker is writing one.
   const analysing = !!(todayAct && !todayAct.review) && !view?.data.coach_checkin_open;
   const { timedOut } = useReviewPolling(analysing);
+  const [open, setOpen] = useState<ApiSession | null>(null);
   if (!view) return <NoPlan title="今天" />;
   const { todayDay, todayActivities, upcoming, currentWeek, daysToRace, data, today } = view;
 
@@ -174,7 +213,7 @@ export default function Today() {
           今天 · {mdDow(today)}
         </SectionH>
         {todayDay ? (
-          <TodayPost day={todayDay} view={view} slow={timedOut} />
+          <TodayPost day={todayDay} view={view} slow={timedOut} onOpen={setOpen} />
         ) : (
           <p className="empty">{today > data.plan.race_date ? "課表已結束，辛苦了。" : "課表還沒開始。"}</p>
         )}
@@ -206,11 +245,10 @@ export default function Today() {
             </>
           );
           const cls = `next-row${first ? " first" : ""}`;
-          return isLoggableNow(d.session, today)
-            ? <Link key={d.session.id} to={`/sessions/${d.session.id}`} className={cls}>{row}</Link>
-            : <div key={d.session.id} className={cls}>{row}</div>;
+          return <button key={d.session.id} type="button" className={cls} onClick={() => setOpen(d.session)}>{row}</button>;
         }) : <p className="empty">沒有後續課表</p>}
       </main>
+      <SessionSheet session={open} view={view} onClose={() => setOpen(null)} />
     </>
   );
 }

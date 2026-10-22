@@ -134,3 +134,76 @@ export function focusLabel(s: ApiSession): string {
   if (last && !content.includes("+")) return `最後 ${last[1]} km`;
   return /MP/.test(`${s.label ?? ""} ${content} ${s.target ?? ""}`) ? "MP 段" : "重點段";
 }
+
+// ---- "怎麼跑": the session's content as one row per part, for the session sheet ----
+
+export interface SegRow {
+  /** The quantity: '2 km', '5 ×', '14 km'; empty when the text has none. */
+  head: string;
+  /** What to do: 'Easy 熱身', '90 秒上坡（慢跑下坡回復）', 'MP 配速'. */
+  body: string;
+  /** The target for that part: '7:15〜7:45', '上坡 6:00 以內'. */
+  right: string;
+}
+
+const tidy = (t: string) => t.replace(/\s*\/\s*/g, " · ").trim();
+
+/** Everything of the target before its first '/': the pace band of the main part. */
+const mainTarget = (s: ApiSession) => (s.target ?? "").split("/")[0].trim();
+
+/**
+ * One row per part of the session. `easyTarget` is the plan's Easy band ('7:15〜7:45 / 心拍 140〜150'),
+ * shown on the warm-up and cool-down kilometres of a composite session.
+ */
+export function segmentRows(s: ApiSession, easyTarget?: string | null): SegRow[] {
+  const content = (s.content ?? "").replace(/^🏁\s*/, "");
+  const target = s.target ?? "";
+  const total = s.target_distance_m ? Math.round(s.target_distance_m / 1000) : 0;
+  const easy = easyTarget ? tidy(easyTarget) : "輕鬆";
+
+  if (content.includes("+")) {
+    const parts = content.split("+").map((p) => p.trim());
+    const targets = target.split("/").map((t) => t.trim()).filter(Boolean);
+    let ti = 0; // the next target part for a non-Easy segment
+    return parts.map((part, i) => {
+      const km = /^(\d+(?:\.\d+)?)\s*km\s*(.*)$/i.exec(part);
+      if (km) {
+        const rest = km[2].trim();
+        if (/easy/i.test(rest)) return { head: `${km[1]} km`, body: i === 0 ? "Easy 熱身" : i === parts.length - 1 ? "Easy 收操" : "Easy", right: easy };
+        const t = targets[ti++] ?? mainTarget(s);
+        const at = rest.replace(/^@\s*/, "");
+        return { head: `${km[1]} km`, body: /^MP$/i.test(at) ? "MP 配速" : at, right: tidy(t.replace(/^MP 段\s*/, "")) };
+      }
+      const reps = /^(\d+)\s*[×x]\s*(.*)$/i.exec(part);
+      if (reps) {
+        const t = targets[ti++] ?? "";
+        return { head: `${reps[1]} ×`, body: reps[2].trim(), right: tidy(t) };
+      }
+      return { head: "", body: part, right: "" };
+    });
+  }
+
+  // Multi-part targets ('前 12 km 7:15〜7:30 / 中 12 km 7:00〜7:15 / 最後 8 km 6:45'): one row each.
+  const tparts = target.split("/").map((t) => t.trim()).filter(Boolean);
+  if (tparts.length >= 3) {
+    return tparts.map((t) => {
+      const m = /^(前|中|最後)?\s*([\d〜~\-–]+)\s*km\s*(.*)$/.exec(t);
+      if (m) return { head: `${m[2]} km`, body: m[1] === "前" ? "前段" : m[1] === "中" ? "中段" : m[1] === "最後" ? "最後" : "", right: tidy(m[3]) };
+      return { head: "", body: t, right: "" };
+    });
+  }
+
+  // '長跑 18 km，最後 4 km @ 6:45'
+  const last = /最後\s*(\d+)\s*km\s*@\s*([^，,（(★]+)/.exec(content);
+  if (last && total) {
+    const n = Number(last[1]);
+    const name = content.split(/[，,]/)[0].replace(/\s*\d+\s*km.*$/, "").trim() || "長跑";
+    return [
+      { head: `${total - n} km`, body: name, right: tidy(tparts[0] ?? "") },
+      { head: `${n} km`, body: "最後", right: tidy(last[2].trim()) },
+    ];
+  }
+
+  const name = content.replace(/\s*\d+(?:〜\d+)?\s*km.*$/, "").trim() || content;
+  return [{ head: total ? `${total} km` : "", body: name || content, right: tidy(target) }];
+}

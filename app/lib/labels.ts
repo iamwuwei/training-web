@@ -74,13 +74,35 @@ export function shortName(session: Pick<ApiSession, "label" | "type" | "target_d
   return m ? `${name} ${Math.round(m / 100) / 10} km` : name;
 }
 
+const STRENGTH_SPORTS = new Set(["WeightTraining", "Workout", "Crossfit", "HighIntensityIntervalTraining"]);
+
+/** A strength day: typed 肌力 / Hyrox, or a rest day whose note opens with 肌力日. */
+export function isStrengthDay(s: Pick<ApiSession, "label" | "type" | "content" | "note">): boolean {
+  if (/肌力|重訓|Hyrox/i.test(`${s.label ?? ""} ${s.content ?? ""}`)) return true;
+  return s.type === "rest" && /^肌力/.test((s.note ?? "").trim());
+}
+
+/** The one-line name of a session: its content when short ('輕鬆跑 6 km'), else type + distance ('坡跑 約 8 km'). */
+export function rowName(s: Pick<ApiSession, "label" | "type" | "content" | "note" | "target_distance_m">): string {
+  if (s.type === "rest") return isStrengthDay(s) ? (s.label === "肌力" && s.content ? s.content : "肌力日") : s.content ?? s.label ?? "休息";
+  const c = (s.content ?? "").replace(/^🏁\s*/, "");
+  if (c && !c.includes("+") && !/[，,（(★]/.test(c) && c.length <= 14) return c;
+  const approx = s.type === "interval" || /×|秒/.test(c);
+  const n = shortName(s);
+  return approx ? n.replace(/ (\d)/, " 約 $1") : n;
+}
+
 /** Filter groups on the history page, in display order. */
-export const FILTERS: { key: string; name: string; kind: Kind | null; match: (s: LabelStyle | null) => boolean }[] = [
+export const FILTERS: { key: string; name: string; kind: Kind | null; match: (s: LabelStyle | null, sport?: string | null) => boolean }[] = [
   { key: "all", name: "全部", kind: null, match: () => true },
   { key: "easy", name: "Easy", kind: "easy", match: (s) => s?.kind === "easy" },
   { key: "long", name: "Long", kind: "long", match: (s) => s?.kind === "long" },
-  { key: "hard", name: "MP", kind: "hard", match: (s) => s?.kind === "hard" },
+  { key: "hard", name: "MP", kind: "hard", match: (s) => s?.kind === "hard" && !/坡/.test(s.name) },
+  { key: "hill", name: "坡跑", kind: "hard", match: (s) => !!s && /坡/.test(s.name) },
+  { key: "strength", name: "肌力", kind: null, match: (s, sport) => s?.name === "肌力" || (!!sport && STRENGTH_SPORTS.has(sport)) },
 ];
+
+export const isStrengthSport = (sport: string | null | undefined) => !!sport && STRENGTH_SPORTS.has(sport);
 
 export type VerdictKind = "good" | "warn" | "bad" | "skip";
 
