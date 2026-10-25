@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
+import { md } from "../lib/date";
 import { km, kmPlan, pace } from "../lib/format";
-import type { PlanView } from "../lib/plan";
+import { activityDate, type PlanView } from "../lib/plan";
 import { aerobicTrend, longTrend, mpTrend, paceTone, totals, type Tone, type TrendPoint } from "../lib/trend";
 import { SectionH } from "./ui";
 
@@ -52,7 +53,7 @@ function Card({ k, value, unit, delta, tone, chart }: { k: string; value: string
 }
 
 const sign = (n: number) => (n < 0 ? `−${Math.abs(n)}` : n > 0 ? `+${n}` : "0");
-const dateOf = (p: TrendPoint) => p.a.start_time.slice(5, 10).replace("-", "/");
+const dateOf = (p: TrendPoint) => md(activityDate(p.a));
 
 export function Progress({ view }: { view: PlanView }) {
   const aero = aerobicTrend(view);

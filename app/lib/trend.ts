@@ -54,6 +54,9 @@ export function kindSeries(session: ApiSession, all: ApiActivity[], sessions: Ap
 const MAX_POINTS = 10;
 const BASELINE_DAYS = 28;
 const MARATHON_M = 42_195;
+/** Easy / Recovery only — by name, so 走跑 (also kind "easy") never counts as aerobic efficiency. */
+const AEROBIC = new Set(["Easy", "Recovery"]);
+const isAerobic = (s: ApiSession) => AEROBIC.has(labelStyle(s).name) && s.target_hr_min != null && s.target_hr_max != null;
 
 export type Tone = "good" | "flat" | "worse";
 
@@ -81,7 +84,7 @@ function runsToDate(view: PlanView): { a: ApiActivity; s: ApiSession }[] {
 
 /** Easy / Recovery runs: pace while the heart rate sat in the session's band, against ~4 weeks ago (or the first one). */
 export function aerobicTrend(view: PlanView): AerobicTrend {
-  const runs = runsToDate(view).filter(({ s }) => labelStyle(s).kind === "easy" && s.target_hr_min != null && s.target_hr_max != null);
+  const runs = runsToDate(view).filter(({ s }) => isAerobic(s));
   const series = runs
     .map(({ a, s }) => {
       const v = aerobicPace(a, s.target_hr_min as number, s.target_hr_max as number);
@@ -90,7 +93,7 @@ export function aerobicTrend(view: PlanView): AerobicTrend {
     .filter((x): x is TrendPoint => !!x)
     .sort(byTime);
   const band = [...runs].sort((x, y) => y.s.scheduled_date.localeCompare(x.s.scheduled_date))[0]?.s
-    ?? [...view.data.sessions].reverse().find((s) => labelStyle(s).kind === "easy" && s.target_hr_min != null && s.target_hr_max != null);
+    ?? [...view.data.sessions].reverse().find(isAerobic);
   const lo = band?.target_hr_min ?? null, hi = band?.target_hr_max ?? null;
   const latest = series[series.length - 1] ?? null;
   if (series.length < 2 || !latest) return { points: series, lo, hi, delta: null, weeks: 0, latest };
@@ -166,8 +169,11 @@ export interface Totals {
 }
 
 export function totals(view: PlanView): Totals {
-  const { actual_m, plan_to_date_m, pct, done_count } = view.totals;
-  const planned = view.days.filter((d) => d.session.scheduled_date <= view.today && d.session.type !== "rest").length;
+  const { actual_m, plan_to_date_m, pct } = view.totals;
+  // Numerator and denominator from the same set of days, so a strength day's activity (type "rest") can't push done past planned.
+  const toDate = view.days.filter((d) => d.session.scheduled_date <= view.today && d.session.type !== "rest");
+  const planned = toDate.length;
+  const done = toDate.filter((d) => d.activity).length;
   let streak = 0;
   for (const w of [...view.weeks].reverse()) {
     if (w.isFuture) continue;
@@ -175,7 +181,7 @@ export function totals(view: PlanView): Totals {
     if (w.isComplete) streak++;
     else break;
   }
-  return { actual_m, plan_to_date_m, pct, done: done_count, planned, streak };
+  return { actual_m, plan_to_date_m, pct, done, planned, streak };
 }
 
 /** Colour for a pace delta: faster is good, slower is worse. */

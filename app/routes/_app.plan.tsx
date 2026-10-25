@@ -104,7 +104,7 @@ function DayRow({ day, isToday, onOpen, routine }: { day: Day; isToday: boolean;
 /** 其他活動: the week's Strava activities that are not a session (walks, strength, unmatched runs), under the 7 rows. Each opens its report. */
 function ExtraRows({ week, unassigned }: { week: Week; unassigned: ApiActivity[] }) {
   const rows = unassigned
-    .filter((a) => { const d = activityDate(a); return d >= week.week_start && d <= week.week_end; })
+    .filter((a) => { const d = activityDate(a); return a.match_status !== "ignored" && d >= week.week_start && d <= week.week_end; })
     .sort((a, b) => a.start_time.localeCompare(b.start_time));
   if (!rows.length) return null;
   return (

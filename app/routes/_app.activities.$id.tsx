@@ -251,8 +251,9 @@ export default function Report({ loaderData }: Route.ComponentProps) {
   const revalidator = useRevalidator();
   const { all } = loaderData;
   // ← goes back to where the report was opened from; opened directly (the router's initial
-  // entry, key "default", or nothing before it) there is no source page, so 課表.
-  const cameFromApp = location.key !== "default" && window.history.length > 1;
+  // entry, key "default") there is no source page, so 課表. Any other key means the app
+  // itself pushed this entry, so there is always something to go back to.
+  const cameFromApp = location.key !== "default";
   // A memo save shows immediately through `override`; once a revalidation brings the
   // same memo_updated_at back from the server, the loader's copy (with the new review) wins.
   const [override, setOverride] = useState<ApiActivity | null>(null);
