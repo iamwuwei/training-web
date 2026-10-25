@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, redirect, useNavigate, useRevalidator } from "react-router";
+import { Link, redirect, useLocation, useNavigate, useRevalidator } from "react-router";
 import { useReviewPolling } from "../lib/use-review-polling";
 import type { Route } from "./+types/_app.activities.$id";
 import { BackIcon } from "../components/icons";
@@ -13,7 +13,8 @@ import { dayDiff, md, mdDow, timeJst } from "../lib/date";
 import { duration, int, km, kmPlan, pace } from "../lib/format";
 import { labelStyle, shortName, sportName, verdictKind } from "../lib/labels";
 import { activityDate, hrOver, isRunSport, paceFast, type PlanView } from "../lib/plan";
-import { comparablePace, focusLabel, focusStats, fullSplits, planFor, sessionBand, splitPace, type Band, type SessionPlan } from "../lib/segments";
+import { focusLabel, focusStats, fullSplits, planFor, sessionBand, splitPace, type Band, type SessionPlan } from "../lib/segments";
+import { kindSeries } from "../lib/trend";
 import type { ApiActivity, ApiSession } from "../types/api";
 import { usePlan } from "../lib/use-plan";
 
@@ -145,34 +146,15 @@ function SplitDots({ a, s, plan }: { a: ApiActivity; s: ApiSession | null; plan:
   );
 }
 
-/** Pace of the km splits run inside the session's HR band (aerobic efficiency); null without enough of them. */
-function paceInBand(a: ApiActivity, lo: number, hi: number): number | null {
-  const inBand = fullSplits(a.splits).filter((sp) => sp.average_heartrate != null && sp.average_heartrate >= lo && sp.average_heartrate <= hi && sp.distance > 500);
-  if (inBand.length < 2) return null;
-  const dist = inBand.reduce((n, sp) => n + sp.distance, 0);
-  const time = inBand.reduce((n, sp) => n + sp.moving_time, 0);
-  return Math.round(time / (dist / 1000));
-}
-
 /**
  * The same kind of session over its last six runs, as a line: for Easy / Recovery
  * the pace while the heart rate sat in the target band (fitness, not effort);
- * for MP and the rest the focus-block pace. Faster is higher.
+ * for MP and the rest the focus-block pace. Faster is higher. Series in lib/trend.ts.
  */
 function Trend({ current, session, all, sessions }: { current: ApiActivity; session: ApiSession; all: ApiActivity[]; sessions: ApiSession[] }) {
   const kind = labelStyle(session);
-  const aerobic = kind.kind === "easy" && session.target_hr_min != null && session.target_hr_max != null;
-  const lo = session.target_hr_min ?? 0, hi = session.target_hr_max ?? 0;
-  const points = all
-    .map((a) => {
-      const s = sessions.find((x) => x.id === a.session_id) ?? null;
-      if (!s || labelStyle(s).name !== kind.name) return null;
-      const v = aerobic ? (paceInBand(a, lo, hi) ?? (a.avg_hr != null && a.avg_hr >= lo && a.avg_hr <= hi ? a.avg_pace_sec_km : null)) : comparablePace(a, s)?.pace ?? null;
-      return v ? { a, v } : null;
-    })
-    .filter((x): x is NonNullable<typeof x> => !!x)
-    .sort((x, y) => x.a.start_time.localeCompare(y.a.start_time))
-    .slice(-6);
+  const { points: series, aerobic, lo, hi } = kindSeries(session, all, sessions);
+  const points = series.slice(-6);
   const title = aerobic ? `${kind.name} 的有氧效率` : `${kind.name} 的配速趨勢`;
   const sub = aerobic ? `心拍 ${lo}〜${hi} 時的配速` : planFor(session).single ? "整趟平均" : `${focusLabel(session)}平均`;
   if (points.length < 2) {
@@ -265,8 +247,12 @@ function SwapSheet({ open, onClose, a, s, all, view }: { open: boolean; onClose:
 export default function Report({ loaderData }: Route.ComponentProps) {
   const view = usePlan();
   const navigate = useNavigate();
+  const location = useLocation();
   const revalidator = useRevalidator();
   const { all } = loaderData;
+  // ← goes back to where the report was opened from; opened directly (the router's initial
+  // entry, key "default", or nothing before it) there is no source page, so 課表.
+  const cameFromApp = location.key !== "default" && window.history.length > 1;
   // A memo save shows immediately through `override`; once a revalidation brings the
   // same memo_updated_at back from the server, the loader's copy (with the new review) wins.
   const [override, setOverride] = useState<ApiActivity | null>(null);
@@ -317,7 +303,7 @@ export default function Report({ loaderData }: Route.ComponentProps) {
 
   return (
     <>
-      <TopBar title="報告" back={<button type="button" className="back" aria-label="返回" onClick={() => (window.history.length > 1 ? void navigate(-1) : void navigate("/history"))}><BackIcon /></button>} />
+      <TopBar title="報告" back={<button type="button" className="back" aria-label="返回" onClick={() => (cameFromApp ? void navigate(-1) : void navigate("/plan"))}><BackIcon /></button>} />
       <main>
         <article className="post report-head">
           <Avatar session={s} sport={a.sport_type} />

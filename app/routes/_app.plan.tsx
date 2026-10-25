@@ -3,12 +3,12 @@ import type { Route } from "./+types/_app.plan";
 import { Link } from "react-router";
 import { SessionSheet } from "../components/session-sheet";
 import { Avatar, Bar, TopBar } from "../components/ui";
-import { md } from "../lib/date";
+import { md, timeJst } from "../lib/date";
 import { duration, km, kmPlan, pace } from "../lib/format";
-import { isStrengthDay, rowName, verdictKind } from "../lib/labels";
-import { isRunSport, type Day, type Week } from "../lib/plan";
+import { isStrengthDay, rowName, sportName, verdictKind } from "../lib/labels";
+import { activityDate, isRunSport, type Day, type Week } from "../lib/plan";
 import { NoPlan, usePlan } from "../lib/use-plan";
-import type { ApiRoutine, ApiSession } from "../types/api";
+import type { ApiActivity, ApiRoutine, ApiSession } from "../types/api";
 
 export function meta(): Route.MetaDescriptors {
   return [{ title: "課表 · 富士山マラソン 2026" }];
@@ -101,6 +101,33 @@ function DayRow({ day, isToday, onOpen, routine }: { day: Day; isToday: boolean;
   return <button type="button" className={cls} onClick={() => onOpen(s)}>{inner}</button>;
 }
 
+/** 其他活動: the week's Strava activities that are not a session (walks, strength, unmatched runs), under the 7 rows. Each opens its report. */
+function ExtraRows({ week, unassigned }: { week: Week; unassigned: ApiActivity[] }) {
+  const rows = unassigned
+    .filter((a) => { const d = activityDate(a); return d >= week.week_start && d <= week.week_end; })
+    .sort((a, b) => a.start_time.localeCompare(b.start_time));
+  if (!rows.length) return null;
+  return (
+    <section className="extras" aria-label="其他活動">
+      <h3 className="h">其他活動 · 沒配到課的</h3>
+      {rows.map((a) => {
+        const run = isRunSport(a.sport_type);
+        return (
+          <Link key={a.id} to={`/activities/${a.id}`} className="row">
+            <span aria-hidden="true" />
+            <Avatar session={null} sport={a.sport_type} />
+            <span className="n"><span className="t">{sportName(a.sport_type)}</span><span className="when">{md(activityDate(a))} {timeJst(a.start_time)}</span></span>
+            <span className="r">
+              {run || a.distance_m > 0 ? <><b className="num">{km(a.distance_m)}</b> km</> : <><b className="num">{Math.round(a.moving_time_sec / 60)}</b> 分</>}
+              {run && a.avg_pace_sec_km ? <> · <b className="num">{pace(a.avg_pace_sec_km)}</b></> : a.avg_hr != null ? <> · <b className="num">{a.avg_hr}</b> bpm</> : null}
+            </span>
+          </Link>
+        );
+      })}
+    </section>
+  );
+}
+
 /** This week: '這週還剩 輕鬆跑 6 km、長跑 16 km'; a past week: '跑了 3 / 4 堂'. */
 function remaining(week: Week): string {
   const planned = week.days.filter((d) => d.session.type !== "rest");
@@ -145,6 +172,7 @@ export default function Plan() {
             <div className="dayrows">
               {week.days.map((d) => <DayRow key={d.session.id} day={d} isToday={d.session.scheduled_date === today} onOpen={setOpen} routine={view.routineBySession.get(d.session.id) ?? null} />)}
             </div>
+            <ExtraRows week={week} unassigned={view.unassigned} />
           </>
         ) : null}
       </main>
