@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { NavLink } from "react-router";
 import type { ApiSession, Verdict } from "../types/api";
 import { labelStyle, verdictKind } from "../lib/labels";
-import { BarsIcon, CalendarIcon, ChatIcon, HomeIcon } from "./icons";
+import { CalendarIcon, ChatIcon, HomeIcon } from "./icons";
 
 /** Type avatar: coloured disc with a 1–2 character code; rest/strength is a hollow grey ring. */
 export function Avatar({ session, sport }: { session: Pick<ApiSession, "label" | "type"> | null | undefined; sport?: string | null }) {
@@ -63,7 +63,6 @@ export function TabBar({ coachUnread = false }: { coachUnread?: boolean }) {
       <nav aria-label="主選單">
         <NavLink to="/" end><HomeIcon /><span>今天</span></NavLink>
         <NavLink to="/plan"><CalendarIcon /><span>課表</span></NavLink>
-        <NavLink to="/history"><BarsIcon /><span>紀錄</span></NavLink>
         <NavLink to="/coach">
           {({ isActive }) => (
             <>

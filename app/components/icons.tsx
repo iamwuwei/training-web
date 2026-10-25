@@ -11,9 +11,6 @@ export const HomeIcon = (p: SVGProps<SVGSVGElement>) => (
 export const CalendarIcon = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><rect x="4" y="5.5" width="18" height="16" rx="2" /><path d="M4 10.5h18M9 3.5v4M17 3.5v4" /></svg>
 );
-export const BarsIcon = (p: SVGProps<SVGSVGElement>) => (
-  <svg {...base(p)}><path d="M4 20.5h18M7 17v-6M13 17V6M19 17v-4" /></svg>
-);
 export const UserIcon = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><circle cx="13" cy="9" r="4.5" /><path d="M4.5 22c.8-4.2 4.3-6.5 8.5-6.5s7.7 2.3 8.5 6.5" /></svg>
 );

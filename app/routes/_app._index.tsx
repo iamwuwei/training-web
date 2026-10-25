@@ -3,6 +3,7 @@ import { Link, useRevalidator } from "react-router";
 import type { Route } from "./+types/_app._index";
 import { GearIcon, MountainIcon } from "../components/icons";
 import { PlanPost } from "../components/posts";
+import { Progress } from "../components/progress";
 import { SessionSheet } from "../components/session-sheet";
 import { StrengthDay } from "../components/strength-day";
 import { Avatar, Bar, CoachAvatar, SectionH, TopBar, VerdictTag } from "../components/ui";
@@ -197,6 +198,8 @@ export default function Today() {
     ? (todayActivities.filter((a) => !a.session_id).find((a) => isRunSport(a.sport_type)) ?? todayActivities.find((a) => !a.session_id))?.id
     : undefined;
   const extras = todayActivities.filter((a) => !a.session_id && a.id !== shownInPost);
+  const next = upcoming[0] ?? null;
+  const nextPrep = next ? lastReminderFor(view, next.session) : null;
 
   return (
     <>
@@ -238,28 +241,19 @@ export default function Today() {
           </>
         ) : null}
 
-        <SectionH>下次練習</SectionH>
-        {upcoming.length ? upcoming.map((d, i) => {
-          const first = i === 0;
-          const prep = first ? lastReminderFor(view, d.session) : null;
-          const row = first ? (
-            <>
-              <Avatar session={d.session} />
-              <span className="t">{d.session.content ?? shortName(d.session)}</span>
-              <span className="when">{md(d.session.scheduled_date)} · {relativeDay(d.session.scheduled_date, today)}</span>
-              {d.session.target ? <span className="sub">{d.session.target}</span> : null}
-              {prep ? <WooLine text={prep} /> : null}
-            </>
-          ) : (
-            <>
-              <Avatar session={d.session} />
-              <span className="t">{d.session.content ?? shortName(d.session)}</span>
-              <span className="when">{md(d.session.scheduled_date)} · {relativeDay(d.session.scheduled_date, today)}</span>
-            </>
-          );
-          const cls = `next-row${first ? " first" : ""}`;
-          return <button key={d.session.id} type="button" className={cls} onClick={() => setOpen(d.session)}>{row}</button>;
-        }) : <p className="empty">沒有後續課表</p>}
+        {/* Only the next session: the 進步 block below should start on the second screen. */}
+        <SectionH>下次{next ? ` · ${mdDow(next.session.scheduled_date)}` : ""}</SectionH>
+        {next ? (
+          <button type="button" className="next-row first" onClick={() => setOpen(next.session)}>
+            <Avatar session={next.session} />
+            <span className="t">{next.session.content ?? shortName(next.session)}</span>
+            <span className="when">{md(next.session.scheduled_date)} · {relativeDay(next.session.scheduled_date, today)}</span>
+            {next.session.target ? <span className="sub">{next.session.target}</span> : null}
+            {nextPrep ? <WooLine text={nextPrep} /> : null}
+          </button>
+        ) : <p className="empty">沒有後續課表</p>}
+
+        <Progress view={view} />
       </main>
       <SessionSheet session={open} view={view} onClose={() => setOpen(null)} />
     </>
