@@ -348,7 +348,7 @@ export default function Report({ loaderData }: Route.ComponentProps) {
         ) : r?.failed ? (
           <section className="verdict-block bad">
             <h2>分析失敗</h2>
-            <p className="comment" style={{ color: "var(--ink-2)" }}>教練這次沒有回應{r.error ? `：${r.error}` : ""}。數據和心得都已經存好，可以再試一次。</p>
+            <p className="comment" style={{ color: "var(--ink-2)" }}>這次分析沒成功，再試一次。數據和心得都已經存好。</p>
             <div className="src"><span className="who"><CoachAvatar size={20} />Woo</span><span className="acts"><Link to={`/coach?quote=${a.id}`} className="chip">問教練</Link>{retryChip}</span></div>
             {rereviewError ? <p className="hint" style={{ color: "var(--v-bad)" }}>{rereviewError}</p> : null}
           </section>
