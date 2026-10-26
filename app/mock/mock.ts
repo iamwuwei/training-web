@@ -277,7 +277,7 @@ function postMismatchAsk(a: ApiActivity, s: ApiSession, reason: string, from: "c
 function judge(a: ApiActivity, s: ApiSession | null) {
   const comment = "（示範）數據落在課表目標內，感受也一致。";
   const reminder = "第 1 km 先走 2 分鐘再起跑";
-  a.review = { verdict: "達成", comment, reminders: [reminder], source: "claude", model: "claude-haiku-4-5", adjust_hint: null, failed: false, error: null, created_at: new Date().toISOString() };
+  a.review = { verdict: "達成", comment, reminders: [reminder], source: "claude", model: null, adjust_hint: null, failed: false, error: null, created_at: new Date().toISOString() };
   const t = threadData();
   t.push({ ...BLANK, id: `c${t.length + 1}`, role: "coach", kind: "review", text: comment, activity_id: a.id, review: { label: s ? shortName(s) : "未排課", verdict: "達成", reminder, date: s?.scheduled_date ?? todayJst() }, created_at: new Date().toISOString() });
 }
@@ -310,7 +310,7 @@ export function mockPutSession(activityId: string, body: PutSessionRequest): Put
     const s = d.sessions.find((x) => x.id === body.session_id) ?? null;
     const reason = s ? mismatchReason(a, s) : null;
     if (s && reason) postMismatchAsk(a, s, reason, "report");
-    else setTimeout(() => { a.review = { verdict: "達成", comment: "（示範）數據落在課表目標內，感受也一致。", reminders: ["第 1 km 先走 2 分鐘再起跑"], source: "claude", model: "claude-haiku-4-5", adjust_hint: null, failed: false, error: null, created_at: new Date().toISOString() }; }, 4000);
+    else setTimeout(() => { a.review = { verdict: "達成", comment: "（示範）數據落在課表目標內，感受也一致。", reminders: ["第 1 km 先走 2 分鐘再起跑"], source: "claude", model: null, adjust_hint: null, failed: false, error: null, created_at: new Date().toISOString() }; }, 4000);
   } else {
     a.session_id = null;
     a.match_status = body.status ?? "unplanned";
@@ -331,7 +331,7 @@ export function mockRereview(activityId: string): RereviewResponse {
   if (!a) throw new Error("not found");
   a.review = null;
   setTimeout(() => {
-    a.review = { verdict: "達成但有提醒", comment: "（示範）重新分析：配速在區間內，但第 3 km 心拍衝到 166。", reminders: ["MP 第 3 公里開始看心拍"], source: "claude", model: "claude-haiku-4-5", adjust_hint: null, failed: false, error: null, created_at: new Date().toISOString() };
+    a.review = { verdict: "達成但有提醒", comment: "（示範）重新分析：配速在區間內，但第 3 km 心拍衝到 166。", reminders: ["MP 第 3 公里開始看心拍"], source: "claude", model: null, adjust_hint: null, failed: false, error: null, created_at: new Date().toISOString() };
   }, 4000);
   return { queued: true };
 }
@@ -353,7 +353,7 @@ function weeklyData(): ApiWeeklyReview[] {
     id: WEEK2_ID,
     week_start: "2026-10-12",
     summary: "（示範）第 2 週完成 3/4，Easy 心拍守得比第 1 週好（150→140）。10/14 MP 段配速到位但第 5 km 心拍 166 超過上限，體感也說第三公里開始腿重。長跑前一天排 Hyrox，建議把長跑目標心拍再壓低一點。",
-    model: "claude-sonnet-5-5",
+    model: null,
     adjustments: ([
       long ? { index: 0, session_id: long.id, field: "note" as const, old: long.note, new: "前日 Hyrox。心拍 ≤150 為最高優先，配速掉到 8:00 也可；超過 155 就走 1 分鐘。", reason: "10/14 MP 段心拍已衝到 166，長跑前一天又是 Hyrox，疲勞疊加時心拍容易失控。", status: "pending" as const, decided_at: null, applied_session_id: null } : null,
       rec ? { index: 1, session_id: rec.id, field: "target_distance_m" as const, old: rec.target_distance_m, new: 3000, reason: "本週已經有一次高強度，恢復跑縮短到 3 km 讓腿在 Hyrox 前多休一點。", status: "pending" as const, decided_at: null, applied_session_id: null } : null,

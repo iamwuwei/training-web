@@ -66,7 +66,7 @@ function AthleteMessage({ m, onRetry, onReset, busy }: { m: ApiCoachMessage; onR
         {m.rpe ? <span className="rpe-tag">RPE {m.rpe}</span> : null}
       </div>
       <span className="when">
-        {m.status === "failed" ? <>Woo 沒收到{m.error ? `（${m.error}）` : ""} · {onRetry ? <button type="button" onClick={onRetry}>再送一次</button> : null}</> : timeJst(m.created_at)}
+        {m.status === "failed" ? <>這次分析沒成功，再試一次{onRetry ? <> · <button type="button" onClick={onRetry}>再送一次</button></> : null}</> : timeJst(m.created_at)}
         {onReset ? <> · <button type="button" onClick={onReset} disabled={busy}>選錯了 ›</button></> : null}
       </span>
     </div>
@@ -161,8 +161,10 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
   const typing = waiting || expectPending;
 
   // Woo's open "how did it feel?" (the last message) turns the composer into the answer
-  // box. A mismatch question is answered with its own chips instead.
+  // box. A mismatch question is answered with its own chips instead — while it is open,
+  // 不是，重選 is the one way to undo the pick (選錯了 on the pick bubble is hidden).
   const openAsk = last && last.kind === "ask" && last.ask?.state === "open" && last.ask.kind !== "mismatch" ? last : null;
+  const mismatchOpen = !!last && last.kind === "ask" && last.ask?.kind === "mismatch" && last.ask.state === "open";
 
   const count = messages.length;
   useEffect(() => { window.scrollTo({ top: document.documentElement.scrollHeight }); }, [count, typing]);
@@ -291,9 +293,8 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
           const rule = i === 0 || toJstDate(messages[i - 1].created_at) !== day ? <DayRule date={day} /> : null;
           let node: React.ReactNode;
           if (m.role === "athlete") {
-            // While Woo's mismatch question is open, 不是，重選 is the one way to undo the pick.
-            const mismatchOpen = !!last && last.kind === "ask" && last.ask?.kind === "mismatch" && last.ask.state === "open";
-            const resettable = m.kind === "pick" && i === lastPickIdx && i > lastCheckinIdx && lastCheckin?.checkin?.state === "picked" && !mismatchOpen;
+            // No 選錯了 while the mismatch question is open, nor while Woo's next line (after 是) is on its way.
+            const resettable = m.kind === "pick" && i === lastPickIdx && i > lastCheckinIdx && lastCheckin?.checkin?.state === "picked" && !mismatchOpen && !expectPending;
             node = <AthleteMessage m={m} busy={busy} onReset={resettable ? () => void reset() : undefined} onRetry={m.kind === "chat" && !m.rpe ? () => void send(m.text, m.activity_id ?? undefined) : undefined} />;
           } else if (m.kind === "weekly") {
             const w = reviews.find((r) => r.id === m.weekly_review_id) ?? null;
