@@ -267,7 +267,14 @@ export default function Report({ loaderData }: Route.ComponentProps) {
   const vk = verdictKind(r?.verdict);
   // No review yet with a session assigned, or a Claude review older than the memo = being written.
   const waitingReview = !!(a.session_id && !r?.failed && (!r || (r.source === "claude" && a.memo_updated_at != null && r.created_at < a.memo_updated_at)));
-  const { timedOut, restart } = useReviewPolling(waitingReview);
+  // Woo is waiting on an answer in the thread (how it felt, or whether this is really the
+  // run): nothing to poll for until the athlete replies there, and no "took too long". With
+  // only a check-in open (the api leaves the day's check-in open after a report-page pick)
+  // the verdict is still on its way, so keep polling.
+  const askKind = view?.data.coach_ask_kind ?? null;
+  const askOpen = !r && askKind != null;
+  const checkinOpen = !r && !!view?.data.coach_checkin_open;
+  const { timedOut, restart } = useReviewPolling(waitingReview && !askOpen);
   const [rereviewBusy, setRereviewBusy] = useState(false);
   const [rereviewError, setRereviewError] = useState<string | null>(null);
   async function askAgain() {
@@ -341,19 +348,23 @@ export default function Report({ loaderData }: Route.ComponentProps) {
         ) : r?.failed ? (
           <section className="verdict-block bad">
             <h2>分析失敗</h2>
-            <p className="comment" style={{ color: "var(--ink-2)" }}>教練這次沒有回應{r.error ? `：${r.error}` : ""}。數據和心得都已經存好，可以再試一次。</p>
+            <p className="comment" style={{ color: "var(--ink-2)" }}>這次分析沒成功，再試一次。數據和心得都已經存好。</p>
             <div className="src"><span className="who"><CoachAvatar size={20} />Woo</span><span className="acts"><Link to={`/coach?quote=${a.id}`} className="chip">問教練</Link>{retryChip}</span></div>
             {rereviewError ? <p className="hint" style={{ color: "var(--v-bad)" }}>{rereviewError}</p> : null}
           </section>
         ) : waitingReview ? (
           <section className="verdict-block">
-            {timedOut ? (
+            {askOpen ? (
+              <div className="src"><span className="pending">{askKind === "mismatch" ? "Woo 在問這趟是不是" : "Woo 在等你回感受"}</span><Link to="/coach" className="chip">去回他 ›</Link></div>
+            ) : timedOut ? (
               <>
                 <h2 className="pending-h">分析比較久</h2>
                 <p className="comment" style={{ color: "var(--ink-2)" }}>已經等了 3 分鐘還沒有結果。可能是資料庫剛喚醒或教練那邊塞車，稍後再回來看，或直接重新分析。</p>
                 <div className="src"><span className="who"><CoachAvatar size={20} />Woo</span>{retryChip}</div>
                 {rereviewError ? <p className="hint" style={{ color: "var(--v-bad)" }}>{rereviewError}</p> : null}
               </>
+            ) : checkinOpen ? (
+              <div className="src"><span className="pending">Woo 在等你回</span><Link to="/coach" className="chip">去回他 ›</Link></div>
             ) : (
               <div className="src"><span className="pending">Woo 分析中，通常 10 秒到 1 分鐘</span></div>
             )}
