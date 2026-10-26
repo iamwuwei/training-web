@@ -665,3 +665,28 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 .sheet-body .oneline:focus { outline: none; border-color: var(--ink-2); }
 .sheet-body .btn.primary { margin-top: 14px; }
 .msg.coach .relink { margin-top: 8px; font-size: 13px; color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; }
+
+/* ---- Woo's consistency: the weekly review asks first and updates in place; proposal cards in chat ---- */
+.msg.coach .updated { display: inline-flex; align-items: center; gap: 5px; margin-top: 6px; padding: 2px 10px; border-radius: 999px; background: var(--chip); font-size: 12px; color: var(--ink-2); }
+.msg.coach .updated + .text { margin-top: 6px; }
+.msg.coach .ask { margin-top: 10px; }
+.msg.coach .ask-block { padding: 10px 12px; border-left: 3px solid var(--chip-line); background: var(--chip); border-radius: 0 10px 10px 0; }
+.msg.coach .ask-block .q { font-size: 15px; line-height: 1.55; color: var(--ink); }
+.msg.coach .ask .chips-row { margin-top: 8px; }
+.msg.coach .said { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 13px; color: var(--ink-3); }
+.msg.coach .said a { color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; }
+.msg.coach .cancelled { margin: 8px 0 0; font-size: 12px; color: var(--ink-3); line-height: 1.5; }
+.proposal-card { position: relative; margin-top: 10px; padding: 4px 12px 12px; border: 1px solid var(--line); border-radius: 14px; display: flex; flex-direction: column; gap: 8px; }
+.proposal-card > .proposal { gap: 0; padding: 10px 0 8px; }
+.proposal-card > .proposal:first-child { border-top: none; }
+.proposal-card > .proposal + .why, .proposal-card > .proposal + .flags { margin-top: -2px; }
+.proposal-card .change { line-height: 1.4; }
+.proposal-card .why, .proposal-card .basis, .proposal-card .flags, .proposal-card .actions, .proposal-card .hint { margin-left: 52px; }
+.proposal-card .why { font-size: 13px; color: var(--ink-2); line-height: 1.55; }
+.proposal-card .basis { font-size: 12px; color: var(--ink-3); line-height: 1.5; }
+.proposal-card .basis b { font-weight: 700; }
+.proposal-card .flags { font-size: 13px; font-weight: 700; color: var(--v-warn); line-height: 1.45; }
+.proposal-card .actions { display: flex; gap: 8px; margin-top: 2px; }
+.proposal-card > .decided { position: absolute; top: 12px; right: 12px; font-size: 12px; font-weight: 600; color: var(--ink-3); }
+.proposal-card > .decided.applied { color: var(--v-good); }
+.proposal-card.applied .proposal:first-child .t, .proposal-card.dismissed .proposal:first-child .t { padding-right: 56px; }
