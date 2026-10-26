@@ -17,6 +17,7 @@ import type { ActivitiesResponse, ApiActivity, ApiCoachMessage, ApiProposal, Api
   PutCoachSeenResponse, MatchStatus, MeResponse, PlanResponse, PostAdjustmentRequest, PostAdjustmentResponse, PutMemoRequest, PutMemoResponse, PutSessionRequest, PutSessionResponse, RereviewResponse, Verdict, WeeklyResponse } from "../types/api";
 import { md, mdDow, todayJst } from "../lib/date";
 import { kmPlan } from "../lib/format";
+import { shortName } from "../lib/labels";
 const MOCK_USER_ID = "7d1c3a0e-4f7b-4d2e-9c1a-5b8e2f6a1c01"; // ww in training-api seed
 
 interface SeedSession {
@@ -136,6 +137,7 @@ function build(): PlanResponse {
   return {
     coach_unread: 0,
     coach_checkin_open: false,
+    coach_ask_kind: null,
     plan: {
       id: PLAN_ID,
       user_id: MOCK_USER_ID,
@@ -204,7 +206,17 @@ export function mockPutCoachSeen(): PutCoachSeenResponse {
 
 export function mockPlan(): PlanResponse {
   const d = data();
-  return { ...d, coach_unread: coachUnread, coach_checkin_open: threadData().some((m) => (m.kind === "checkin" && m.checkin?.state === "open") || (m.kind === "ask" && m.ask?.state === "open")), activities: [...d.activities, ...d.unassigned].filter((a) => a.session_id), unassigned: d.unassigned.filter((a) => !a.session_id), routines: routines.map((r) => ({ ...r, items: r.items.map((i) => ({ ...i })) })) };
+  const t = threadData();
+  const openAsk = [...t].reverse().find((m) => m.kind === "ask" && m.ask?.state === "open")?.ask ?? null;
+  return {
+    ...d,
+    coach_unread: coachUnread,
+    coach_checkin_open: !!openAsk || t.some((m) => m.kind === "checkin" && m.checkin?.state === "open"),
+    coach_ask_kind: openAsk?.kind ?? null,
+    activities: [...d.activities, ...d.unassigned].filter((a) => a.session_id),
+    unassigned: d.unassigned.filter((a) => !a.session_id),
+    routines: routines.map((r) => ({ ...r, items: r.items.map((i) => ({ ...i })) })),
+  };
 }
 
 export function mockMe(): MeResponse {
@@ -226,15 +238,67 @@ export function mockPutMemo(activityId: string, body: PutMemoRequest): PutMemoRe
 }
 
 const findActivity = (id: string) => [...data().activities, ...data().unassigned].find((x) => x.id === id);
+const isRun = (a: ApiActivity) => !a.sport_type || ["Run", "TrailRun", "VirtualRun"].includes(a.sport_type);
 
-/** Demo mode: assign an unassigned activity to a session; the "coach" answers after ~4 s. */
+/** Move the activity to the list its session_id says it belongs in. */
+function relist(a: ApiActivity) {
+  const d = data();
+  d.activities = d.activities.filter((x) => x.session_id || x.id !== a.id);
+  d.unassigned = d.unassigned.filter((x) => x.id !== a.id);
+  if (a.session_id) d.activities.push(a);
+  else d.unassigned.push(a);
+  d.activities.sort((x, y) => x.start_time.localeCompare(y.start_time));
+}
+function unassign(a: ApiActivity, status: MatchStatus = "unplanned") {
+  a.session_id = null;
+  a.match_status = status;
+  a.review = null;
+  relist(a);
+}
+
+/**
+ * Why the pick looks wrong (a walk on a run day, a run far shorter than the session), or null.
+ * Same two checks as the api's mismatchReason.
+ */
+function mismatchReason(a: ApiActivity, s: ApiSession): string | null {
+  if (s.type === "rest") return null;
+  if (!isRun(a)) return `這趟 ${Math.round(a.moving_time_sec / 60)} 分鐘、心拍 ${a.avg_hr}，看起來像走路，不像 ${shortName(s)}`;
+  if (s.target_distance_m && a.distance_m < s.target_distance_m * 0.5) return `這趟只有 ${kmPlan(a.distance_m)} km，${shortName(s)} 是 ${kmPlan(s.target_distance_m)} km，差太多`;
+  return null;
+}
+
+/** Woo's mismatch question as the newest message; the verdict waits for 是／不是. */
+function postMismatchAsk(a: ApiActivity, s: ApiSession, reason: string, from: "checkin" | "report") {
+  const t = threadData();
+  t.push({ ...BLANK, id: `c${t.length + 1}`, role: "coach", kind: "ask", text: `${reason}。真的要算成 ${md(s.scheduled_date)} 的 ${shortName(s).split(" ")[0]} 嗎？`, activity_id: a.id, ask: { state: "open", kind: "mismatch", from, activity_id: a.id, session_id: s.id, reason }, created_at: new Date().toISOString() });
+}
+
+/** The demo verdict (the worker's review of the activity + Woo's line in the thread). */
+function judge(a: ApiActivity, s: ApiSession | null) {
+  const comment = "（示範）數據落在課表目標內，感受也一致。";
+  const reminder = "第 1 km 先走 2 分鐘再起跑";
+  a.review = { verdict: "達成", comment, reminders: [reminder], source: "claude", model: "claude-haiku-4-5", adjust_hint: null, failed: false, error: null, created_at: new Date().toISOString() };
+  const t = threadData();
+  t.push({ ...BLANK, id: `c${t.length + 1}`, role: "coach", kind: "review", text: comment, activity_id: a.id, review: { label: s ? shortName(s) : "未排課", verdict: "達成", reminder, date: s?.scheduled_date ?? todayJst() }, created_at: new Date().toISOString() });
+}
+
+/**
+ * Demo mode: assign an unassigned activity to a session; the "coach" answers after ~4 s —
+ * unless the pick looks wrong (a walk, or under half the distance): then Woo asks first,
+ * like the api does, and the verdict comes after 是 in the thread.
+ */
 export function mockPutSession(activityId: string, body: PutSessionRequest): PutSessionResponse {
   const d = data();
   const a = findActivity(activityId);
   if (!a) throw new Error("not found");
   if (body.session_id) {
-    const holder = d.activities.find((x) => x.session_id === body.session_id && x.id !== a.id);
-    if (holder) { holder.session_id = null; holder.match_status = "unplanned"; holder.review = null; }
+    // (an activity picked through the check-in still sits in `unassigned`, so look in both lists)
+    const holder = [...d.activities, ...d.unassigned].find((x) => x.session_id === body.session_id && x.id !== a.id);
+    if (holder) {
+      holder.session_id = null; holder.match_status = "unplanned"; holder.review = null;
+      // Woo's open question about the replaced activity is moot now.
+      for (const m of threadData()) if (m.kind === "ask" && m.ask?.state === "open" && m.ask.activity_id === holder.id) m.ask = { ...m.ask, state: "answered" };
+    }
     a.session_id = body.session_id;
     a.match_status = "confirmed";
     a.review = null;
@@ -243,19 +307,16 @@ export function mockPutSession(activityId: string, body: PutSessionRequest): Put
       a.rpe = body.rpe ?? null;
       a.memo_updated_at = new Date().toISOString();
     }
-    setTimeout(() => {
-      a.review = { verdict: "達成", comment: "（示範）數據落在課表目標內，感受也一致。", reminders: ["第 1 km 先走 2 分鐘再起跑"], source: "claude", model: "claude-haiku-4-5", adjust_hint: null, failed: false, error: null, created_at: new Date().toISOString() };
-    }, 4000);
+    const s = d.sessions.find((x) => x.id === body.session_id) ?? null;
+    const reason = s ? mismatchReason(a, s) : null;
+    if (s && reason) postMismatchAsk(a, s, reason, "report");
+    else setTimeout(() => { a.review = { verdict: "達成", comment: "（示範）數據落在課表目標內，感受也一致。", reminders: ["第 1 km 先走 2 分鐘再起跑"], source: "claude", model: "claude-haiku-4-5", adjust_hint: null, failed: false, error: null, created_at: new Date().toISOString() }; }, 4000);
   } else {
     a.session_id = null;
     a.match_status = body.status ?? "unplanned";
     a.review = null;
   }
-  d.activities = d.activities.filter((x) => x.session_id || x.id !== a.id);
-  d.unassigned = d.unassigned.filter((x) => x.id !== a.id);
-  if (a.session_id) d.activities.push(a);
-  else d.unassigned.push(a);
-  d.activities.sort((x, y) => x.start_time.localeCompare(y.start_time));
+  relist(a);
   return { activity: { ...a } };
 }
 
@@ -276,19 +337,20 @@ export function mockRereview(activityId: string): RereviewResponse {
 }
 
 // Demo weekly reviews: week 2 with two proposals (pending) against next week's sessions,
-// and week 3 written before the 10/25 long run had a record — it asks instead of judging.
+// and week 3 written before the 10/25 long run had a record — it asks instead of judging
+// (the question itself is the ask's `question`; the text only says what Woo can see).
 let weekly: ApiWeeklyReview[] | undefined;
+const WEEK2_ID = "w-2026-10-12";
 const WEEK3_ID = "w-2026-10-19";
-const WEEK3_TEXT_ASK = "本週 4 堂跑步完成 3 堂：10/20 Easy 6.03 km（7:11、心拍 143）、10/21 坡跑、10/23 Easy 6.14 km（7:08、心拍 142），兩次 Easy 都比 7:15 快 4〜7 秒，心拍在範圍內。\n\n10/25 的長跑 16 km 我沒看到紀錄，是沒跑，還是還沒同步？長跑確定之後我再談 11/1 的 18 km。";
+const WEEK3_TEXT_ASK = "本週 4 堂跑步完成 3 堂：10/20 Easy 6.03 km（7:11、心拍 143）、10/21 坡跑、10/23 Easy 6.14 km（7:08、心拍 142），兩次 Easy 都比 7:15 快 4〜7 秒，心拍在範圍內。10/25 的長跑確定之後我再談 11/1 的 18 km。";
 const WEEK3_TEXT_SKIPPED = "本週 4 堂跑步完成 3 堂：10/20 Easy 6.03 km（7:11、心拍 143）、10/21 坡跑、10/23 Easy 6.14 km（7:08、心拍 142）。10/25 的長跑你說沒跑，這週長跑量是 0，所以 11/1 的 18 km 不直接上：先回到 16 km，最後 4 km @ 6:45 看當天小腿狀況。兩次 Easy 都比 7:15 快 4〜7 秒，下週 Easy 以 7:15 為下限。";
 function weeklyData(): ApiWeeklyReview[] {
   if (weekly) return weekly;
   const d = data();
   const long = d.sessions.find((s) => s.scheduled_date === "2026-10-18");
   const rec = d.sessions.find((s) => s.scheduled_date === "2026-10-16");
-  const tue = d.sessions.find((s) => s.scheduled_date === "2026-10-27");
   weekly = [{
-    id: "w-2026-10-12",
+    id: WEEK2_ID,
     week_start: "2026-10-12",
     summary: "（示範）第 2 週完成 3/4，Easy 心拍守得比第 1 週好（150→140）。10/14 MP 段配速到位但第 5 km 心拍 166 超過上限，體感也說第三公里開始腿重。長跑前一天排 Hyrox，建議把長跑目標心拍再壓低一點。",
     model: "claude-sonnet-5-5",
@@ -304,9 +366,8 @@ function weeklyData(): ApiWeeklyReview[] {
     week_start: "2026-10-19",
     summary: WEEK3_TEXT_ASK,
     model: null,
-    // The real api makes no proposals while a question is open; the demo keeps one so the
-    // "原本「…」的建議已取消" line can be seen after 沒跑 regenerates the review.
-    adjustments: tue ? [{ index: 0, session_id: tue.id, field: "note" as const, old: tue.note, new: "前 2 km 壓在 7:15 以上，心拍會慢一點才升上來", reason: "10/20、10/23 的前 2 km 都是 7:05 左右，心拍還沒上來就跑快了。", status: "pending" as const, decided_at: null, applied_session_id: null }] : [],
+    // No proposals while the question is open (same as the api); 沒跑 regenerates the review with one.
+    adjustments: [],
     created_at: new Date(`${todayJst()}T04:00:00+09:00`).toISOString(),
     updated_at: null,
     update_reason: null,
@@ -339,14 +400,14 @@ export function mockPostAdjustment(weeklyId: string, index: number, body: PostAd
 const proposals: ApiProposal[] = [
   { id: "p-swap", source: "chat", message_id: "c-prop-1", status: "pending", created_at: "", decided_at: null,
     changes: [
-      { session_id: "s-2026-10-25", field: "scheduled_date", old: "2026-10-25", new: "2026-10-24", label: "長跑 16 km", date: "2026-10-25", applied_session_id: null },
+      { session_id: "s-2026-10-25", field: "scheduled_date", old: "2026-10-25", new: "2026-10-24", label: "Long 16 km", date: "2026-10-25", applied_session_id: null },
       { session_id: "s-2026-10-24", field: "scheduled_date", old: "2026-10-24", new: "2026-10-25", label: "休息", date: "2026-10-24", applied_session_id: null },
     ],
     why: "兩堂對調，週五 Easy → 週六長跑 → 週日休息，硬日沒有連著。",
     basis: ["本週已跑 12.1 / 36 km", "目前最長 12 km（10/11）", "10/24 原本休息"],
     flags: [] },
   { id: "p-long", source: "chat", message_id: "c-prop-2", status: "pending", created_at: "", decided_at: null,
-    changes: [{ session_id: "s-2026-11-01", field: "target_distance_m", old: 18000, new: 21000, label: "長跑 18 km", date: "2026-11-01", applied_session_id: null }],
+    changes: [{ session_id: "s-2026-11-01", field: "target_distance_m", old: 18000, new: 21000, label: "Long 18 km", date: "2026-11-01", applied_session_id: null }],
     why: "11/8 的 22 km 才接得上；小腿若還痠就只跑 18。",
     basis: ["目前最長 12 km（10/11）", "上週 16 / 36 km", "10/25 自述小腿微痠"],
     flags: ["比目前最長多 9 km", "上週少跑 20 km 的補回"] },
@@ -370,7 +431,7 @@ function threadData(): ApiCoachMessage[] {
     { id: "c4", role: "coach", kind: "chat", text: "這是連續第二次了。前 3 分鐘不要看錶，用鼻子呼吸能撐住的速度就是對的；第 1 km 跑到 7:30 以上才算成功。明天 MP 課的前 2 km Easy 也照這個來。", activity_id: null, weekly_review_id: null, status: "sent", review: null, quote: null, error: null, created_at: at("2026-10-12T23:10:20Z") },
     // Week 3's review, written before the 10/25 long run had a record: it asks (demo dates it this morning).
     { ...BLANK, id: "c-weekly-3", role: "coach", kind: "weekly", text: w3.summary ?? "", weekly_review_id: w3.id, created_at: w3.created_at,
-      weekly: { week_start: w3.week_start, asks: [{ session_id: "s-2026-10-25", label: "長跑 16 km", date: "2026-10-25", state: "open" }], updated: null, cancelled: [] } },
+      weekly: { week_start: w3.week_start, asks: [{ session_id: "s-2026-10-25", label: "Long 16 km", date: "2026-10-25", question: "10/25 的 Long 16 km 我沒看到紀錄，是沒跑，還是還沒同步？", state: "open" }], updated: null, cancelled: [] } },
     // A chat reply that carries a proposal card (two changes), and a flagged one.
     { ...BLANK, id: "c-ask-sun", role: "athlete", kind: "chat", text: "這週日有事，長跑跑不了", created_at: todayAt("06:20") },
     { ...BLANK, id: "c-prop-1", role: "coach", kind: "chat", text: "那把長跑提到週六，週日換成休息。週五的 Easy 當長跑前的放鬆，別跑快。", proposal: proposals[0], created_at: todayAt("06:21") },
@@ -398,8 +459,7 @@ export function mockPostWeeklyAsk(weeklyId: string, sessionId: string, body: Pos
     setTimeout(() => {
       const now = new Date().toISOString();
       const reason = `你說 ${md(ask.date)} 沒跑`;
-      const cancelled = w.adjustments.filter((a) => a.status === "pending").map((a) => `${md(d.sessions.find((x) => x.id === a.session_id)?.scheduled_date ?? ask.date)} 備註 → ${a.new}`);
-      for (const a of w.adjustments) if (a.status === "pending") { a.status = "superseded"; a.decided_at = now; }
+      const cancelled = supersedePending(w);
       const next = d.sessions.find((x) => x.scheduled_date === "2026-11-01");
       if (next) w.adjustments.push({ index: w.adjustments.length, session_id: next.id, field: "target_distance_m", old: next.target_distance_m, new: 16000, reason: "長跑斷了一週，18 km 直接上風險高，先回到 16。", status: "pending", decided_at: null, applied_session_id: null });
       w.summary = WEEK3_TEXT_SKIPPED;
@@ -427,9 +487,9 @@ export function mockPostProposal(proposalId: string, action: "apply" | "dismiss"
       else {
         (s as unknown as Record<string, unknown>)[c.field] = c.new;
         if (c.field === "target_distance_m" && typeof c.new === "number") s.content = s.content?.replace(/\d+(?:〜\d+)?\s*km/, `${kmPlan(c.new)} km`) ?? s.content;
-        parts.push(c.field === "scheduled_date" && typeof c.new === "string" ? `${mdDow(c.new)}是${c.label ?? s.label}`
-          : c.field === "target_distance_m" && typeof c.new === "number" ? `${md(s.scheduled_date)} 的${(c.label ?? s.label ?? "").split(" ")[0]}是 ${kmPlan(c.new)} km`
-          : `${md(s.scheduled_date)} 的${c.label ?? s.label}改好了`);
+        parts.push(c.field === "scheduled_date" && typeof c.new === "string" ? `${mdDow(c.new)}是 ${c.label ?? s.label}`
+          : c.field === "target_distance_m" && typeof c.new === "number" ? `${md(s.scheduled_date)} 的 ${(c.label ?? s.label ?? "").split(" ")[0]} 是 ${kmPlan(c.new)} km`
+          : `${md(s.scheduled_date)} 的 ${c.label ?? s.label} 改好了`);
       }
       c.applied_session_id = s.id;
     }
@@ -445,6 +505,43 @@ export function mockPostProposal(proposalId: string, action: "apply" | "dismiss"
 function todaySessionId(): string | null {
   const today = todayJst();
   return data().sessions.find((s) => s.scheduled_date === today)?.id ?? null;
+}
+
+/** A regeneration cancels the pending proposals; returns their "已取消" lines (api format: "10/16 距離 4 → 3 km"). */
+function supersedePending(w: ApiWeeklyReview): string[] {
+  const d = data();
+  const now = new Date().toISOString();
+  const lines: string[] = [];
+  for (const a of w.adjustments) {
+    if (a.status !== "pending") continue;
+    const date = md(d.sessions.find((x) => x.id === a.session_id)?.scheduled_date ?? w.week_start);
+    lines.push(a.field === "target_distance_m" ? `${date} 距離 ${kmPlan(Number(a.old))} → ${kmPlan(Number(a.new))} km` : `${date} 備註 → ${a.new}`);
+    a.status = "superseded";
+    a.decided_at = now;
+  }
+  return lines;
+}
+
+/**
+ * The activity for a session of week 2 arrived: that review is regenerated in place, like
+ * the worker does — its pending proposals are cancelled, a new one replaces them, and the
+ * message gets the "⟳ 已更新 · … 進來了" line.
+ */
+function rerunWeek2(s: ApiSession) {
+  const w = weeklyData().find((x) => x.id === WEEK2_ID);
+  const m = threadData().find((x) => x.kind === "weekly" && x.weekly_review_id === WEEK2_ID);
+  if (!w || !m || w.updated_at) return;
+  const d = data();
+  const now = new Date().toISOString();
+  const reason = `${md(s.scheduled_date)} 的 ${shortName(s).split(" ")[0]} 進來了`;
+  const cancelled = supersedePending(w);
+  const rec = d.sessions.find((x) => x.scheduled_date === "2026-10-16");
+  if (rec) w.adjustments.push({ index: w.adjustments.length, session_id: rec.id, field: "note" as const, old: rec.note, new: "MP 隔天只活動腿，心拍超過 140 就走；腿還重就改成完全休息", reason: "10/14 MP 段心拍到 166、第三公里開始腿重，隔天又是 Hyrox，恢復跑的心拍上限再壓一點。", status: "pending", decided_at: null, applied_session_id: null });
+  w.summary = "（示範）第 2 週完成 4/4。10/14 MP 段 6:46 守住了，但第 5 km 心拍 166 超過上限，體感也說第三公里開始腿重。Easy 心拍守得比第 1 週好（150→140）。長跑前一天是 Hyrox，10/18 照原本的備註跑；10/16 的恢復跑心拍再壓一點。";
+  w.updated_at = now;
+  w.update_reason = reason;
+  m.text = w.summary;
+  m.weekly = { week_start: w.week_start, asks: [], updated: { at: now, reason }, cancelled: [...(m.weekly?.cancelled ?? []), ...cancelled] };
 }
 
 /** Demo: the pick assigns the activity, then Woo's question arrives after ~2 s. */
@@ -463,20 +560,23 @@ export function mockPostCheckinPick(checkinId: string, body: PostCheckinPickRequ
   const activityId = cand.activity_id ?? c.activity_id!;
   const sessionId = cand.session_id ?? c.checkin.session_id!;
   const a = findActivity(activityId);
+  const s = data().sessions.find((x) => x.id === sessionId) ?? null;
   if (a) { a.session_id = sessionId; a.match_status = "confirmed"; }
   c.checkin = { ...c.checkin, state: "picked" };
   const pick: ApiCoachMessage = { ...BLANK, id: `c${t.length + 1}`, role: "athlete", kind: "pick", text: cand.label, status: "pending", activity_id: activityId, created_at: new Date().toISOString() };
   t.push(pick);
   // The pick looks wrong (a walk on a run day): Woo asks instead of judging. His question is the reply, so the pick is settled at once.
-  if (a?.sport_type === "Walk") {
-    const reason = `這趟 ${Math.round(a.moving_time_sec / 60)} 分鐘、心拍 ${a.avg_hr}，看起來像走路，不像 MP 7 km`;
+  const reason = a && s ? mismatchReason(a, s) : null;
+  if (a && s && reason) {
     pick.status = "sent";
-    t.push({ ...BLANK, id: `c${t.length + 1}`, role: "coach", kind: "ask", text: `${reason}。真的要算成 ${md(c.checkin.date)} 的 MP 嗎？`, activity_id: activityId, ask: { state: "open", kind: "mismatch", activity_id: activityId, session_id: sessionId, reason }, created_at: new Date().toISOString() });
+    postMismatchAsk(a, s, reason, "checkin");
     return { checkin: { ...c }, pick: { ...pick } };
   }
   setTimeout(() => {
-    t.push({ ...BLANK, id: `c${t.length + 1}`, role: "coach", kind: "ask", text: "收到，7.00 km 配到 MP 7 km。MP 段配速有守住，心拍第 5 km 到 166 超過上限。第 3 公里之後有撐住嗎？腿現在怎麼樣？", activity_id: activityId, ask: { state: "open", kind: "feel", activity_id: activityId, session_id: sessionId, reason: null }, created_at: new Date().toISOString() });
+    t.push({ ...BLANK, id: `c${t.length + 1}`, role: "coach", kind: "ask", text: "收到，7.00 km 配到 MP 7 km。MP 段配速有守住，心拍第 5 km 到 166 超過上限。第 3 公里之後有撐住嗎？腿現在怎麼樣？", activity_id: activityId, ask: { state: "open", kind: "feel", from: "checkin", activity_id: activityId, session_id: sessionId, reason: null }, created_at: new Date().toISOString() });
     pick.status = "sent";
+    // The run's record is in: the review of its week is regenerated (the "已取消" line demo).
+    if (a && s && isRun(a)) rerunWeek2(s);
   }, 2000);
   return { checkin: { ...c }, pick: { ...pick } };
 }
@@ -511,23 +611,34 @@ export function mockCoach(): CoachResponse {
 /** Demo mode: Woo answers after ~3 s, off-topic gets the one-liner. */
 export function mockPostCoachMessage(body: PostCoachMessageRequest): PostCoachMessageResponse {
   const t = threadData();
-  // 是／不是 on the mismatch question: 是 keeps the pick and Woo's feel question follows; 不是 is the check-in reset.
+  // 是／不是 on the mismatch question, same states as the api: the athlete's line is stored
+  // as sent. 是 after a chip → the earlier pick goes back to pending until Woo's feel
+  // question arrives; 是 after a report-page pick → the verdict is queued at once. 不是 after
+  // a chip → the check-in reset; after a report-page pick → the activity is only unassigned.
   if (body.answer_to && body.confirm_match !== undefined) {
     const ask = t.find((m) => m.id === body.answer_to && m.kind === "ask");
     if (!ask?.ask || ask.ask.kind !== "mismatch" || ask.ask.state !== "open") throw new Error("question not found");
     ask.ask = { ...ask.ask, state: "answered" };
-    const { activity_id, session_id } = ask.ask;
-    const m: ApiCoachMessage = { ...BLANK, id: `c${t.length + 1}`, role: "athlete", kind: "chat", text: body.text, status: body.confirm_match ? "pending" : "sent", activity_id, created_at: new Date().toISOString() };
+    const { activity_id, session_id, from } = ask.ask;
+    const a = findActivity(activity_id);
+    const s = data().sessions.find((x) => x.id === session_id) ?? null;
+    const m: ApiCoachMessage = { ...BLANK, id: `c${t.length + 1}`, role: "athlete", kind: "chat", text: body.text, status: "sent", activity_id, created_at: new Date().toISOString() };
     t.push(m);
     if (!body.confirm_match) {
-      const c = [...t].reverse().find((x) => x.kind === "checkin" && x.checkin?.state === "picked");
+      const c = from === "checkin" ? [...t].reverse().find((x) => x.kind === "checkin" && x.checkin?.state === "picked") : undefined;
       if (c) resetCheckin(c);
+      else if (a) unassign(a);
       return { message: { ...m } };
     }
+    if (from === "report") {
+      setTimeout(() => { if (a) judge(a, s); }, 3000);
+      return { message: { ...m } };
+    }
+    const pick = [...t].reverse().find((x) => x.kind === "pick" && x.activity_id === activity_id);
+    if (pick) pick.status = "pending";
     setTimeout(() => {
-      const a = findActivity(activity_id);
-      t.push({ ...BLANK, id: `c${t.length + 1}`, role: "coach", kind: "ask", text: `好，算 MP 7 km。${a ? `${Math.round(a.moving_time_sec / 60)} 分鐘、心拍 ${a.avg_hr}，` : ""}跟這堂課的強度差很多，是身體哪裡不舒服嗎？腿現在怎麼樣？`, activity_id, ask: { state: "open", kind: "feel", activity_id, session_id, reason: null }, created_at: new Date().toISOString() });
-      m.status = "sent";
+      t.push({ ...BLANK, id: `c${t.length + 1}`, role: "coach", kind: "ask", text: `好，算 ${s ? shortName(s) : "這堂"}。${a ? `${Math.round(a.moving_time_sec / 60)} 分鐘、心拍 ${a.avg_hr}，` : ""}跟這堂課的強度差很多，是身體哪裡不舒服嗎？腿現在怎麼樣？`, activity_id, ask: { state: "open", kind: "feel", from: "checkin", activity_id, session_id, reason: null }, created_at: new Date().toISOString() });
+      if (pick) pick.status = "sent";
     }, 2000);
     return { message: { ...m } };
   }

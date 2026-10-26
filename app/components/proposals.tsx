@@ -42,6 +42,8 @@ export function CoachProposals({ review, sessions, onChanged, embedded }: { revi
       onChanged();
     } catch (e) {
       setError(e instanceof ApiError ? (e.status === 409 ? "這堂課已經改過了，建議不再適用" : e.message) : "送出失敗，再試一次");
+      // 409: the server already decided or superseded it — reload so the buttons go away.
+      if (e instanceof ApiError && e.status === 409) onChanged();
     } finally {
       setBusy(null);
     }
@@ -49,8 +51,9 @@ export function CoachProposals({ review, sessions, onChanged, embedded }: { revi
 
   if (!review.summary && !pending.length) return null;
 
-  // Inside Woo's weekly message every proposal shows, with what was decided.
-  const shown = embedded ? review.adjustments : pending;
+  // Inside Woo's weekly message every proposal shows with what was decided, except the ones a
+  // regeneration cancelled: those are the "原本「…」的建議已取消" line under the message.
+  const shown = embedded ? review.adjustments.filter((a) => (state[a.index] ?? a.status) !== "superseded") : pending;
   if (embedded && !shown.length) return null;
 
   return (
@@ -102,14 +105,16 @@ export function CoachProposals({ review, sessions, onChanged, embedded }: { revi
   );
 }
 
-/** The session a change points at; after apply the old row is superseded, so try the new one too. A card about a session no longer in the plan still gets a type disc from its label. */
-function changeSession(c: ApiProposalChange, sessions: ApiSession[]): Pick<ApiSession, "label" | "type"> | null {
+/**
+ * The session a change points at; after apply the old row is superseded, so try the new one
+ * too. A card about a session no longer in the plan still gets its type disc from the label
+ * the api wrote ("Long 16 km" = the session label plus the distance; labelStyle looks the
+ * label up before falling back to the type).
+ */
+function changeSession(c: ApiProposalChange, sessions: ApiSession[]): ApiSession | Pick<ApiSession, "label" | "type"> | null {
   const s = sessions.find((x) => x.id === c.session_id || x.id === c.applied_session_id);
   if (s) return s;
-  if (!c.label) return null;
-  const l = c.label;
-  const type: ApiSession["type"] = /休息/.test(l) ? "rest" : /Long|長跑/.test(l) ? "long" : /MP|坡|快|Tempo/.test(l) ? "tempo" : "easy";
-  return { label: l.split(" ")[0], type };
+  return c.label ? { label: c.label.replace(/\s*[\d.]+\s*km$/, ""), type: "easy" } : null;
 }
 
 /** One change line: "日期 → 10/24 週六" stays short; everything else is "欄位：舊 → 新". */
@@ -147,6 +152,8 @@ export function ProposalCard({ proposal, sessions, onChanged }: { proposal: ApiP
       onChanged();
     } catch (e) {
       setError(e instanceof ApiError ? (e.status === 409 ? "課表在這之後改過了，這張提案不再適用" : e.message) : "送出失敗，再試一次");
+      // 409: already decided, or a session changed since — reload so the server's status replaces the buttons.
+      if (e instanceof ApiError && e.status === 409) onChanged();
     } finally {
       setBusy(false);
     }
@@ -157,7 +164,7 @@ export function ProposalCard({ proposal, sessions, onChanged }: { proposal: ApiP
       {st === "applied" ? <span className="decided applied">已採用</span> : st === "dismissed" ? <span className="decided dismissed">不採用</span> : null}
       {proposal.changes.map((c, i) => {
         const s = changeSession(c, sessions);
-        const head = [c.date ? mdDow(c.date) : null, c.label ?? (s ? shortName({ ...s, target_distance_m: null }) : null)].filter(Boolean).join(" · ") || "課表上的一堂課";
+        const head = [c.date ? mdDow(c.date) : null, c.label ?? (s && "target_distance_m" in s ? shortName(s) : null)].filter(Boolean).join(" · ") || "課表上的一堂課";
         return (
           <div key={i} className="proposal">
             <div className="who">
@@ -170,7 +177,7 @@ export function ProposalCard({ proposal, sessions, onChanged }: { proposal: ApiP
           </div>
         );
       })}
-      {proposal.flags.length ? <div className="flags">{proposal.flags.map((f, i) => <div key={i}>{f}</div>)}</div> : null}
+      {proposal.flags.length ? <div className="flags">{proposal.flags.join(" · ")}</div> : null}
       {proposal.why ? <div className="why">{proposal.why}</div> : null}
       {proposal.basis.length ? <div className="basis"><b>依據</b>{proposal.basis.map((b, i) => <span key={i}> · {b}</span>)}</div> : null}
       {st === "pending" ? (
