@@ -66,7 +66,7 @@ function AthleteMessage({ m, onRetry, onReset, busy }: { m: ApiCoachMessage; onR
         {m.rpe ? <span className="rpe-tag">RPE {m.rpe}</span> : null}
       </div>
       <span className="when">
-        {m.status === "failed" ? <>這次分析沒成功，再試一次{onRetry ? <> · <button type="button" onClick={onRetry}>再送一次</button></> : null}</> : timeJst(m.created_at)}
+        {m.status === "failed" ? <>這則沒送出，再試一次{onRetry ? <> · <button type="button" onClick={onRetry}>再送一次</button></> : null}</> : timeJst(m.created_at)}
         {onReset ? <> · <button type="button" onClick={onReset} disabled={busy}>選錯了 ›</button></> : null}
       </span>
     </div>
