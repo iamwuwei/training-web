@@ -354,6 +354,9 @@ export default function Report({ loaderData }: Route.ComponentProps) {
                 <div className="src"><span className="who"><CoachAvatar size={20} />Woo</span>{retryChip}</div>
                 {rereviewError ? <p className="hint" style={{ color: "var(--v-bad)" }}>{rereviewError}</p> : null}
               </>
+            ) : !r && view?.data.coach_checkin_open ? (
+              // Woo is waiting on an answer in the thread (how it felt, or whether this is really the run) — no verdict until then.
+              <div className="src"><span className="pending">Woo 在等你回</span><Link to="/coach" className="chip">去回他 ›</Link></div>
             ) : (
               <div className="src"><span className="pending">Woo 分析中，通常 10 秒到 1 分鐘</span></div>
             )}

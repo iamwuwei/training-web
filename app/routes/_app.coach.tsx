@@ -2,15 +2,15 @@ import { Fragment, useEffect, useState } from "react";
 import { Link, redirect, useRevalidator, useSearchParams } from "react-router";
 import type { Route } from "./+types/_app.coach";
 import { SendIcon } from "../components/icons";
-import { CoachProposals } from "../components/proposals";
+import { CoachProposals, ProposalCard } from "../components/proposals";
 import { CoachAvatar, VerdictTag, verdictBadge } from "../components/ui";
-import { ApiError, getActivities, getCoach, getWeekly, postCheckinPick, postCheckinReset, postCoachMessage, putCoachSeen } from "../lib/api";
+import { ApiError, getActivities, getCoach, getWeekly, postCheckinPick, postCheckinReset, postCoachMessage, postWeeklyAsk, putCoachSeen } from "../lib/api";
 import { hasSession } from "../lib/auth";
 import { md, mdDow, timeJst, toJstDate } from "../lib/date";
 import { km, pace } from "../lib/format";
 import { useReviewPolling } from "../lib/use-review-polling";
 import { usePlan } from "../lib/use-plan";
-import type { ApiActivity, ApiCoachMessage } from "../types/api";
+import type { ApiActivity, ApiCoachMessage, ApiWeeklyAsk } from "../types/api";
 
 // Woo's thread: weekly reviews (with their proposals), each run's verdict, his
 // post-run check-in (which activity → how did it feel → verdict), and the
@@ -95,6 +95,26 @@ function CheckinChips({ m, busy, onPick }: { m: ApiCoachMessage; busy: boolean; 
   );
 }
 
+/**
+ * The weekly review's question about a key session with no record ("是沒跑，還是還沒同步？"
+ * is in the message text): one block per session with the two answers, or what was said.
+ */
+function WeeklyAskBlock({ ask, busy, onAnswer }: { ask: ApiWeeklyAsk; busy: boolean; onAnswer: (answer: "synced" | "skipped") => void }) {
+  return (
+    <div className="ask-block">
+      <div className="q">{md(ask.date)} 的{ask.label}</div>
+      {ask.state === "open" ? (
+        <div className="chips-row">
+          <button type="button" className="chip" disabled={busy} onClick={() => onAnswer("synced")}>還沒同步</button>
+          <button type="button" className="chip" disabled={busy} onClick={() => onAnswer("skipped")}>沒跑</button>
+        </div>
+      ) : (
+        <div className="said">你說：{ask.state === "synced" ? "還沒同步" : "沒跑"}</div>
+      )}
+    </div>
+  );
+}
+
 function quoteLine(a: ApiActivity): string {
   const run = !a.sport_type || ["Run", "TrailRun", "VirtualRun"].includes(a.sport_type);
   return [`${md(toJstDate(a.start_time))} ${km(a.distance_m)} km`, run ? `${pace(a.avg_pace_sec_km)}/km` : null, a.avg_hr != null ? `心拍 ${a.avg_hr}` : null, a.review?.verdict ?? null].filter(Boolean).join(" · ");
@@ -116,10 +136,16 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
   // (a chat reply, Woo's question after a pick, or the verdict after an answer).
   const last = messages[messages.length - 1];
   const waiting = !!last && last.role === "athlete" && last.status === "pending";
-  const { timedOut, restart } = useReviewPolling(waiting);
 
-  // Woo's open question (the last message) turns the composer into the answer box.
-  const openAsk = last && last.kind === "ask" && last.ask?.state === "open" ? last : null;
+  // After 沒跑 the weekly review is regenerated in place a few seconds later: keep
+  // reloading until that message's `updated` stamp moves (or the polling gives up).
+  const [rerun, setRerun] = useState<{ id: string; at: string | null } | null>(null);
+  const rerunPending = !!rerun && (messages.find((m) => m.id === rerun.id)?.weekly?.updated?.at ?? null) === rerun.at;
+  const { timedOut, restart } = useReviewPolling(waiting || rerunPending);
+
+  // Woo's open "how did it feel?" (the last message) turns the composer into the answer
+  // box. A mismatch question is answered with its own chips instead.
+  const openAsk = last && last.kind === "ask" && last.ask?.state === "open" && last.ask.kind !== "mismatch" ? last : null;
 
   const count = messages.length;
   useEffect(() => { window.scrollTo({ top: document.documentElement.scrollHeight }); }, [count, waiting]);
@@ -182,6 +208,40 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
     }
   }
 
+  // 還沒同步 / 沒跑 on the weekly review's question.
+  async function answerWeeklyAsk(m: ApiCoachMessage, ask: ApiWeeklyAsk, answer: "synced" | "skipped") {
+    if (!m.weekly_review_id || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await postWeeklyAsk(m.weekly_review_id, ask.session_id, { answer });
+      if (answer === "skipped") setRerun({ id: m.id, at: m.weekly?.updated?.at ?? null });
+      await revalidator.revalidate();
+      restart();
+    } catch (e) {
+      setError(e instanceof ApiError ? (e.status === 409 ? "這個已經回過了" : e.message) : "送出失敗，再試一次");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // 是，就是這趟 / 不是，重選 on Woo's mismatch question. 是 → his feel question follows
+  // (polled for); 不是 → the pick is undone and a fresh check-in is posted at once.
+  async function confirmMatch(m: ApiCoachMessage, yes: boolean) {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await postCoachMessage({ text: yes ? "是" : "不是", answer_to: m.id, confirm_match: yes });
+      await revalidator.revalidate();
+      restart();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "送出失敗，再試一次");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const sessions = view?.data.sessions ?? [];
 
   // A long run farther than any run before it is worth a line of its own.
@@ -214,10 +274,33 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
             node = <AthleteMessage m={m} busy={busy} onReset={resettable ? () => void reset() : undefined} onRetry={m.kind === "chat" && !m.rpe ? () => void send(m.text, m.activity_id ?? undefined) : undefined} />;
           } else if (m.kind === "weekly") {
             const w = reviews.find((r) => r.id === m.weekly_review_id) ?? null;
+            const wm = m.weekly;
+            node = (
+              <CoachMessage m={m} badge={wm?.updated ? "check" : null}>
+                {wm?.updated ? <div className="updated"><span aria-hidden="true">⟳</span> 已更新 · {wm.updated.reason}</div> : null}
+                <p className="text">{m.text}</p>
+                {wm?.asks.map((ask) => <WeeklyAskBlock key={ask.session_id} ask={ask} busy={busy} onAnswer={(answer) => void answerWeeklyAsk(m, ask, answer)} />)}
+                {w ? <CoachProposals review={w} sessions={sessions} embedded onChanged={() => void revalidator.revalidate()} /> : null}
+                {wm?.cancelled.length ? <p className="cancelled">{wm.cancelled.map((c) => `原本「${c}」的建議已取消`).join("；")}</p> : null}
+              </CoachMessage>
+            );
+          } else if (m.kind === "ask" && m.ask?.kind === "mismatch") {
             node = (
               <CoachMessage m={m}>
                 <p className="text">{m.text}</p>
-                {w ? <CoachProposals review={w} sessions={sessions} embedded onChanged={() => void revalidator.revalidate()} /> : null}
+                {m.ask.state === "open" ? (
+                  <div className="chips-row" role="group" aria-label="是不是這趟">
+                    <button type="button" className="chip" disabled={busy} onClick={() => void confirmMatch(m, true)}>是，就是這趟</button>
+                    <button type="button" className="chip primary" disabled={busy} onClick={() => void confirmMatch(m, false)}>不是，重選</button>
+                  </div>
+                ) : null}
+              </CoachMessage>
+            );
+          } else if (m.kind === "chat" && m.proposal) {
+            node = (
+              <CoachMessage m={m}>
+                <p className="text">{m.text}</p>
+                <ProposalCard proposal={m.proposal} sessions={sessions} onChanged={() => void revalidator.revalidate()} />
               </CoachMessage>
             );
           } else if (m.kind === "review") {

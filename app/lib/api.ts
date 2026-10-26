@@ -19,6 +19,9 @@ import type {
   PostCheckinPickRequest,
   PostCheckinPickResponse,
   PostCheckinResetResponse,
+  PostProposalResponse,
+  PostWeeklyAskRequest,
+  PostWeeklyAskResponse,
   PostRoutineRequest,
   PostRoutineResponse,
   PutRoutineRequest,
@@ -29,7 +32,7 @@ import type {
 } from "../types/api";
 import { clearSession, getIdToken } from "./auth";
 import { config, useMock } from "./config";
-import { mockActivities, mockCoach, mockMe, mockPlan, mockPostAdjustment, mockPostCheckinPick, mockPostCheckinReset, mockPostRoutine, mockPutRoutine,
+import { mockActivities, mockCoach, mockMe, mockPlan, mockPostAdjustment, mockPostCheckinPick, mockPostCheckinReset, mockPostProposal, mockPostRoutine, mockPostWeeklyAsk, mockPutRoutine,
   mockPostCoachMessage,
   mockPutCoachSeen, mockPutMemo, mockPutSession, mockRereview, mockWeekly } from "../mock/mock";
 
@@ -117,6 +120,22 @@ export function postAdjustment(weeklyId: string, index: number, body: PostAdjust
   return request<PostAdjustmentResponse>(`/weekly/${weeklyId}/adjustments/${index}`, { method: "POST", body: JSON.stringify(body) });
 }
 
+/**
+ * Answer the weekly review's question about a key session without a record.
+ * synced: nothing changes; skipped: the session is marked skipped and the review is
+ * regenerated in place a few seconds later (poll getCoach for the message's `weekly.updated`).
+ */
+export function postWeeklyAsk(weeklyId: string, sessionId: string, body: PostWeeklyAskRequest): Promise<PostWeeklyAskResponse> {
+  if (useMock) return Promise.resolve(mockPostWeeklyAsk(weeklyId, sessionId, body));
+  return request<PostWeeklyAskResponse>(`/weekly/${weeklyId}/asks/${sessionId}`, { method: "POST", body: JSON.stringify(body) });
+}
+
+/** Apply (every change at once) or dismiss one of Woo's proposal cards in chat. Woo posts a confirmation line on apply; reload /plan and the thread afterwards. */
+export function postProposal(proposalId: string, action: "apply" | "dismiss"): Promise<PostProposalResponse> {
+  if (useMock) return Promise.resolve(mockPostProposal(proposalId, action));
+  return request<PostProposalResponse>(`/proposals/${proposalId}/${action}`, { method: "POST" });
+}
+
 /** The coach's thread, oldest first. */
 export function getCoach(): Promise<CoachResponse> {
   if (useMock) return Promise.resolve(mockCoach());
@@ -153,7 +172,11 @@ export function putCoachSeen(): Promise<PutCoachSeenResponse> {
   return request<PutCoachSeenResponse>("/coach/seen", { method: "PUT" });
 }
 
-/** Say something to the coach; the reply arrives later on getCoach (poll while the message is pending). */
+/**
+ * Say something to the coach; the reply arrives later on getCoach (poll while the message is pending).
+ * With `answer_to` it answers Woo's open question: the feel question (with `rpe`), or the
+ * mismatch question with `confirm_match` (true: the pick stands; false: same as a check-in reset).
+ */
 export function postCoachMessage(body: PostCoachMessageRequest): Promise<PostCoachMessageResponse> {
   if (useMock) return Promise.resolve(mockPostCoachMessage(body));
   return request<PostCoachMessageResponse>("/coach/messages", { method: "POST", body: JSON.stringify(body) });

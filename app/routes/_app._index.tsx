@@ -116,7 +116,7 @@ function TodayPost({ day, view, slow, onOpen }: { day: Day; view: PlanView; slow
         <div className="body">
           <div className="head">
             <b>{shortName(session)}</b>
-            {r?.verdict ? <VerdictTag verdict={r.verdict} /> : r?.failed ? <span className="pending failed">分析失敗，點進去重試</span> : view.data.coach_checkin_open ? <span className="pending">Woo 在等你回感受</span> : <span className="pending">{slow ? "分析比較久，點進去看" : "教練分析中…"}</span>}
+            {r?.verdict ? <VerdictTag verdict={r.verdict} /> : r?.failed ? <span className="pending failed">分析失敗，點進去重試</span> : view.data.coach_checkin_open ? <span className="pending">Woo 在等你回</span> : <span className="pending">{slow ? "分析比較久，點進去看" : "教練分析中…"}</span>}
           </div>
           <Stats a={activity} day={day} big />
           {line ? <div className="wooline"><CoachAvatar size={20} /><span>{line}</span></div> : null}

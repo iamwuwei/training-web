@@ -1,16 +1,18 @@
 import { useState } from "react";
-import type { ApiAdjustment, ApiSession, ApiWeeklyReview } from "../types/api";
-import { ApiError, postAdjustment } from "../lib/api";
+import type { ApiAdjustment, ApiProposal, ApiProposalChange, ApiSession, ApiWeeklyReview, ProposalField } from "../types/api";
+import { ApiError, postAdjustment, postProposal } from "../lib/api";
 import { md, mdDow } from "../lib/date";
 import { kmPlan, pace } from "../lib/format";
 import { shortName } from "../lib/labels";
 import { Avatar } from "./ui";
 
-const FIELD_NAMES: Record<ApiAdjustment["field"], string> = {
-  type: "課型", target_distance_m: "距離", target_pace_sec_km: "配速", scheduled_date: "日期", note: "備註",
+const FIELD_NAMES: Record<ProposalField, string> = {
+  type: "課型", target_distance_m: "距離", target_pace_sec_km: "配速", scheduled_date: "日期", note: "備註", skip: "整堂",
 };
 
-function fmt(field: ApiAdjustment["field"], v: string | number | null): string {
+const DECIDED: Record<ApiAdjustment["status"], string> = { pending: "", applied: "✓ 已採用", dismissed: "已略過", superseded: "已作廢" };
+
+function fmt(field: ProposalField, v: string | number | null): string {
   if (v == null || v === "") return "—";
   if (field === "target_distance_m" && typeof v === "number") return `${kmPlan(v)} km`;
   if (field === "target_pace_sec_km" && typeof v === "number") return `${pace(v)} /km`;
@@ -89,7 +91,7 @@ export function CoachProposals({ review, sessions, onChanged, embedded }: { revi
                   <button type="button" className="chip" disabled={busy != null} onClick={() => void decide(a, "dismiss")}>略過</button>
                 </>
               ) : (
-                <span className={`decided ${status}`}>{status === "applied" ? "✓ 已採用" : "已略過"}</span>
+                <span className={`decided ${status}`}>{DECIDED[status]}</span>
               )}
             </div>
           </div>
@@ -97,5 +99,87 @@ export function CoachProposals({ review, sessions, onChanged, embedded }: { revi
       })}
       {error ? <p className="hint" style={{ color: "var(--v-bad)" }}>{error}</p> : null}
     </section>
+  );
+}
+
+/** The session a change points at; after apply the old row is superseded, so try the new one too. A card about a session no longer in the plan still gets a type disc from its label. */
+function changeSession(c: ApiProposalChange, sessions: ApiSession[]): Pick<ApiSession, "label" | "type"> | null {
+  const s = sessions.find((x) => x.id === c.session_id || x.id === c.applied_session_id);
+  if (s) return s;
+  if (!c.label) return null;
+  const l = c.label;
+  const type: ApiSession["type"] = /休息/.test(l) ? "rest" : /Long|長跑/.test(l) ? "long" : /MP|坡|快|Tempo/.test(l) ? "tempo" : "easy";
+  return { label: l.split(" ")[0], type };
+}
+
+/** One change line: "日期 → 10/24 週六" stays short; everything else is "欄位：舊 → 新". */
+function ChangeLine({ c }: { c: ApiProposalChange }) {
+  if (c.field === "skip") return <div className="change">整堂改成休息</div>;
+  if (c.field === "scheduled_date") return <div className="change">日期 → <b>{fmt(c.field, c.new)}</b></div>;
+  if (c.field === "note") {
+    return (
+      <>
+        <div className="change">備註改成：<b>{fmt(c.field, c.new)}</b></div>
+        {c.old ? <div className="old">原本：{fmt(c.field, c.old)}</div> : null}
+      </>
+    );
+  }
+  return <div className="change">{FIELD_NAMES[c.field]}：<s>{fmt(c.field, c.old)}</s> → <b>{fmt(c.field, c.new)}</b></div>;
+}
+
+/**
+ * Woo's proposal card under a chat reply: one or more changes applied together, one
+ * line of why, the numbers he looked at, and amber flags for unusual changes. 採用
+ * applies the whole card; the thread is reloaded afterwards for his confirmation line.
+ */
+export function ProposalCard({ proposal, sessions, onChanged }: { proposal: ApiProposal; sessions: ApiSession[]; onChanged: () => void }) {
+  const [status, setStatus] = useState<ApiProposal["status"] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const st = status ?? proposal.status;
+
+  async function decide(action: "apply" | "dismiss") {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await postProposal(proposal.id, action);
+      setStatus(r.proposal.status);
+      onChanged();
+    } catch (e) {
+      setError(e instanceof ApiError ? (e.status === 409 ? "課表在這之後改過了，這張提案不再適用" : e.message) : "送出失敗，再試一次");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className={`proposal-card${st !== "pending" ? ` ${st}` : ""}`}>
+      {st === "applied" ? <span className="decided applied">已採用</span> : st === "dismissed" ? <span className="decided dismissed">不採用</span> : null}
+      {proposal.changes.map((c, i) => {
+        const s = changeSession(c, sessions);
+        const head = [c.date ? mdDow(c.date) : null, c.label ?? (s ? shortName({ ...s, target_distance_m: null }) : null)].filter(Boolean).join(" · ") || "課表上的一堂課";
+        return (
+          <div key={i} className="proposal">
+            <div className="who">
+              <Avatar session={s} />
+              <div className="txt">
+                <div className="t">{head}</div>
+                <ChangeLine c={c} />
+              </div>
+            </div>
+          </div>
+        );
+      })}
+      {proposal.flags.length ? <div className="flags">{proposal.flags.map((f, i) => <div key={i}>{f}</div>)}</div> : null}
+      {proposal.why ? <div className="why">{proposal.why}</div> : null}
+      {proposal.basis.length ? <div className="basis"><b>依據</b>{proposal.basis.map((b, i) => <span key={i}> · {b}</span>)}</div> : null}
+      {st === "pending" ? (
+        <div className="actions">
+          <button type="button" className="chip primary" disabled={busy} onClick={() => void decide("apply")}>{busy ? "…" : "採用"}</button>
+          <button type="button" className="chip" disabled={busy} onClick={() => void decide("dismiss")}>不採用</button>
+        </div>
+      ) : null}
+      {error ? <p className="hint" style={{ color: "var(--v-bad)" }}>{error}</p> : null}
+    </div>
   );
 }
