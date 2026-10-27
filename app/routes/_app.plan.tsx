@@ -1,20 +1,24 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Route } from "./+types/_app.plan";
-import { Link } from "react-router";
+import { Link, useNavigate, useRevalidator, useSearchParams } from "react-router";
+import { BackIcon } from "../components/icons";
 import { SessionSheet } from "../components/session-sheet";
-import { Avatar, Bar, TopBar } from "../components/ui";
+import { Avatar, Bar, CoachAvatar, TopBar } from "../components/ui";
+import { ApiError, postProposal } from "../lib/api";
 import { md, timeJst } from "../lib/date";
 import { duration, km, kmPlan, pace } from "../lib/format";
 import { isStrengthDay, rowName, sportName, verdictKind } from "../lib/labels";
-import { activityDate, isRunSport, type Day, type Week } from "../lib/plan";
+import { activityDate, buildPlanView, isRunSport, type Day, type Week } from "../lib/plan";
+import { buildPreview, type Preview } from "../lib/preview";
 import { NoPlan, usePlan } from "../lib/use-plan";
-import type { ApiActivity, ApiRoutine, ApiSession } from "../types/api";
+import { useProposal } from "../lib/use-proposal";
+import type { ApiActivity, ApiRoutine, ApiSession, PlanResponse } from "../types/api";
 
 export function meta(): Route.MetaDescriptors {
   return [{ title: "課表 · 富士山マラソン 2026" }];
 }
 
-function WeekBars({ weeks, selected, onSelect }: { weeks: Week[]; selected: number; onSelect: (weekNo: number) => void }) {
+function WeekBars({ weeks, selected, onSelect, changed }: { weeks: Week[]; selected: number; onSelect: (weekNo: number) => void; changed?: Set<number> }) {
   const max = Math.max(1, ...weeks.map((w) => w.plan_m));
   const isRace = (w: Week) => w.days.some((d) => d.session.type === "race");
   return (
@@ -42,7 +46,7 @@ function WeekBars({ weeks, selected, onSelect }: { weeks: Week[]; selected: numb
       </div>
       <div className="labels" aria-hidden="true">
         {weeks.map((w) => (
-          <span key={w.week_no} className={[isRace(w) ? "race" : "", w.isCurrent ? "cur" : "", w.week_no === selected ? "on" : ""].join(" ")}>
+          <span key={w.week_no} className={[isRace(w) ? "race" : "", w.isCurrent ? "cur" : "", w.week_no === selected ? "on" : "", changed?.has(w.week_no) ? "changed" : ""].join(" ")}>
             {isRace(w) ? "42" : w.week_no}
           </span>
         ))}
@@ -60,7 +64,7 @@ function firstSentence(t: string | null): string | null {
 
 const DOW = ["日", "一", "二", "三", "四", "五", "六"];
 
-function DayRow({ day, isToday, onOpen, routine }: { day: Day; isToday: boolean; onOpen: (s: ApiSession) => void; routine: ApiRoutine | null }) {
+function DayRow({ day, isToday, onOpen, routine, was, preview }: { day: Day; isToday: boolean; onOpen: (s: ApiSession) => void; routine: ApiRoutine | null; was?: string; preview?: boolean }) {
   const { session: s, activity: a, status } = day;
   const date = new Date(`${s.scheduled_date}T00:00:00Z`);
   const rest = s.type === "rest";
@@ -91,13 +95,14 @@ function DayRow({ day, isToday, onOpen, routine }: { day: Day; isToday: boolean;
     <>
       <div className="d"><span className="dow">{DOW[date.getUTCDay()]}</span><span className="num dom">{date.getUTCDate()}</span></div>
       <Avatar session={s} sport={a?.sport_type} />
-      <div className="n"><div className={`t${rest && !strength ? " rest" : ""}`}>{rowName(s)}</div>{sub ? <div className="sub">{sub}</div> : null}</div>
+      <div className="n"><div className={`t${rest && !strength ? " rest" : ""}`}>{rowName(s)}</div>{!was && sub ? <div className="sub">{sub}</div> : null}</div>
       <div className="r">{right}{dot ? <i className={`dot ${dot}`} /> : null}</div>
+      {was ? <div className="was">{was}</div> : null}
     </>
   );
-  const cls = `dayrow${isToday ? " today" : ""}${status === "skipped" ? " skipped" : ""}`;
+  const cls = `dayrow${isToday ? " today" : ""}${status === "skipped" ? " skipped" : ""}${was ? " changed" : ""}`;
   if (a) return <Link to={`/activities/${a.id}`} className={cls}>{inner}</Link>;
-  if (rest && !s.note && !s.brief) return <div className={cls}>{inner}</div>;
+  if (preview || (rest && !s.note && !s.brief)) return <div className={cls}>{inner}</div>; // a preview row carries its "原本" line instead of a sheet
   return <button type="button" className={cls} onClick={() => onOpen(s)}>{inner}</button>;
 }
 
@@ -136,23 +141,87 @@ function remaining(week: Week): string {
   return left.length ? `這週還剩 ${left.join("、")}` : "這週的課都跑完了";
 }
 
+// /plan?proposal=<id>: the plan as it would be after one of Woo's cards (本地疊上去，不打新 API),
+// with 採用／不用 in the top bar. Anything else is the plain plan.
 export default function Plan() {
-  const view = usePlan();
+  const base = usePlan();
+  const proposalId = useSearchParams()[0].get("proposal");
+  const { proposal, ready } = useProposal(proposalId);
+  const navigate = useNavigate();
+  const revalidator = useRevalidator();
   const [picked, setPicked] = useState<number | null>(null);
   const [open, setOpen] = useState<ApiSession | null>(null);
-  if (!view) return <NoPlan title="課表" />;
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [noticeGone, setNoticeGone] = useState<string | null>(null);
+  // 採用 went through: until the reloaded plan is in, keep showing the plan the athlete just saw
+  // (without markers) — laying the card over the already-changed plan would add a session twice.
+  const [applied, setApplied] = useState<{ id: string; data: PlanResponse } | null>(null);
+  const done = !!applied && applied.id === proposalId;
+
+  // The card still waiting for an answer is previewed; one that was decided elsewhere (or is gone)
+  // gets the plain plan and a grey line for 3 seconds.
+  const pending = !!proposal && proposal.status === "pending" && !done;
+  const preview: Preview | null = useMemo(() => (base && proposal && pending ? buildPreview(base.data, proposal) : null), [base, proposal, pending]);
+  const view = useMemo(() => (done && base ? buildPlanView(applied.data, base.today) : preview && base ? buildPlanView(preview.data, base.today) : base), [done, applied, preview, base]);
+  const notice = !!proposalId && ready && !preview && !done;
+  useEffect(() => {
+    if (!notice) return;
+    const t = window.setTimeout(() => setNoticeGone(proposalId), 3000);
+    return () => window.clearTimeout(t);
+  }, [notice, proposalId]);
+
+  if (!view || !base) return <NoPlan title="課表" />;
   const { weeks, currentWeek, today } = view;
   const current = currentWeek?.week_no ?? weeks.find((w) => w.isFuture)?.week_no ?? weeks[weeks.length - 1]?.week_no;
-  const selected = picked ?? current;
+  const firstChanged = preview ? weeks.find((w) => preview.changedWeeks.has(w.week_no))?.week_no : undefined;
+  const selected = picked ?? firstChanged ?? current;
   const idx = weeks.findIndex((w) => w.week_no === selected);
   const week = weeks[idx];
   const go = (i: number) => (i >= 0 && i < weeks.length ? () => setPicked(weeks[i].week_no) : undefined);
+  const changedList = preview ? [...preview.changedWeeks].sort((a, b) => a - b) : [];
+  const weekAfter = (n: number) => `第 ${n} 週 ${kmPlan(weeks.find((w) => w.week_no === n)?.plan_m ?? 0)} km`;
+
+  // 採用 stays on the plan (now the new one); 不用 = this card is not taken, back to the thread.
+  async function decide(action: "apply" | "dismiss") {
+    if (!proposal) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await postProposal(proposal.id, action);
+      if (action === "apply") {
+        if (preview) setApplied({ id: proposal.id, data: preview.data });
+        setPicked(null);
+        await revalidator.revalidate();
+        void navigate("/plan", { replace: true });
+      } else void navigate("/coach");
+    } catch (e) {
+      // 409: the plan changed since — the card is stale now, the thread says so.
+      if (e instanceof ApiError && e.status === 409) void navigate("/coach");
+      else setError(e instanceof ApiError ? e.message : "送出失敗，再試一次");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <>
-      <TopBar title="課表" aside={currentWeek?.phase ? currentWeek.phase : `${weeks.length} 週`} />
+      {preview ? (
+        <header className="plan-preview-bar">
+          <Link to="/coach" className="back" aria-label="返回教練"><BackIcon /></Link>
+          <CoachAvatar size={24} />
+          <div className="mid">
+            <div className="t">預覽 Woo 的提案</div>
+            <div className="s">{changedList.length ? `第 ${changedList.join("、")} 週會改 · 還沒生效` : "還沒生效"}</div>
+          </div>
+          <button type="button" className="chip primary" disabled={busy} onClick={() => void decide("apply")}>採用</button>
+          <button type="button" className="chip" disabled={busy} onClick={() => void decide("dismiss")}>不用</button>
+        </header>
+      ) : <TopBar title="課表" aside={currentWeek?.phase ? currentWeek.phase : `${weeks.length} 週`} />}
       <main>
-        <WeekBars weeks={weeks} selected={selected} onSelect={setPicked} />
+        {notice && noticeGone !== proposalId ? <p className="plan-notice" role="status">這張提案已經處理過了</p> : null}
+        {error ? <p className="plan-notice" role="alert" style={{ color: "var(--v-bad)" }}>{error}</p> : null}
+        <WeekBars weeks={weeks} selected={selected} onSelect={setPicked} changed={preview?.changedWeeks} />
         {week ? (
           <>
             <div className="week-head2">
@@ -161,17 +230,27 @@ export default function Plan() {
                 <div className="line">
                   <span className="title">第 {week.week_no} 週 {week.isCurrent ? <span className="pill">本週</span> : current != null && current !== week.week_no ? <button type="button" className="back-today" onClick={() => setPicked(current)}>回本週</button> : null}</span>
                   <span className="kms">
+                    {preview && preview.changedWeeks.has(week.week_no) && preview.beforeM.get(week.week_no) !== week.plan_m ? <span className="was"><s>{kmPlan(preview.beforeM.get(week.week_no))}</s> →</span> : null}
                     {week.isFuture ? <><b className="num plan">{kmPlan(week.plan_m)}</b><span className="of"> km</span></> : <><b className={`num${week.isComplete ? " done" : ""}`}>{km(week.actual_m)}</b><span className="of"> / {kmPlan(week.plan_m)} km</span></>}
                   </span>
                 </div>
-                <div className="sub">{md(week.week_start)}–{md(week.week_end)} · {week.isFuture ? (week.focus ?? "") : remaining(week)}</div>
+                {preview && preview.focusWas.has(week.week_no) ? (
+                  <div className="sub">{md(week.week_start)}–{md(week.week_end)} · <span className="was"><s>{preview.focusWas.get(week.week_no)}</s></span><br /><span className="now">{week.focus}</span></div>
+                ) : <div className="sub">{md(week.week_start)}–{md(week.week_end)} · {week.isFuture ? (week.focus ?? "") : remaining(week)}</div>}
               </div>
               <button type="button" className="step" onClick={go(idx + 1)} disabled={!go(idx + 1)} aria-label="下一週">›</button>
             </div>
             {!week.isFuture ? <Bar value={week.actual_m} max={week.plan_m} tone={week.isComplete ? "good" : "ink"} /> : null}
             <div className="dayrows">
-              {week.days.map((d) => <DayRow key={d.session.id} day={d} isToday={d.session.scheduled_date === today} onOpen={setOpen} routine={view.routineBySession.get(d.session.id) ?? null} />)}
+              {week.days.map((d) => <DayRow key={d.session.id} day={d} isToday={d.session.scheduled_date === today} onOpen={setOpen} routine={view.routineBySession.get(d.session.id) ?? null} was={preview?.was.get(d.session.id)} preview={!!preview} />)}
             </div>
+            {preview ? (
+              <p className="plan-note">
+                琥珀線的列是這張提案會改的，下面一行是改前。
+                {changedList.filter((n) => n !== week.week_no).length ? `${changedList.filter((n) => n !== week.week_no).map((n) => `第 ${n} 週也有改${n < week.week_no ? "（‹）" : "（›）"}`).join("；")}。` : ""}
+                採用後{changedList.map(weekAfter).join("、")}。
+              </p>
+            ) : null}
             <ExtraRows week={week} unassigned={view.unassigned} />
           </>
         ) : null}

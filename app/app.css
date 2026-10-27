@@ -690,3 +690,108 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 .proposal-card > .decided { position: absolute; top: 12px; right: 12px; font-size: 12px; font-weight: 600; color: var(--ink-3); }
 .proposal-card > .decided.applied { color: var(--v-good); }
 .proposal-card.applied .proposal:first-child .t, .proposal-card.dismissed .proposal:first-child .t { padding-right: 56px; }
+
+/* ---- Woo replans the whole plan: multi-week proposal cards, A／B, 記下來, the 影響 / 依據 blocks ---- */
+.collapse { display: grid; grid-template-rows: 0fr; opacity: 0; visibility: hidden; transition: grid-template-rows 0.3s ease, opacity 0.2s ease, margin-top 0.3s ease, visibility 0s 0.3s; }
+.collapse.open { grid-template-rows: 1fr; opacity: 1; visibility: visible; transition: grid-template-rows 0.3s ease, opacity 0.2s ease 0.1s, margin-top 0.3s ease, visibility 0s; }
+.collapse > div { min-height: 0; overflow: hidden; }
+.proposal-card:not(.multi) > .collapse:not(.open) { margin-top: -8px; } /* cancels the card's row gap while shut */
+.proposal-card:not(.multi) .impact, .proposal-card:not(.multi) .fold-wrap, .proposal-card:not(.multi) .conflict { margin-left: 52px; }
+.proposal-card .basis .toggle, .proposal-card .fold { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; width: 100%; text-align: left; font-size: 12px; line-height: 1.5; color: var(--ink-3); border-radius: 0; }
+.proposal-card .basis .toggle b, .proposal-card .fold b { font-weight: 700; color: var(--ink-2); }
+.proposal-card .basis .more, .proposal-card .fold .more { flex: none; }
+.proposal-card .basis .what { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.proposal-card .basis p { margin: 4px 0 0; font-size: 13px; line-height: 1.55; color: var(--ink-2); }
+.proposal-card .impact { padding-top: 10px; }
+.proposal-card .impact h4 { margin: 0; font-size: 12px; font-weight: 700; color: var(--ink-2); letter-spacing: 0.04em; }
+.proposal-card .impact .row { display: grid; grid-template-columns: 46px minmax(0, 1fr); gap: 8px; margin-top: 6px; font-size: 13px; line-height: 1.55; }
+.proposal-card .impact .k { padding-top: 1px; font-size: 12px; font-weight: 700; color: var(--ink-2); }
+.proposal .op { display: inline-block; margin-left: 6px; padding: 0 5px; border: 1px solid var(--ink); border-radius: 4px; font-size: 11px; font-weight: 700; color: var(--ink); line-height: 16px; vertical-align: 1px; }
+.proposal.removed .change, .proposal.removed .change s { color: var(--ink-3); font-weight: 400; }
+.proposal .flag { margin-top: 3px; font-size: 13px; font-weight: 700; line-height: 1.45; color: var(--v-warn); }
+.proposal .reason { margin-top: 2px; font-size: 13px; line-height: 1.5; color: var(--ink-2); }
+.proposal-card .conflict { padding-top: 10px; font-size: 13px; font-weight: 700; line-height: 1.45; color: var(--v-warn); }
+.proposal-card .conflict .why-stale { margin-top: 2px; font-weight: 400; color: var(--ink-2); }
+.proposal-card > .decided.stale { color: var(--v-warn); }
+.proposal-card > .decided.applied { animation: pop 0.25s ease-out; transform-origin: right center; }
+.proposal-card .actions .preview { margin-left: auto; align-self: center; font-size: 13px; color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; }
+
+/* multi-week: full width (flush with the avatar), week groups, two-level rows */
+.proposal-card.multi { display: block; margin-left: -52px; padding: 2px 12px 12px; }
+.proposal-card.multi .why, .proposal-card.multi .basis, .proposal-card.multi .flags, .proposal-card.multi .actions, .proposal-card.multi .hint { margin-left: 0; }
+.proposal-card.multi .wk { padding-top: 10px; }
+.proposal-card.multi .wk + .wk, .proposal-card.multi .wk + .why, .proposal-card.multi .wk + .flags { margin-top: 10px; border-top: 1px solid var(--line); }
+.proposal-card .wk-h { font-size: 13px; font-weight: 700; }
+.proposal-card .wk-h span { font-weight: 400; color: var(--ink-3); }
+.proposal-card .wk-focus { margin-top: 2px; font-size: 12px; line-height: 1.5; color: var(--ink-3); }
+.proposal-card .wk-focus b { font-weight: 600; color: var(--ink-2); }
+.proposal-card.multi .rows .proposal { gap: 0; padding: 10px 0; border-top: 1px solid var(--line); }
+.proposal-card.multi .rows .proposal:first-child { border-top: none; }
+.proposal-card.multi .proposal .who { grid-template-columns: 36px minmax(0, 1fr); }
+.proposal-card.multi .proposal .txt { gap: 0; }
+.proposal-card.multi .flags { margin-top: 10px; }
+.proposal-card.multi .why { margin-top: 10px; }
+.proposal-card.multi .impact { margin-top: 8px; border-top: 1px solid var(--line); }
+.proposal-card.multi .basis, .proposal-card.multi .fold-wrap { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.proposal-card.multi .fold-wrap .basis, .proposal-card.multi .fold-wrap .impact { margin-top: 8px; padding-top: 0; border-top: none; }
+.proposal-card.multi .fold-wrap .basis { padding-top: 8px; }
+.proposal-card.multi .conflict { margin-top: 10px; border-top: 1px solid var(--line); }
+.proposal-card.multi .actions { margin-top: 12px; }
+.proposal-card.multi .hint { margin-top: 8px; }
+.proposal-card.multi.applied .wk:first-child .wk-h, .proposal-card.multi.dismissed .wk:first-child .wk-h, .proposal-card.multi.stale .wk:first-child .wk-h { padding-right: 64px; }
+
+/* A／B */
+.proposal-card .opt-head { display: flex; align-items: center; gap: 8px; padding: 10px 0 8px; border-bottom: 1px solid var(--line); }
+.proposal-card .opt-head .letter { font-family: var(--font-num); font-size: 22px; font-weight: 700; line-height: 1; }
+.proposal-card .opt-head .title { min-width: 0; font-size: 15px; font-weight: 700; }
+.proposal-card .opt-head .rec { flex: none; padding: 1px 7px; border-radius: 999px; background: var(--chip); font-size: 11px; color: var(--ink-2); }
+.proposal-card .opt-head .gone { margin-left: auto; flex: none; font-size: 12px; font-weight: 600; color: var(--ink-3); }
+.proposal-card.applied .opt-head, .proposal-card.stale .opt-head, .proposal-card.dismissed .opt-head { padding-right: 64px; }
+.proposal-card.superseded { opacity: 0.55; transition: opacity 0.3s ease; }
+.proposal-card.superseded .opt-head { border-bottom: none; padding-bottom: 0; }
+.proposal-card .folded-note { display: block; margin-top: 4px; font-size: 12px; color: var(--ink-3); text-align: left; border-radius: 0; }
+.proposal-card.superseded .opt-head + .folded-note + .collapse.open { margin-top: 8px; }
+
+/* 記下來 */
+.memo-card { position: relative; margin: 8px 0 0 -52px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 14px; }
+.memo-card.dismissed { opacity: 0.55; }
+.memo-card .who { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 12px; align-items: start; }
+.memo-card .avatar { width: 36px; height: 36px; font-size: 14px; }
+.memo-card .t { font-size: 15px; font-weight: 600; line-height: 1.4; }
+.memo-card .s { margin-top: 2px; font-size: 13px; color: var(--ink-3); }
+.memo-card .decided { position: absolute; top: 12px; right: 12px; font-size: 12px; font-weight: 600; color: var(--v-good); animation: pop 0.25s ease-out; transform-origin: right center; }
+.memo-card .actions { display: flex; gap: 8px; margin: 8px 0 0 48px; }
+.memo-card .hint { margin: 6px 0 0 48px; font-size: 12px; }
+.memo-card.dismissed .actions { display: none; }
+@media (prefers-reduced-motion: reduce) { .collapse, .collapse.open, .proposal-card.superseded { transition: none; } .proposal-card > .decided.applied, .memo-card .decided { animation: none; } }
+
+/* ---- 課表預覽: /plan?proposal=<id> (the title bar with a 2px amber underline is the whole marker) ---- */
+.plan-preview-bar { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 10px; padding: calc(10px + env(safe-area-inset-top)) 20px 10px; background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: saturate(180%) blur(12px); -webkit-backdrop-filter: saturate(180%) blur(12px); border-bottom: 2px solid var(--v-warn); }
+.plan-preview-bar .back { display: flex; align-items: center; justify-content: center; flex: none; width: 32px; height: 44px; margin-left: -8px; }
+.plan-preview-bar .mid { flex: 1 1 auto; min-width: 0; line-height: 1.2; }
+.plan-preview-bar .t { font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.plan-preview-bar .s { font-size: 12px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.plan-preview-bar .chip { height: 32px; padding: 0 14px; font-size: 13px; }
+.weekbars .labels .changed { color: var(--v-warn); font-weight: 700; }
+.week-head2 .kms .was { margin-right: 4px; font-size: 13px; color: var(--ink-3); }
+.week-head2 .sub .was { color: var(--ink-3); }
+.week-head2 .sub .now { color: var(--ink-2); font-weight: 600; }
+.dayrow.changed { margin: 0 -20px; padding: 0 20px 0 17px; width: calc(100% + 40px); border-left: 3px solid var(--v-warn); }
+.dayrow > .was { grid-column: 3 / -1; font-size: 12px; line-height: 1.35; color: var(--ink-3); margin-top: -4px; }
+.dayrow.changed { height: auto; min-height: 56px; grid-template-rows: minmax(44px, auto) auto; align-content: center; padding-top: 6px; padding-bottom: 8px; row-gap: 0; } /* the 原本 line gets its own full-width line */
+.dayrow.changed .r { max-width: 34vw; }
+.plan-note { margin: 12px 0 0; font-size: 12px; line-height: 1.5; color: var(--ink-3); }
+.plan-notice { margin: 8px 0 0; font-size: 12px; color: var(--ink-3); }
+
+/* ---- 設定: Woo 記住的限制 ---- */
+.constraint-wrap { display: grid; grid-template-rows: 1fr; transition: grid-template-rows 0.2s ease, opacity 0.2s ease; }
+.constraint-wrap.gone { grid-template-rows: 0fr; opacity: 0; }
+.constraint-wrap > .constraint { min-height: 0; overflow: hidden; }
+.constraint { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.constraint .t { font-size: 15px; font-weight: 600; }
+.constraint .meta { margin-top: 2px; font-size: 12px; color: var(--ink-3); }
+.constraint .meta.expired { color: var(--ink-3); font-style: normal; }
+.constraint .del { min-height: 44px; padding: 6px 0 6px 10px; font-size: 13px; color: var(--ink-2); }
+.constraints .empty-line { margin: 8px 0 0; font-size: 13px; color: var(--ink-3); }
+.constraints .note-line { margin: 8px 0 0; font-size: 12px; line-height: 1.5; color: var(--ink-3); }
+@media (prefers-reduced-motion: reduce) { .constraint-wrap { transition: none; } }

@@ -3,10 +3,11 @@
 // results become an activity + manual review on the same local date.
 
 import plans from "./plans.json";
-import type { ActivitiesResponse, ApiActivity, ApiCoachMessage, ApiProposal, ApiRoutine, ApiSession, ApiSplit, ApiWeek, ApiWeeklyReview, CoachResponse, PostCoachMessageRequest, PostCoachMessageResponse,
+import type { ActivitiesResponse, ApiActivity, ApiCoachMessage, ApiConstraint, ApiProposal, ApiProposalChange, ApiRoutine, ApiSession, ApiSplit, ApiWeek, ApiWeeklyReview, CoachResponse, PostCoachMessageRequest, PostCoachMessageResponse,
   PostCheckinPickRequest,
   PostCheckinPickResponse,
   PostCheckinResetResponse,
+  PostConstraintResponse,
   PostProposalResponse,
   PostRoutineRequest,
   PostRoutineResponse,
@@ -15,9 +16,10 @@ import type { ActivitiesResponse, ApiActivity, ApiCoachMessage, ApiProposal, Api
   PutRoutineRequest,
   PutRoutineResponse,
   PutCoachSeenResponse, MatchStatus, MeResponse, PlanResponse, PostAdjustmentRequest, PostAdjustmentResponse, PutMemoRequest, PutMemoResponse, PutSessionRequest, PutSessionResponse, RereviewResponse, Verdict, WeeklyResponse } from "../types/api";
-import { md, mdDow, todayJst } from "../lib/date";
-import { kmPlan } from "../lib/format";
-import { shortName } from "../lib/labels";
+import { ApiError } from "../lib/api";
+import { addDays, md, mdDow, todayJst } from "../lib/date";
+import { kmPlan, pace } from "../lib/format";
+import { shortName, typeLabel, typeName } from "../lib/labels";
 const MOCK_USER_ID = "7d1c3a0e-4f7b-4d2e-9c1a-5b8e2f6a1c01"; // ww in training-api seed
 
 interface SeedSession {
@@ -152,6 +154,7 @@ function build(): PlanResponse {
     activities,
     unassigned,
     routines: [],
+    constraints: [],
   };
 }
 
@@ -216,6 +219,7 @@ export function mockPlan(): PlanResponse {
     activities: [...d.activities, ...d.unassigned].filter((a) => a.session_id),
     unassigned: d.unassigned.filter((a) => !a.session_id),
     routines: routines.map((r) => ({ ...r, items: r.items.map((i) => ({ ...i })) })),
+    constraints: constraints.filter((c) => c.status === "active").map((c) => ({ ...c })),
   };
 }
 
@@ -394,41 +398,225 @@ export function mockPostAdjustment(weeklyId: string, index: number, body: PostAd
   return { review: { ...w, adjustments: w.adjustments.map((a) => ({ ...a })) } };
 }
 
+// ---- 記下來 constraints (demo) ----------------------------------------------------
+// Three active ones (the settings page: one has expired) and three Woo proposes in the thread.
+const at = (iso: string) => new Date(iso).toISOString();
+const TODAY = todayJst();
+const todayAt = (hm: string) => new Date(`${TODAY}T${hm}:00+09:00`).toISOString();
+const constraints: ApiConstraint[] = [
+  { id: "k-mon", text: "週一固定休息，不排課", start_date: null, end_date: null, kind: "fixed_day", weekday: 1, source_message_id: null, status: "active", created_at: at("2026-10-05T10:00:00+09:00") },
+  { id: "k-trip", text: "11/3〜4 出差", start_date: "2026-11-03", end_date: "2026-11-04", kind: "period", weekday: null, source_message_id: null, status: "active", created_at: at("2026-10-09T21:30:00+09:00") },
+  { id: "k-ankle", text: "左腳踝輕傷", start_date: "2026-10-01", end_date: "2026-10-10", kind: "period", weekday: null, source_message_id: null, status: "active", created_at: at("2026-10-02T08:00:00+09:00") },
+  { id: "k-abroad", text: "11/21〜23 出國", start_date: "2026-11-21", end_date: "2026-11-23", kind: "period", weekday: null, source_message_id: "c-rp-a1", status: "proposed", created_at: todayAt("06:31") },
+  { id: "k-abroad-ab", text: "11/21〜23 出國", start_date: "2026-11-21", end_date: "2026-11-23", kind: "period", weekday: null, source_message_id: "c-rp-a3", status: "proposed", created_at: todayAt("06:41") },
+  { id: "k-knee", text: "左膝不舒服", start_date: null, end_date: "2026-10-31", kind: "period", weekday: null, source_message_id: "c-rp-a4", status: "proposed", created_at: todayAt("06:51") },
+  { id: "k-wed", text: "週三肌力不能動", start_date: null, end_date: null, kind: "fixed_day", weekday: 3, source_message_id: "c-rp-a5", status: "proposed", created_at: todayAt("06:53") },
+];
+
+/** Demo: 記下來 → active, 不用 / 刪除 → dismissed. Deciding twice is a 409, like the api. */
+export function mockPostConstraint(constraintId: string, action: "accept" | "dismiss"): PostConstraintResponse {
+  const c = constraints.find((x) => x.id === constraintId);
+  if (!c) throw new ApiError(404, "not found");
+  if (c.status === "dismissed" || (c.status === "active" && action === "accept")) throw new ApiError(409, "already decided");
+  c.status = action === "accept" ? "active" : "dismissed";
+  return { constraint: { ...c } };
+}
+
 // ---- Woo's proposal cards in chat (demo) --------------------------------------
-// Two cards: swap the long run and the rest day (two changes, applied together), and a
-// flagged one (the long run jumps well past the longest run so far).
+// Single-change cards: swap the long run and the rest day (two changes, applied together), and a
+// flagged one. Multi-week cards: 11/21〜23 abroad (pending, applied-style, stale), an A／B pair, and
+// the card Woo sends after 請 Woo 重看. Applying changes the demo plan for real; two cards that touch
+// the same session make the second one a 409 (the card turns stale).
+const chg = (o: Pick<ApiProposalChange, "op" | "label" | "date"> & Partial<ApiProposalChange>): ApiProposalChange =>
+  ({ session_id: null, old: null, new: null, reason: null, flags: [], applied_session_id: null, ...o });
+
+const BASIS_TEXT = "目標 4:45（6:45/km）。目前最長 16.2 km（10/25）、週跑量 36 km，兩次 Easy 心拍 142〜149 在範圍內，關卡 1（11/15 的 26 km）還沒到。原則：32 km 是關卡 2 唯一一次測試，不縮、只移；長跑之間至少隔 6 天；賽前 14 天內不排 25 km 以上。";
+const BASIS = ["目標 4:45", "最長 16.2 km", "週 36 km", "關卡 1 未測"];
+const ABROAD_WEEKS = [
+  { week_no: 7, phase: null, focus: "出國前收尾，峰值移到下週" },
+  { week_no: 8, phase: null, focus: "★ 峰值 32 km（11/25 週三），週末 16 km 收尾" },
+];
+const ABROAD_IMPACT = {
+  keep: "11/22 你在國外，32 km 跑不到，關卡 2 測不到；比賽配速只能用保守的 7:00，4:45 會變 4:55 左右。",
+  change: "峰值從 11/22 後移到 11/25，離比賽 18 天，恢復夠。第 7 週 60 → 28 km，第 8 週 42 → 58 km；11/29 的 16 km 讓腿在 taper 前收回來。",
+  risk: "回程晚或 11/24 腿還重，32 km 再延到 11/26、11/29 改 12 km。11/25 跑不到 28 km 就當關卡 2 沒過，比賽照 7:00 起跑。",
+};
+const abroadChanges = (): ApiProposalChange[] => [
+  chg({ op: "change", session_id: "s-2026-11-22", field: "scheduled_date", old: "2026-11-22", new: "2026-11-25", label: "Peak Long 32 km", date: "2026-11-22", flags: ["落到第 8 週：那週 42 → 58 km（+38%），減量週變峰值週"] }),
+  chg({ op: "add", label: "休息", date: "2026-11-22", new_session: { scheduled_date: "2026-11-22", type: "rest", label: "休息", target_distance_m: 0, target_pace_sec_km: null, note: "出國" }, reason: "你 11/21〜23 不在，這天空出來。" }),
+  chg({ op: "remove", session_id: "s-2026-11-25", label: "Easy 7 km", date: "2026-11-25", reason: "這天改跑 32 km，不另外加課。" }),
+  chg({ op: "change", session_id: "s-2026-11-26", field: "skip", label: "Recovery 5 km", date: "2026-11-26", reason: "32 km 隔天，肌力也不做。" }),
+  chg({ op: "change", session_id: "s-2026-11-27", field: "target_pace_sec_km", old: 450, new: 465, label: "Easy 5 km", date: "2026-11-27" }),
+  chg({ op: "change", session_id: "s-2026-11-29", field: "target_distance_m", old: 20000, new: 16000, label: "Long 20 km", date: "2026-11-29", reason: "離 32 km 只隔 4 天，20 km 會疊進 taper。" }),
+];
+
+const card = (o: Pick<ApiProposal, "id" | "message_id" | "changes" | "impact" | "basis_text" | "basis"> & Partial<ApiProposal>): ApiProposal =>
+  ({ source: "chat", why: null, weeks: [], flags: [], group_id: null, option: null, status: "pending", stale_reason: null, created_at: "", decided_at: null, ...o });
+
 const proposals: ApiProposal[] = [
-  { id: "p-swap", source: "chat", message_id: "c-prop-1", status: "pending", created_at: "", decided_at: null,
+  card({ id: "p-swap", message_id: "c-prop-1",
     changes: [
-      { session_id: "s-2026-10-25", field: "scheduled_date", old: "2026-10-25", new: "2026-10-24", label: "Long 16 km", date: "2026-10-25", applied_session_id: null },
-      { session_id: "s-2026-10-24", field: "scheduled_date", old: "2026-10-24", new: "2026-10-25", label: "休息", date: "2026-10-24", applied_session_id: null },
+      chg({ op: "change", session_id: "s-2026-10-25", field: "scheduled_date", old: "2026-10-25", new: "2026-10-24", label: "Long 16 km", date: "2026-10-25" }),
+      chg({ op: "change", session_id: "s-2026-10-24", field: "scheduled_date", old: "2026-10-24", new: "2026-10-25", label: "休息", date: "2026-10-24" }),
     ],
     why: "兩堂對調，週五 Easy → 週六長跑 → 週日休息，硬日沒有連著。",
     basis: ["本週已跑 12.1 / 36 km", "目前最長 12 km（10/11）", "10/24 原本休息"],
-    flags: [] },
-  { id: "p-long", source: "chat", message_id: "c-prop-2", status: "pending", created_at: "", decided_at: null,
-    changes: [{ session_id: "s-2026-11-01", field: "target_distance_m", old: 18000, new: 21000, label: "Long 18 km", date: "2026-11-01", applied_session_id: null }],
+    basis_text: "目標 4:45。目前最長 12 km（10/11）、本週已跑 12.1 / 36 km，Easy 心拍都在 140〜150。原則：長跑前一天不排硬課，長跑之間至少隔 6 天。",
+    impact: {
+      keep: "10/25 週日你跑不了，這週長跑量會是 0，11/1 的 18 km 變成直接跳一大步。",
+      change: "長跑移到 10/24 週六，10/25 休息；週五 Easy 當放鬆，這週長跑量 16 km 不掉。",
+      risk: "10/24 腿還重就把長跑縮成 14 km，跟我說一聲我再重排。",
+    } }),
+  card({ id: "p-long", message_id: "c-prop-2",
+    changes: [chg({ op: "change", session_id: "s-2026-11-01", field: "target_distance_m", old: 18000, new: 21000, label: "Long 18 km", date: "2026-11-01" })],
     why: "11/8 的 22 km 才接得上；小腿若還痠就只跑 18。",
     basis: ["目前最長 12 km（10/11）", "上週 16 / 36 km", "10/25 自述小腿微痠"],
-    flags: ["比目前最長多 9 km", "上週少跑 20 km 的補回"] },
+    basis_text: "目標 4:45。目前最長 12 km（10/11），上週 16 / 36 km，10/25 你說小腿微痠。原則：長跑每週最多加 2〜4 km，補量要在恢復完之後。",
+    impact: {
+      keep: "11/1 照 18 km 跑，跟 11/8 的 22 km 之間跳 4 km，比較穩。",
+      change: "11/1 直接 21 km，把上週少跑的補回來，11/8 的 22 km 接得上。",
+      risk: "10/25 小腿還痠就只跑 18 km；21 km 比目前最長多 9 km，跑完隔天腿腫就停。",
+    },
+    flags: ["比目前最長多 9 km", "上週少跑 20 km 的補回"] }),
+  // 11/21〜23 abroad: the canonical card (驗收 1)
+  card({ id: "p-replan", message_id: "c-rp-a1", changes: abroadChanges(), weeks: ABROAD_WEEKS, basis: BASIS, basis_text: BASIS_TEXT, impact: ABROAD_IMPACT }),
+  // already applied (yesterday): two weeks, the week-5 description was rewritten with the sessions
+  card({ id: "p-applied", message_id: "c-rp-b2", status: "applied", decided_at: at(`${addDays(TODAY, -1)}T21:02:00+09:00`),
+    changes: [
+      chg({ op: "change", session_id: "s-2026-11-06", field: "target_distance_m", old: 6000, new: 5000, label: "Easy 6 km", date: "2026-11-06", applied_session_id: "s-2026-11-06" }),
+      chg({ op: "change", session_id: "s-2026-11-08", field: "target_distance_m", old: 22000, new: 20000, label: "Long 22 km", date: "2026-11-08", reason: "小腿還痠，22 km 退到 20，最後 5 km 照測關卡 1。", applied_session_id: "s-2026-11-08" }),
+      chg({ op: "change", session_id: "s-2026-11-10", field: "target_distance_m", old: 6000, new: 5000, label: "Recovery 6 km", date: "2026-11-10", applied_session_id: "s-2026-11-10" }),
+    ],
+    weeks: [{ week_no: 5, phase: null, focus: "長跑 20，小腿先恢復" }],
+    basis: ["目標 4:45", "最長 16.2 km", "小腿微痠"],
+    basis_text: "目標 4:45。你說小腿還痠，目前最長 16.2 km、10/25 之後週跑量 36 km。原則：痠痛期先把量減在長跑和隔天的恢復跑，不動關卡課。",
+    impact: {
+      keep: "11/8 照 22 km 跑，小腿沒好的話關卡 1 的最後 5 km 很可能跑不到 6:45。",
+      change: "11/8 退到 20 km，11/6 和 11/10 各少 1 km，第 5 週 40 → 38 km，關卡 1 還是測得到。",
+      risk: "11/6 腿還痠就把 Easy 改走路；11/8 最後 5 km 心拍過 168 就停，關卡 1 往後一週補測。",
+    } }),
+  // 409: the plan changed under it
+  card({ id: "p-stale", message_id: "c-rp-c2", status: "stale", stale_reason: "11/29 長跑 20 km 在 10/27 被週回顧改過（現在是 18 km）",
+    changes: [
+      chg({ op: "change", session_id: "s-2026-11-27", field: "target_pace_sec_km", old: 450, new: 465, label: "Easy 5 km", date: "2026-11-27" }),
+      chg({ op: "change", session_id: "s-2026-11-29", field: "target_distance_m", old: 20000, new: 16000, label: "Long 20 km", date: "2026-11-29", reason: "離 32 km 只隔 4 天，20 km 會疊進 taper。" }),
+    ],
+    weeks: [{ week_no: 8, phase: null, focus: "★ 峰值 32 km（11/25 週三），週末 16 km 收尾" }],
+    basis: BASIS, basis_text: BASIS_TEXT, impact: ABROAD_IMPACT }),
+  // A／B: one reply, two cards, one 記下來
+  card({ id: "p-ab-a", message_id: "c-rp-a2", group_id: "g-ab", option: { letter: "A", title: "32 km 後移到 11/25", recommended: true },
+    changes: abroadChanges(), weeks: ABROAD_WEEKS, basis: BASIS, basis_text: BASIS_TEXT, impact: ABROAD_IMPACT }),
+  card({ id: "p-ab-b", message_id: "c-rp-a3", group_id: "g-ab", option: { letter: "B", title: "縮成 26 km，11/20 跑完再走", recommended: false },
+    changes: [
+      chg({ op: "change", session_id: "s-2026-11-22", field: "scheduled_date", old: "2026-11-22", new: "2026-11-20", label: "Peak Long 32 km", date: "2026-11-22" }),
+      chg({ op: "change", session_id: "s-2026-11-22", field: "target_distance_m", old: 32000, new: 26000, label: "Peak Long 32 km", date: "2026-11-22", flags: ["離 11/15 的 26 km 只隔 5 天"] }),
+      chg({ op: "remove", session_id: "s-2026-11-20", label: "Easy 6 km", date: "2026-11-20", reason: "這天改跑 26 km。" }),
+      chg({ op: "change", session_id: "s-2026-11-18", field: "type", old: "interval", new: "easy", label: "坡跑+MP 10 km", date: "2026-11-18", reason: "26 km 前兩天不排坡。" }),
+      chg({ op: "change", session_id: "s-2026-11-18", field: "target_distance_m", old: 10000, new: 6000, label: "坡跑+MP 10 km", date: "2026-11-18" }),
+      chg({ op: "add", label: "休息", date: "2026-11-22", new_session: { scheduled_date: "2026-11-22", type: "rest", label: "休息", target_distance_m: 0, target_pace_sec_km: null, note: "出國" }, reason: "你 11/21〜23 不在。" }),
+    ],
+    weeks: [{ week_no: 7, phase: null, focus: "★ 峰值 26 km（11/20 週五），出國前跑完" }],
+    basis: BASIS, basis_text: BASIS_TEXT,
+    impact: {
+      keep: "同上：關卡 2 測不到，比賽配速只能用 7:00。",
+      change: "關卡 2 用 26 km 的最後 6 km 估，比賽配速最多押到 6:50；第 8 週照原本減量 42 km，taper 不受影響。",
+      risk: "26 km 跑完兩天就上飛機，坐久腿會腫；回來 11/24 的恢復跑改走路也行。",
+    } }),
 ];
+
+/** What Woo says after 採用 (the api writes it; the demo has a few by hand). */
+const CONFIRM: Record<string, () => string> = {
+  "p-replan": () => `改好了。第 7 週變出國前收尾，11/25 週三 32 km、11/29 16 km。${constraints.find((c) => c.id === "k-abroad")?.status === "active" ? "11/21〜23 出國我記著了，設定頁看得到。" : ""}`.trim(),
+  "p-ab-a": () => "改好了。11/25 週三 32 km，前一天的恢復跑別偷快。出國那三天走路算活動，不用找我報到。",
+  "p-ab-b": () => "改好了。11/20 週五 26 km 跑完再走，出國那三天走路就好；回來 11/24 的恢復跑看腿再決定。",
+  "p-restale": () => "改好了。11/27 的 Easy 放慢，11/29 的長跑 18 → 16 km。",
+};
+
+/** Why applying would be a 409: a session of the card moved, vanished, got a record, or no longer has the value the card started from. */
+function planConflict(p: ApiProposal): string | null {
+  const d = data();
+  for (const c of p.changes) {
+    if (c.op === "add" || !c.session_id) continue;
+    const s = d.sessions.find((x) => x.id === c.session_id);
+    const what = `${c.date ? md(c.date) : ""} ${c.label ?? "那堂"}`.trim();
+    if (!s || (c.date && s.scheduled_date !== c.date)) return `${what} 在你按之前被別的提案改過`;
+    if ([...d.activities, ...d.unassigned].some((a) => a.session_id === s.id)) return `${what} 已完成`;
+    if (c.op === "change" && c.field && c.field !== "scheduled_date" && typeof c.old === "number" && (s as unknown as Record<string, unknown>)[c.field] !== c.old) return `${what} 在你按之前被別的提案改過`;
+  }
+  return null;
+}
+
+/** Write a card's changes into the demo plan (the api does this in one transaction); returns the bits Woo's confirmation names. */
+function applyToPlan(p: ApiProposal): string[] {
+  const d = data();
+  const parts: string[] = [];
+  const weekOf = (date: string) => d.weeks.find((w) => date >= w.week_start && date <= w.week_end)?.week_no ?? null;
+  // removals first, so a session that moves onto the freed day does not meet the old one
+  for (const c of p.changes) if (c.op === "remove" && c.session_id) d.sessions = d.sessions.filter((x) => x.id !== c.session_id);
+  for (const c of p.changes) {
+    if (c.op !== "change" || !c.session_id) continue;
+    const s = d.sessions.find((x) => x.id === c.session_id);
+    if (!s) continue;
+    if (c.field === "skip") { s.type = "rest"; s.label = "休息"; s.content = "休息"; s.target_distance_m = 0; s.target = null; s.note = null; parts.push(`${md(c.date ?? s.scheduled_date)} 改成休息`); }
+    else if (c.field === "type") {
+      // the api's enum: the session becomes that kind (label and content follow; distance is its own change)
+      const t = String(c.new) as ApiSession["type"];
+      s.type = t; s.label = typeLabel(t); s.content = null; s.target = t === "easy" ? "7:15〜7:45 / 心拍 140〜150" : null;
+      parts.push(`${md(c.date ?? s.scheduled_date)} 改成 ${typeName(t)}`);
+    } else if (c.field === "target_pace_sec_km" && typeof c.new === "number") {
+      const by = c.new - (s.target_pace_sec_km ?? c.new);
+      s.target = [pace(c.new), ...(s.target?.split(" / ").slice(1) ?? [])].join(" / ");
+      if (s.target_pace_min_sec_km != null) s.target_pace_min_sec_km += by;
+      if (s.target_pace_max_sec_km != null) s.target_pace_max_sec_km += by;
+      s.target_pace_sec_km = c.new;
+    } else if (c.field) {
+      (s as unknown as Record<string, unknown>)[c.field] = c.new;
+      if (c.field === "scheduled_date" && typeof c.new === "string") s.week_no = weekOf(c.new);
+      if (c.field === "target_distance_m" && typeof c.new === "number") s.content = s.content?.replace(/\d+(?:〜\d+)?\s*km/, `${kmPlan(c.new)} km`) ?? s.content;
+      parts.push(c.field === "scheduled_date" && typeof c.new === "string" ? `${mdDow(c.new)}是 ${c.label ?? s.label}`
+        : c.field === "target_distance_m" && typeof c.new === "number" ? `${md(s.scheduled_date)} 的 ${(c.label ?? s.label ?? "").split(" ")[0]} 是 ${kmPlan(c.new)} km`
+        : `${md(s.scheduled_date)} 的 ${c.label ?? s.label} 改好了`);
+    }
+    c.applied_session_id = s.id;
+  }
+  p.changes.forEach((c, i) => {
+    const n = c.new_session;
+    if (c.op !== "add" || !n) return;
+    const id = `s-add-${p.id}-${i}`;
+    d.sessions.push({ id, plan_id: PLAN_ID, scheduled_date: n.scheduled_date, week_no: weekOf(n.scheduled_date), phase: d.weeks.find((w) => w.week_no === weekOf(n.scheduled_date))?.phase ?? null,
+      label: n.label, type: n.type, content: n.label, note: n.note, target: null, target_distance_m: n.target_distance_m, target_pace_sec_km: n.target_pace_sec_km, target_pace_min_sec_km: null, target_pace_max_sec_km: null,
+      target_hr_min: null, target_hr_max: null, brief: null, skipped_at: null, version: 1, superseded: false });
+    c.applied_session_id = id;
+  });
+  for (const w of p.weeks) {
+    const week = d.weeks.find((x) => x.week_no === w.week_no);
+    if (week) { if (w.focus != null) week.focus = w.focus; if (w.phase != null) week.phase = w.phase; }
+  }
+  d.sessions.sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date));
+  return parts;
+}
 
 // ---- the coach's thread (demo) ------------------------------------------------
 let thread: ApiCoachMessage[] | undefined;
-const at = (iso: string) => new Date(iso).toISOString();
-const BLANK = { activity_id: null, weekly_review_id: null, status: "sent" as const, review: null, quote: null, rpe: null, checkin: null, ask: null, weekly: null, proposal: null, error: null };
+const BLANK = { activity_id: null, weekly_review_id: null, status: "sent" as const, review: null, quote: null, rpe: null, checkin: null, ask: null, weekly: null, proposal: null, constraint: null, proposal_rejected: false, error: null };
 function threadData(): ApiCoachMessage[] {
   if (thread) return thread;
   const w = weeklyData()[0];
   const w3 = weeklyData()[1];
   const today = todayJst();
-  const todayAt = (hm: string) => new Date(`${today}T${hm}:00+09:00`).toISOString();
-  for (const p of proposals) p.created_at = todayAt("06:21");
+  const yAt = (hm: string) => new Date(`${addDays(today, -1)}T${hm}:00+09:00`).toISOString();
+  for (const p of proposals) p.created_at = p.id === "p-applied" ? yAt("21:01") : p.id === "p-stale" ? yAt("22:11") : todayAt("06:21");
   thread = [
     { id: "c1", role: "coach", kind: "weekly", text: w.summary ?? "", activity_id: null, weekly_review_id: w.id, status: "sent", review: null, quote: null, error: null, created_at: at("2026-10-12T12:00:00Z") },
     { id: "c2", role: "coach", kind: "review", text: "心拍整段壓在 140，是四次 Easy 裡最穩的一次。第 1 km 6:35 偏快是錶的心拍延遲，不是真的用力；第 6 km 8:01 是坡後自然放慢，正常。", activity_id: "a-2026-10-13", weekly_review_id: null, status: "sent", review: { label: "Easy 6 km", verdict: "達成", reminder: "第 1 km 前 3 分鐘用呼吸不用錶", date: "2026-10-13" }, quote: null, error: null, created_at: at("2026-10-12T22:52:00Z") },
     { id: "c3", role: "athlete", kind: "chat", text: "第一公里又衝太快了，有什麼辦法壓住？", activity_id: "a-2026-10-13", weekly_review_id: null, status: "sent", review: null, quote: "10/13 Easy 6.01 km · 7:25/km · 心拍 140（最高 148） · 達成", error: null, created_at: at("2026-10-12T23:10:00Z") },
     { id: "c4", role: "coach", kind: "chat", text: "這是連續第二次了。前 3 分鐘不要看錶，用鼻子呼吸能撐住的速度就是對的；第 1 km 跑到 7:30 以上才算成功。明天 MP 課的前 2 km Easy 也照這個來。", activity_id: null, weekly_review_id: null, status: "sent", review: null, quote: null, error: null, created_at: at("2026-10-12T23:10:20Z") },
+    // Yesterday: a multi-week card already applied (and Woo's confirmation), and one that went stale (409).
+    { ...BLANK, id: "c-rp-b1", role: "athlete", kind: "chat", text: "小腿還痠，11/8 的長跑想退一點", created_at: yAt("21:00") },
+    { ...BLANK, id: "c-rp-b2", role: "coach", kind: "chat", text: "22 km 退到 20 km，最後 5 km 照測關卡 1。11/6 和 11/10 各少 1 km，讓腿先恢復；第 5 週的描述跟著改。整張一起看：", proposal: proposals.find((x) => x.id === "p-applied") ?? null, created_at: yAt("21:01") },
+    { ...BLANK, id: "c-rp-b3", role: "coach", kind: "chat", text: "改好了。11/8 長跑 20 km，11/6 Easy 5 km、11/10 恢復跑 5 km。跑完 20 km 跟我說腿的狀況。", created_at: yAt("21:02") },
+    { ...BLANK, id: "c-rp-c1", role: "athlete", kind: "chat", text: "11/27 的 Easy 放慢、11/29 縮短，這樣調", created_at: yAt("22:10") },
+    { ...BLANK, id: "c-rp-c2", role: "coach", kind: "chat", text: "11/29 那堂在你按之前已經改過了（週一的回顧把它改成 18 km）。這張不能照用。", proposal: proposals.find((x) => x.id === "p-stale") ?? null, created_at: yAt("22:11") },
     // Week 3's review, written before the 10/25 long run had a record: it asks (demo dates it this morning).
     { ...BLANK, id: "c-weekly-3", role: "coach", kind: "weekly", text: w3.summary ?? "", weekly_review_id: w3.id, created_at: w3.created_at,
       weekly: { week_start: w3.week_start, asks: [{ session_id: "s-2026-10-25", label: "Long 16 km", date: "2026-10-25", question: "10/25 的 Long 16 km 我沒看到紀錄，是沒跑，還是還沒同步？", state: "open" }], updated: null, cancelled: [] } },
@@ -436,10 +624,24 @@ function threadData(): ApiCoachMessage[] {
     { ...BLANK, id: "c-ask-sun", role: "athlete", kind: "chat", text: "這週日有事，長跑跑不了", created_at: todayAt("06:20") },
     { ...BLANK, id: "c-prop-1", role: "coach", kind: "chat", text: "那把長跑提到週六，週日換成休息。週五的 Easy 當長跑前的放鬆，別跑快。", proposal: proposals[0], created_at: todayAt("06:21") },
     { ...BLANK, id: "c-prop-2", role: "coach", kind: "chat", text: "另外，上週少跑了 20 km，這週補一點回來的話，長跑可以直接到 21。這個比較激進，你決定。", proposal: proposals[1], created_at: todayAt("06:21") },
+    // 11/21〜23 abroad: one card + 記下來 (驗收 1), then the same question as an A／B pair sharing one 記下來, then constraints alone.
+    { ...BLANK, id: "c-rp-q1", role: "athlete", kind: "chat", text: "11/21〜23 要出國，課表怎麼調？", created_at: todayAt("06:30") },
+    { ...BLANK, id: "c-rp-a1", role: "coach", kind: "chat", text: "11/22 是 32 km 的峰值長跑，11/23 本來就是完全休息。32 km 是關卡 2 唯一一次測試，不縮、往後移到 11/25 週三；第 8 週因此從減量週變成峰值週，11/29 的 20 km 縮成 16 km 讓腿收回來。整張一起看：", proposal: proposals.find((x) => x.id === "p-replan") ?? null, constraint: constraints.find((x) => x.id === "k-abroad") ?? null, created_at: todayAt("06:31") },
+    { ...BLANK, id: "c-rp-q2", role: "athlete", kind: "chat", text: "我 11/21〜23 出國，32 km 還跑得了嗎", created_at: todayAt("06:40") },
+    { ...BLANK, id: "c-rp-a2", role: "coach", kind: "chat", text: "兩條路。A：32 km 後移到 11/25，關卡 2 照測，第 8 週變重。B：縮成 26 km 提前到 11/20 週五跑完再走，第 8 週照減量，但關卡 2 只能用 26 km 估。我偏 A；回程累不累你比我清楚。", proposal: proposals.find((x) => x.id === "p-ab-a") ?? null, created_at: todayAt("06:41") },
+    { ...BLANK, id: "c-rp-a3", role: "coach", kind: "chat", text: "", proposal: proposals.find((x) => x.id === "p-ab-b") ?? null, constraint: constraints.find((x) => x.id === "k-abroad-ab") ?? null, created_at: todayAt("06:41") },
+    { ...BLANK, id: "c-rp-q3", role: "athlete", kind: "chat", text: "左膝有點不舒服，到月底都會小心一點", created_at: todayAt("06:50") },
+    { ...BLANK, id: "c-rp-a4", role: "coach", kind: "chat", text: "好。到 10/31 的課沒有坡跑和 MP，照跑，Easy 一律壓在 7:30 以後。跑完有腫、下樓梯會痛就跟我說，我再動課表。", constraint: constraints.find((x) => x.id === "k-knee") ?? null, created_at: todayAt("06:51") },
+    { ...BLANK, id: "c-rp-q4", role: "athlete", kind: "chat", text: "週三晚上有課，肌力不能動", created_at: todayAt("06:52") },
+    { ...BLANK, id: "c-rp-a5", role: "coach", kind: "chat", text: "知道了，週三的肌力不動；之後要調課我會避開它。", constraint: constraints.find((x) => x.id === "k-wed") ?? null, created_at: todayAt("06:53") },
+    // A card that failed the api's check: only his text stays, plus the grey line.
+    { ...BLANK, id: "c-rp-q5", role: "athlete", kind: "chat", text: "11/16 那週全部改成輕鬆跑好了", created_at: todayAt("06:58") },
+    { ...BLANK, id: "c-rp-a6", role: "coach", kind: "chat", text: "11/16 那週有 11/18 的坡跑加 MP，是第三階段最重要的一堂，整週改輕鬆跑我不建議；要動的話跟我說是哪幾天不方便。", proposal_rejected: true, created_at: todayAt("06:59") },
     // Woo's check-in for today's run (demo: today's session is MP 7 km, three activities synced)
     { ...BLANK, id: "c5", role: "coach", kind: "checkin", text: "今天的課是 MP 7 km：2 km Easy + 3 km @ MP + 2 km Easy。Strava 剛進來 3 個活動，哪一個是這堂？", activity_id: "u-run", created_at: todayAt("07:05"),
       checkin: { state: "open", mode: "activity", date: today, session_id: todaySessionId(), session_label: "MP 7 km", candidates: [{ activity_id: "u-run", label: "跑步 06:40 · 7.00 km · 7:08/km" }, { activity_id: "u-walk", label: "走路 17:30 · 4.9 km · 64 分" }, { activity_id: "u-hyrox", label: "重訓 18:30 · 58 分 · 心拍 152" }] } },
   ].map((m) => ({ ...BLANK, ...m })) as ApiCoachMessage[];
+  applyToPlan(proposals.find((x) => x.id === "p-applied")!);
   return thread;
 }
 
@@ -472,34 +674,32 @@ export function mockPostWeeklyAsk(weeklyId: string, sessionId: string, body: Pos
   return { message: { ...m } };
 }
 
-/** Demo: apply rewrites the sessions (a date swap moves both) and Woo confirms in the thread at once; dismiss only records it. */
+/**
+ * Demo: apply writes every change into the plan and Woo confirms in the thread at once; the other
+ * cards of an A／B group become superseded. A card whose sessions changed since is a 409 and turns
+ * stale. Dismiss only records it (a stale card can still be dismissed).
+ */
 export function mockPostProposal(proposalId: string, action: "apply" | "dismiss"): PostProposalResponse {
   const p = proposals.find((x) => x.id === proposalId);
-  if (!p) throw new Error("not found");
-  if (p.status !== "pending") throw new Error("already decided");
-  const d = data();
+  if (!p) throw new ApiError(404, "not found");
+  if (p.status !== "pending" && !(action === "dismiss" && p.status === "stale")) throw new ApiError(409, "already decided");
+  const superseded: string[] = [];
   if (action === "apply") {
-    const parts: string[] = [];
-    for (const c of p.changes) {
-      const s = d.sessions.find((x) => x.id === c.session_id);
-      if (!s) continue;
-      if (c.field === "skip") { s.type = "rest"; s.label = "休息"; s.content = "休息"; s.target_distance_m = 0; parts.push(`${md(c.date ?? s.scheduled_date)} 改成休息`); }
-      else {
-        (s as unknown as Record<string, unknown>)[c.field] = c.new;
-        if (c.field === "target_distance_m" && typeof c.new === "number") s.content = s.content?.replace(/\d+(?:〜\d+)?\s*km/, `${kmPlan(c.new)} km`) ?? s.content;
-        parts.push(c.field === "scheduled_date" && typeof c.new === "string" ? `${mdDow(c.new)}是 ${c.label ?? s.label}`
-          : c.field === "target_distance_m" && typeof c.new === "number" ? `${md(s.scheduled_date)} 的 ${(c.label ?? s.label ?? "").split(" ")[0]} 是 ${kmPlan(c.new)} km`
-          : `${md(s.scheduled_date)} 的 ${c.label ?? s.label} 改好了`);
-      }
-      c.applied_session_id = s.id;
+    const why = planConflict(p);
+    if (why) {
+      p.status = "stale";
+      p.stale_reason = why;
+      throw new ApiError(409, "plan_changed");
     }
-    d.sessions.sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date));
+    const parts = applyToPlan(p);
+    for (const q of proposals) if (p.group_id && q.group_id === p.group_id && q.id !== p.id && q.status === "pending") { q.status = "superseded"; q.decided_at = new Date().toISOString(); superseded.push(q.id); }
     const t = threadData();
-    t.push({ ...BLANK, id: `c${t.length + 1}`, role: "coach", kind: "chat", text: parts.length ? `改好了，課表上${parts.join("、")}。前一天的 Easy 跑完記得跟我說腿的狀況。` : "改好了。", created_at: new Date().toISOString() });
+    const text = CONFIRM[p.id]?.() ?? (parts.length ? `改好了，課表上${parts.join("、")}。前一天的 Easy 跑完記得跟我說腿的狀況。` : "改好了。");
+    t.push({ ...BLANK, id: `c${t.length + 1}`, role: "coach", kind: "chat", text, created_at: new Date().toISOString() });
   }
   p.status = action === "apply" ? "applied" : "dismissed";
   p.decided_at = new Date().toISOString();
-  return { proposal: { ...p, changes: p.changes.map((c) => ({ ...c })) } };
+  return { proposal: { ...p, changes: p.changes.map((c) => ({ ...c })) }, superseded };
 }
 
 function todaySessionId(): string | null {
@@ -653,6 +853,30 @@ export function mockPostCoachMessage(body: PostCoachMessageRequest): PostCoachMe
     setTimeout(() => {
       if (a) a.review = { verdict: "達成但有提醒", comment: "MP 段 6:46 守住了，第 5 km 心拍 166 超過上限。第三公里開始腿重跟數字對得上。", reminders: ["MP 第 3 公里開始看心拍，過 160 就稍微放慢"], source: "claude", model: null, adjust_hint: null, failed: false, error: null, created_at: new Date().toISOString() };
       t.push({ ...BLANK, id: `c${t.length + 1}`, role: "coach", kind: "review", text: "MP 段 6:46 守住了，第 5 km 心拍 166 超過上限。第三公里開始腿重跟數字對得上。", activity_id: ask.ask!.activity_id, review: { label: "MP 7 km", verdict: "達成但有提醒", reminder: "MP 第 3 公里開始看心拍，過 160 就稍微放慢", date: todayJst() }, created_at: new Date().toISOString() });
+      m.status = "sent";
+    }, 3000);
+    return { message: { ...m } };
+  }
+  // 請 Woo 重看: he sends a new card against today's plan (the stale one stays as it was).
+  if (body.re_propose) {
+    const old = proposals.find((x) => x.id === body.re_propose);
+    if (!old) throw new ApiError(404, "not found");
+    const m: ApiCoachMessage = { ...BLANK, id: `c${t.length + 1}`, role: "athlete", kind: "chat", text: body.text, status: "pending", created_at: new Date().toISOString() };
+    t.push(m);
+    setTimeout(() => {
+      let next = proposals.find((x) => x.id === "p-restale");
+      if (!next) {
+        next = card({ id: "p-restale", message_id: null, created_at: new Date().toISOString(),
+          changes: [
+            chg({ op: "change", session_id: "s-2026-11-27", field: "target_pace_sec_km", old: 450, new: 465, label: "Easy 5 km", date: "2026-11-27" }),
+            chg({ op: "change", session_id: "s-2026-11-29", field: "target_distance_m", old: 18000, new: 16000, label: "Long 18 km", date: "2026-11-29", reason: "離 32 km 只隔 4 天，18 km 還是會疊進 taper。" }),
+          ],
+          weeks: old.weeks, basis: old.basis, basis_text: old.basis_text, impact: old.impact });
+        proposals.push(next);
+        const s29 = data().sessions.find((x) => x.id === "s-2026-11-29");
+        if (s29 && s29.target_distance_m === 20000) { s29.target_distance_m = 18000; s29.content = "長跑 18 km"; } // the weekly review's edit the old card ran into
+      }
+      t.push({ ...BLANK, id: `c${t.length + 1}`, role: "coach", kind: "chat", text: "用現在的課表重排了一張：11/29 已經是 18 km，改成 16 km；11/27 的 Easy 配速照放慢。", proposal: next, created_at: new Date().toISOString() });
       m.status = "sent";
     }, 3000);
     return { message: { ...m } };

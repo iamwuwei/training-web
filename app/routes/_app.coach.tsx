@@ -2,7 +2,7 @@ import { Fragment, useEffect, useState } from "react";
 import { Link, redirect, useRevalidator, useSearchParams } from "react-router";
 import type { Route } from "./+types/_app.coach";
 import { SendIcon } from "../components/icons";
-import { CoachProposals, ProposalCard } from "../components/proposals";
+import { CoachProposals, ConstraintCard, ProposalCard } from "../components/proposals";
 import { CoachAvatar, VerdictTag, verdictBadge } from "../components/ui";
 import { ApiError, getActivities, getCoach, getWeekly, postCheckinPick, postCheckinReset, postCoachMessage, postWeeklyAsk, putCoachSeen } from "../lib/api";
 import { hasSession } from "../lib/auth";
@@ -10,7 +10,7 @@ import { md, mdDow, timeJst, toJstDate } from "../lib/date";
 import { km, pace } from "../lib/format";
 import { useReviewPolling } from "../lib/use-review-polling";
 import { usePlan } from "../lib/use-plan";
-import type { ApiActivity, ApiCoachMessage, ApiWeeklyAsk } from "../types/api";
+import type { ApiActivity, ApiCoachMessage, ApiProposal, ApiWeeklyAsk } from "../types/api";
 
 // Woo's thread: weekly reviews (with their proposals), each run's verdict, his
 // post-run check-in (which activity → how did it feel → verdict), and the
@@ -38,6 +38,11 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
 
 export function meta(): Route.MetaDescriptors {
   return [{ title: "教練 Woo · 富士山マラソン 2026" }];
+}
+
+/** Woo's cards failed the api's check: only his text stays. */
+function Rejected() {
+  return <p className="cancelled">Woo 的提案沒過格式檢查，再問他一次</p>;
 }
 
 function DayRule({ date }: { date: string }) {
@@ -157,6 +162,11 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
   // 不是這堂 on a report-page pick only unassigns the activity; say so once.
   const [unlinked, setUnlinked] = useState<string | null>(null);
 
+  // What this page just did to a proposal card (applied it, or a sibling A／B card was): shown
+  // at once; once the stored status is anything but pending, the stored one wins.
+  const [decisions, setDecisions] = useState<Record<string, ApiProposal["status"]>>({});
+  const statusOf = (p: ApiProposal) => (p.status !== "pending" ? p.status : decisions[p.id] ?? "pending");
+
   const { timedOut, restart } = useReviewPolling(waiting || rerunPending || expectPending);
   const typing = waiting || expectPending;
 
@@ -266,6 +276,36 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
   }
 
   const sessions = view?.data.sessions ?? [];
+  const planWeeks = view?.data.weeks ?? [];
+
+  // 請 Woo 重看 on a stale card: a user line with re_propose; Woo sends a new card against today's plan.
+  async function repropose(p: ApiProposal) {
+    await postCoachMessage({ text: "課表變了，這張重看一次", re_propose: p.id });
+    await revalidator.revalidate();
+    restart();
+  }
+
+  // The cards of one A／B reply arrive as consecutive messages sharing a group_id: draw them as one reply.
+  const groups = new Map<string, ApiCoachMessage[]>();
+  for (const m of messages) if (m.proposal?.group_id) groups.set(m.proposal.group_id, [...(groups.get(m.proposal.group_id) ?? []), m]);
+
+  const appliedAt = messages.flatMap((x) => (x.proposal?.status === "applied" && x.proposal.decided_at ? [Date.parse(x.proposal.decided_at)] : []));
+
+  function cards(members: ApiCoachMessage[]) {
+    const reload = () => void revalidator.revalidate();
+    const ps = members.flatMap((x) => (x.proposal ? [x.proposal] : []));
+    const chosen = ps.find((p) => statusOf(p) === "applied")?.option?.letter ?? null;
+    const memo = members.find((x) => x.constraint)?.constraint ?? null;
+    return (
+      <>
+        {ps.map((p) => (
+          <ProposalCard key={p.id} proposal={p} status={statusOf(p)} sessions={sessions} weeks={planWeeks} chosen={chosen}
+            onStatus={(id, status) => setDecisions((d) => ({ ...d, [id]: status }))} onChanged={reload} onRepropose={repropose} />
+        ))}
+        {memo ? <ConstraintCard key={memo.id} constraint={memo} onChanged={reload} /> : null}
+      </>
+    );
+  }
 
   // A long run farther than any run before it is worth a line of its own.
   const allRuns = (view ? [...view.data.activities, ...view.data.unassigned] : []).filter((a) => !a.sport_type || ["Run", "TrailRun", "VirtualRun"].includes(a.sport_type));
@@ -306,6 +346,8 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
                 <p className="text">{m.text}</p>
                 {wm?.asks.map((ask) => <WeeklyAskBlock key={ask.session_id} ask={ask} busy={busy} rerun={rewriting && ask.state === "skipped" ? (timedOut ? "gave-up" : "pending") : null} onAnswer={(answer) => void answerWeeklyAsk(m, ask, answer)} />)}
                 {w ? <CoachProposals review={w} sessions={sessions} embedded onChanged={() => void revalidator.revalidate()} /> : null}
+                {m.proposal || m.constraint ? cards([m]) : null}
+                {m.proposal_rejected ? <Rejected /> : null}
                 {wm?.cancelled.length ? <p className="cancelled">{wm.cancelled.map((c) => `原本「${c}」的建議已取消`).join("；")}</p> : null}
               </CoachMessage>
             );
@@ -323,11 +365,16 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
                 ) : null}
               </CoachMessage>
             );
-          } else if (m.kind === "chat" && m.proposal) {
+          } else if (m.kind === "chat" && (m.proposal || m.constraint)) {
+            const members = (m.proposal?.group_id && groups.get(m.proposal.group_id)) || [m];
+            if (members[0] !== m) return null; // drawn with the first card of its group
+            const stale = members.some((x) => x.proposal && statusOf(x.proposal) === "stale");
             node = (
-              <CoachMessage m={m}>
-                <p className="text">{m.text}</p>
-                <ProposalCard proposal={m.proposal} sessions={sessions} onChanged={() => void revalidator.revalidate()} />
+              <CoachMessage m={m} badge={stale ? "warn" : null}>
+                {m.text ? <p className="text">{m.text}</p> : null}
+                {members.slice(1).filter((x) => x.text && x.text !== m.text).map((x) => <p key={x.id} className="text">{x.text}</p>)}
+                {cards(members)}
+                {m.proposal_rejected ? <Rejected /> : null}
               </CoachMessage>
             );
           } else if (m.kind === "review") {
@@ -350,7 +397,9 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
               </CoachMessage>
             );
           } else {
-            node = <CoachMessage m={m}><p className="text">{m.text}</p></CoachMessage>;
+            // Woo's line written as a card was applied (within a few seconds of it) is his confirmation: the avatar gets the check.
+            const confirms = m.kind === "chat" && appliedAt.some((t) => Math.abs(t - Date.parse(m.created_at)) < 5000);
+            node = <CoachMessage m={m} badge={confirms ? "check" : null}><p className="text">{m.text}</p>{m.proposal_rejected ? <Rejected /> : null}</CoachMessage>;
           }
           return <Fragment key={m.id}>{rule}{node}</Fragment>;
         })}
