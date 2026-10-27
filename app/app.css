@@ -697,8 +697,8 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 .collapse > div { min-height: 0; overflow: hidden; }
 .proposal-card:not(.multi) > .collapse:not(.open) { margin-top: -8px; } /* cancels the card's row gap while shut */
 .proposal-card:not(.multi) .impact, .proposal-card:not(.multi) .fold-wrap, .proposal-card:not(.multi) .conflict { margin-left: 52px; }
-.proposal-card .basis .head, .proposal-card .fold { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; width: 100%; text-align: left; font-size: 12px; line-height: 1.5; color: var(--ink-3); border-radius: 0; }
-.proposal-card .basis .head b, .proposal-card .fold b { font-weight: 700; color: var(--ink-2); }
+.proposal-card .basis .toggle, .proposal-card .fold { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; width: 100%; text-align: left; font-size: 12px; line-height: 1.5; color: var(--ink-3); border-radius: 0; }
+.proposal-card .basis .toggle b, .proposal-card .fold b { font-weight: 700; color: var(--ink-2); }
 .proposal-card .basis .more, .proposal-card .fold .more { flex: none; }
 .proposal-card .basis p { margin: 4px 0 0; font-size: 13px; line-height: 1.55; color: var(--ink-2); }
 .proposal-card .basis.open .head { color: var(--ink-2); }

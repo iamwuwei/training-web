@@ -555,7 +555,7 @@ function applyToPlan(p: ApiProposal): string[] {
     if (c.op !== "change" || !c.session_id) continue;
     const s = d.sessions.find((x) => x.id === c.session_id);
     if (!s) continue;
-    if (c.field === "skip") { s.type = "rest"; s.label = "休息"; s.content = "休息"; s.target_distance_m = 0; s.target = null; parts.push(`${md(c.date ?? s.scheduled_date)} 改成休息`); }
+    if (c.field === "skip") { s.type = "rest"; s.label = "休息"; s.content = "休息"; s.target_distance_m = 0; s.target = null; s.note = null; parts.push(`${md(c.date ?? s.scheduled_date)} 改成休息`); }
     else if (c.field === "type") {
       const n = String(c.new ?? "");
       const m = /([\d.]+)\s*km/.exec(n);

@@ -284,6 +284,8 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
   const groups = new Map<string, ApiCoachMessage[]>();
   for (const m of messages) if (m.proposal?.group_id) groups.set(m.proposal.group_id, [...(groups.get(m.proposal.group_id) ?? []), m]);
 
+  const appliedAt = messages.flatMap((x) => (x.proposal?.status === "applied" && x.proposal.decided_at ? [Date.parse(x.proposal.decided_at)] : []));
+
   function cards(members: ApiCoachMessage[]) {
     const reload = () => void revalidator.revalidate();
     const ps = members.flatMap((x) => (x.proposal ? [x.proposal] : []));
@@ -388,9 +390,8 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
               </CoachMessage>
             );
           } else {
-            // Woo's line right after a card was applied is his confirmation: the avatar gets the check.
-            const prev = messages[i - 1]?.proposal;
-            const confirms = m.kind === "chat" && !!prev && (prev.group_id ? groups.get(prev.group_id) ?? [] : [messages[i - 1]]).some((x) => x.proposal && statusOf(x.proposal) === "applied");
+            // Woo's line written as a card was applied (within a few seconds of it) is his confirmation: the avatar gets the check.
+            const confirms = m.kind === "chat" && appliedAt.some((t) => Math.abs(t - Date.parse(m.created_at)) < 5000);
             node = <CoachMessage m={m} badge={confirms ? "check" : null}><p className="text">{m.text}</p></CoachMessage>;
           }
           return <Fragment key={m.id}>{rule}{node}</Fragment>;

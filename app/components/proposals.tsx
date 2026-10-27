@@ -304,7 +304,7 @@ export function ProposalCard({ proposal, status: st, sessions, weeks, chosen, on
             {impact ? <Impact impact={impact} /> : null}
             {text ? (
               <div className={`basis ${basisOpen ? "open" : "folded"}`}>
-                <button type="button" className="head" aria-expanded={basisOpen} onClick={() => setBasisOpen((v) => !v)}>
+                <button type="button" className="toggle" aria-expanded={basisOpen} onClick={() => setBasisOpen((v) => !v)}>
                   <span><b>依據</b>{basisOpen ? null : proposal.basis.map((b, i) => <span key={i}> · {b}</span>)}</span>
                   <span className="more">{basisOpen ? "收合 ⌃" : "展開 ›"}</span>
                 </button>

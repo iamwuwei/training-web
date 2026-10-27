@@ -206,7 +206,7 @@ export default function Plan() {
           <CoachAvatar size={24} />
           <div className="mid">
             <div className="t">預覽 Woo 的提案</div>
-            <div className="s">{changedList.length ? `${changedList.map((n) => `第 ${n}`).join("、")} 週會改 · 還沒生效` : "還沒生效"}</div>
+            <div className="s">{changedList.length ? `第 ${changedList.join("、")} 週會改 · 還沒生效` : "還沒生效"}</div>
           </div>
           <button type="button" className="chip primary" disabled={busy} onClick={() => void decide("apply")}>採用</button>
           <button type="button" className="chip" disabled={busy} onClick={() => void decide("dismiss")}>不用</button>

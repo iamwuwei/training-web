@@ -57,7 +57,7 @@ export function buildPreview(plan: PlanResponse, p: ApiProposal): Preview {
     const s = sessions.find((x) => x.id === c.session_id);
     const b = c.session_id ? before.get(c.session_id) : undefined;
     if (!s || !b || !c.field) continue;
-    if (c.field === "skip") { s.type = "rest"; s.label = "休息"; s.content = "休息"; s.target_distance_m = 0; s.target = null; s.target_pace_sec_km = null; }
+    if (c.field === "skip") { s.type = "rest"; s.label = "休息"; s.content = "休息"; s.target_distance_m = 0; s.target = null; s.target_pace_sec_km = null; s.note = null; }
     else if (c.field === "scheduled_date" && typeof c.new === "string") {
       s.scheduled_date = c.new; s.week_no = weekNo(c.new);
       touch(c.new);
