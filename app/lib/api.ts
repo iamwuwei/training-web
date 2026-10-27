@@ -19,6 +19,7 @@ import type {
   PostCheckinPickRequest,
   PostCheckinPickResponse,
   PostCheckinResetResponse,
+  PostConstraintResponse,
   PostProposalResponse,
   PostWeeklyAskRequest,
   PostWeeklyAskResponse,
@@ -135,10 +136,23 @@ export function postWeeklyAsk(weeklyId: string, sessionId: string, body: PostWee
   return request<PostWeeklyAskResponse>(`/weekly/${encodeURIComponent(weeklyId)}/asks/${encodeURIComponent(sessionId)}`, { method: "POST", body: JSON.stringify(body) });
 }
 
-/** Apply (every change at once) or dismiss one of Woo's proposal cards in chat. Woo posts a confirmation line on apply; reload /plan and the thread afterwards. */
+/**
+ * Apply (every change at once) or dismiss one of Woo's proposal cards in chat. Woo posts a
+ * confirmation line on apply, and the other cards of an A／B group come back in `superseded`;
+ * reload /plan and the thread afterwards. 409 = the plan changed since: the card is now `stale`.
+ */
 export function postProposal(proposalId: string, action: "apply" | "dismiss"): Promise<PostProposalResponse> {
   if (useMock) return mock().then((m) => m.mockPostProposal(proposalId, action));
   return request<PostProposalResponse>(`/proposals/${encodeURIComponent(proposalId)}/${action}`, { method: "POST" });
+}
+
+/**
+ * Woo's "記下來" card: accept stores the constraint (it goes into every later briefing), dismiss
+ * drops it. The settings page's 刪除 is the same dismiss call on an active one.
+ */
+export function postConstraint(constraintId: string, action: "accept" | "dismiss"): Promise<PostConstraintResponse> {
+  if (useMock) return mock().then((m) => m.mockPostConstraint(constraintId, action));
+  return request<PostConstraintResponse>(`/constraints/${encodeURIComponent(constraintId)}/${action}`, { method: "POST" });
 }
 
 /** The coach's thread, oldest first. */
@@ -181,6 +195,7 @@ export function putCoachSeen(): Promise<PutCoachSeenResponse> {
  * Say something to the coach; the reply arrives later on getCoach (poll while the message is pending).
  * With `answer_to` it answers Woo's open question: the feel question (with `rpe`), or the
  * mismatch question with `confirm_match` (true: the pick stands; false: same as a check-in reset).
+ * With `re_propose` (a stale proposal's id) it is 請 Woo 重看: he sends a new card against today's plan.
  */
 export function postCoachMessage(body: PostCoachMessageRequest): Promise<PostCoachMessageResponse> {
   if (useMock) return mock().then((m) => m.mockPostCoachMessage(body));
