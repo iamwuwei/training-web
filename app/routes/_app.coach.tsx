@@ -342,6 +342,7 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
                 {wm?.asks.map((ask) => <WeeklyAskBlock key={ask.session_id} ask={ask} busy={busy} rerun={rewriting && ask.state === "skipped" ? (timedOut ? "gave-up" : "pending") : null} onAnswer={(answer) => void answerWeeklyAsk(m, ask, answer)} />)}
                 {w ? <CoachProposals review={w} sessions={sessions} embedded onChanged={() => void revalidator.revalidate()} /> : null}
                 {m.proposal || m.constraint ? cards([m]) : null}
+                {m.proposal_rejected ? <p className="cancelled">Woo 的提案沒過格式檢查，再問他一次</p> : null}
                 {wm?.cancelled.length ? <p className="cancelled">{wm.cancelled.map((c) => `原本「${c}」的建議已取消`).join("；")}</p> : null}
               </CoachMessage>
             );
@@ -368,6 +369,7 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
                 {m.text ? <p className="text">{m.text}</p> : null}
                 {members.slice(1).filter((x) => x.text && x.text !== m.text).map((x) => <p key={x.id} className="text">{x.text}</p>)}
                 {cards(members)}
+                {m.proposal_rejected ? <p className="cancelled">Woo 的提案沒過格式檢查，再問他一次</p> : null}
               </CoachMessage>
             );
           } else if (m.kind === "review") {
@@ -392,7 +394,7 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
           } else {
             // Woo's line written as a card was applied (within a few seconds of it) is his confirmation: the avatar gets the check.
             const confirms = m.kind === "chat" && appliedAt.some((t) => Math.abs(t - Date.parse(m.created_at)) < 5000);
-            node = <CoachMessage m={m} badge={confirms ? "check" : null}><p className="text">{m.text}</p></CoachMessage>;
+            node = <CoachMessage m={m} badge={confirms ? "check" : null}><p className="text">{m.text}</p>{m.proposal_rejected ? <p className="cancelled">Woo 的提案沒過格式檢查，再問他一次</p> : null}</CoachMessage>;
           }
           return <Fragment key={m.id}>{rule}{node}</Fragment>;
         })}

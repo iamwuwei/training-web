@@ -595,7 +595,7 @@ function applyToPlan(p: ApiProposal): string[] {
 
 // ---- the coach's thread (demo) ------------------------------------------------
 let thread: ApiCoachMessage[] | undefined;
-const BLANK = { activity_id: null, weekly_review_id: null, status: "sent" as const, review: null, quote: null, rpe: null, checkin: null, ask: null, weekly: null, proposal: null, constraint: null, error: null };
+const BLANK = { activity_id: null, weekly_review_id: null, status: "sent" as const, review: null, quote: null, rpe: null, checkin: null, ask: null, weekly: null, proposal: null, constraint: null, proposal_rejected: false, error: null };
 function threadData(): ApiCoachMessage[] {
   if (thread) return thread;
   const w = weeklyData()[0];
@@ -631,6 +631,9 @@ function threadData(): ApiCoachMessage[] {
     { ...BLANK, id: "c-rp-a4", role: "coach", kind: "chat", text: "好。到 10/31 的課沒有坡跑和 MP，照跑，Easy 一律壓在 7:30 以後。跑完有腫、下樓梯會痛就跟我說，我再動課表。", constraint: constraints.find((x) => x.id === "k-knee") ?? null, created_at: todayAt("06:51") },
     { ...BLANK, id: "c-rp-q4", role: "athlete", kind: "chat", text: "週三晚上有課，肌力不能動", created_at: todayAt("06:52") },
     { ...BLANK, id: "c-rp-a5", role: "coach", kind: "chat", text: "知道了，週三的肌力不動；之後要調課我會避開它。", constraint: constraints.find((x) => x.id === "k-wed") ?? null, created_at: todayAt("06:53") },
+    // A card that failed the api's check: only his text stays, plus the grey line.
+    { ...BLANK, id: "c-rp-q5", role: "athlete", kind: "chat", text: "11/16 那週全部改成輕鬆跑好了", created_at: todayAt("06:58") },
+    { ...BLANK, id: "c-rp-a6", role: "coach", kind: "chat", text: "11/16 那週有 11/18 的坡跑加 MP，是第三階段最重要的一堂，整週改輕鬆跑我不建議；要動的話跟我說是哪幾天不方便。", proposal_rejected: true, created_at: todayAt("06:59") },
     // Woo's check-in for today's run (demo: today's session is MP 7 km, three activities synced)
     { ...BLANK, id: "c5", role: "coach", kind: "checkin", text: "今天的課是 MP 7 km：2 km Easy + 3 km @ MP + 2 km Easy。Strava 剛進來 3 個活動，哪一個是這堂？", activity_id: "u-run", created_at: todayAt("07:05"),
       checkin: { state: "open", mode: "activity", date: today, session_id: todaySessionId(), session_label: "MP 7 km", candidates: [{ activity_id: "u-run", label: "跑步 06:40 · 7.00 km · 7:08/km" }, { activity_id: "u-walk", label: "走路 17:30 · 4.9 km · 64 分" }, { activity_id: "u-hyrox", label: "重訓 18:30 · 58 分 · 心拍 152" }] } },
