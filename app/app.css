@@ -780,3 +780,16 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 .dayrow .n .was { font-size: 12px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .plan-note { margin: 12px 0 0; font-size: 12px; line-height: 1.5; color: var(--ink-3); }
 .plan-notice { margin: 8px 0 0; font-size: 12px; color: var(--ink-3); }
+
+/* ---- 設定: Woo 記住的限制 ---- */
+.constraint-wrap { display: grid; grid-template-rows: 1fr; transition: grid-template-rows 0.2s ease, opacity 0.2s ease; }
+.constraint-wrap.gone { grid-template-rows: 0fr; opacity: 0; }
+.constraint-wrap > .constraint { min-height: 0; overflow: hidden; }
+.constraint { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.constraint .t { font-size: 15px; font-weight: 600; }
+.constraint .meta { margin-top: 2px; font-size: 12px; color: var(--ink-3); }
+.constraint .meta.expired { color: var(--ink-3); font-style: normal; }
+.constraint .del { min-height: 44px; padding: 6px 0 6px 10px; font-size: 13px; color: var(--ink-2); }
+.constraints .empty-line { margin: 8px 0 0; font-size: 13px; color: var(--ink-3); }
+.constraints .note-line { margin: 8px 0 0; font-size: 12px; line-height: 1.5; color: var(--ink-3); }
+@media (prefers-reduced-motion: reduce) { .constraint-wrap { transition: none; } }
