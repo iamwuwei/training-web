@@ -5,7 +5,7 @@ import { ApiError, postAdjustment, postConstraint, postProposal } from "../lib/a
 import { periodLabel } from "../lib/constraints";
 import { md, mdDow } from "../lib/date";
 import { kmPlan, pace } from "../lib/format";
-import { rowName, shortName } from "../lib/labels";
+import { rowName, shortName, typeName } from "../lib/labels";
 import { Avatar } from "./ui";
 
 const FIELD_NAMES: Record<ProposalField, string> = {
@@ -17,7 +17,8 @@ const DECIDED: Record<ApiAdjustment["status"], string> = { pending: "", applied:
 function fmt(field: ProposalField, v: string | number | null): string {
   if (v == null || v === "") return "—";
   if (field === "target_distance_m" && typeof v === "number") return `${kmPlan(v)} km`;
-  if (field === "target_pace_sec_km" && typeof v === "number") return `${pace(v)} /km`; // (the api may also send the range as text, "7:15〜7:45")
+  if (field === "target_pace_sec_km" && typeof v === "number") return `${pace(v)} /km`;
+  if (field === "type") return typeName(v);
   if (field === "scheduled_date" && typeof v === "string") return mdDow(v);
   return String(v);
 }
@@ -256,8 +257,9 @@ export function ProposalCard({ proposal, status: st, sessions, weeks, chosen, on
       onChanged();
     } catch (e) {
       // 409: the plan changed since (the card is stale now), or it was already decided — reload so the server's word replaces the buttons.
+      // 400: the card breaks a hard rule (race day, a day the athlete said is fixed); the api's sentence is English, so a fixed line.
       if (e instanceof ApiError && e.status === 409) onChanged();
-      else setError(e instanceof ApiError ? e.message : "送出失敗，再試一次");
+      else setError(e instanceof ApiError ? (e.status === 400 ? "這張卡不能採用（比賽日或固定日）" : e.message) : "送出失敗，再試一次");
     } finally {
       setBusy(false);
     }
@@ -305,7 +307,7 @@ export function ProposalCard({ proposal, status: st, sessions, weeks, chosen, on
             {text ? (
               <div className={`basis ${basisOpen ? "open" : "folded"}`}>
                 <button type="button" className="toggle" aria-expanded={basisOpen} onClick={() => setBasisOpen((v) => !v)}>
-                  <span><b>依據</b>{basisOpen ? null : proposal.basis.map((b, i) => <span key={i}> · {b}</span>)}</span>
+                  <span className="what"><b>依據</b>{basisOpen ? null : proposal.basis.map((b, i) => <span key={i}> · {b}</span>)}</span>
                   <span className="more">{basisOpen ? "收合 ⌃" : "展開 ›"}</span>
                 </button>
                 <Collapse open={basisOpen}><p>{text}</p></Collapse>
@@ -363,7 +365,7 @@ export function ProposalCard({ proposal, status: st, sessions, weeks, chosen, on
           {st === "superseded" ? <span className="gone">已作廢</span> : null}
         </div>
       ) : null}
-      {st === "superseded" ? <SupersededNote count={changes.length} chosen={chosen ?? null} open={foldOpen} onToggle={() => setFoldOpen((v) => !v)} /> : null}
+      {st === "superseded" ? <SupersededNote count={rows.length} chosen={chosen ?? null} open={foldOpen} onToggle={() => setFoldOpen((v) => !v)} /> : null}
       {opt ? <Collapse open={st !== "superseded" || foldOpen}>{body}</Collapse> : body}
     </div>
   );

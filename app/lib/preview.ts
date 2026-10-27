@@ -1,10 +1,10 @@
 // The plan as it would be after a proposal: the local plan with the card's changes laid over
 // it (no API call). The same steps the api takes on apply, so the preview and the result agree.
 
-import type { ApiProposal, ApiProposalChange, ApiSession, PlanResponse } from "../types/api";
+import type { ApiProposal, ApiProposalChange, ApiSession, PlanResponse, SessionType } from "../types/api";
 import { md } from "./date";
 import { kmPlan, pace } from "./format";
-import { rowName, shortName } from "./labels";
+import { rowName, shortName, typeLabel, typeName } from "./labels";
 
 export interface Preview {
   /** The plan after the card; build the usual PlanView from it. */
@@ -19,6 +19,8 @@ export interface Preview {
   focusWas: Map<number, string | null>;
 }
 
+const TYPES = { easy: 1, long: 1, tempo: 1, interval: 1, rest: 1, race: 1 };
+const FIELD_K: Partial<Record<NonNullable<ApiProposalChange["field"]>, string>> = { target_distance_m: "距離", target_pace_sec_km: "配速", type: "課型", note: "備註" };
 const op = (c: ApiProposalChange) => c.op ?? "change";
 const firstSentence = (t: string | null) => (t ? /^[^。！？!?；;]+/.exec(t.trim())?.[0] ?? t : "");
 
@@ -27,6 +29,7 @@ function oldText(c: ApiProposalChange, before: ApiSession): string {
   switch (c.field) {
     case "target_distance_m": return `${kmPlan(typeof c.old === "number" ? c.old : before.target_distance_m)} km`;
     case "target_pace_sec_km": return typeof c.old === "number" ? `${pace(c.old)} /km` : String(c.old ?? before.target?.split(" / ")[0] ?? "—");
+    case "type": return typeName(c.old ?? before.type);
     case "note": return firstSentence(typeof c.old === "string" ? c.old : before.note) || "（沒有備註）";
     case "skip": return shortName(before);
     default: return String(c.old ?? shortName(before));
@@ -45,8 +48,10 @@ export function buildPreview(plan: PlanResponse, p: ApiProposal): Preview {
 
   const removed = new Set(p.changes.filter((c) => op(c) === "remove" && c.session_id).map((c) => c.session_id as string));
   const sessions = plan.sessions.filter((s) => !removed.has(s.id)).map((s) => ({ ...s }));
-  const was = new Map<string, string[]>();
-  const note = (id: string, t: string) => was.set(id, [...(was.get(id) ?? []), t]);
+  // per session: the old value of each field the card changes, and where a moved one came from
+  const was = new Map<string, { k: string | null; v: string }[]>();
+  const note = (id: string, v: string, k: string | null = null) => was.set(id, [...(was.get(id) ?? []), { k, v }]);
+  const moves = new Map<string, { there: ApiSession | undefined; from: string }>();
   const changedWeeks = new Set<number>();
   const touch = (date: string | null) => { const n = date ? weekNo(date) : null; if (n != null) changedWeeks.add(n); };
 
@@ -65,15 +70,23 @@ export function buildPreview(plan: PlanResponse, p: ApiProposal): Preview {
       s.target_distance_m = c.new;
       s.content = s.content?.replace(/\d+(?:〜\d+)?\s*km/, `${kmPlan(c.new)} km`) ?? s.content;
     } else if (c.field === "target_pace_sec_km") {
-      if (typeof c.new === "number") s.target_pace_sec_km = c.new; else s.target = String(c.new ?? "");
-    } else if (c.field === "type") { s.content = String(c.new ?? ""); s.target_distance_m = Number(/([\d.]+)\s*km/.exec(String(c.new))?.[1] ?? 0) * 1000 || s.target_distance_m; if (typeof c.new === "string" && /輕鬆|恢復/.test(c.new)) { s.type = "easy"; s.label = "Easy"; } }
-    else if (c.field === "note") s.note = String(c.new ?? "") || null;
+      if (typeof c.new === "number") {
+        // what the row's right side says: the first part of `target` is the pace; min / max move by the same seconds (as the api does)
+        const by = c.new - (s.target_pace_sec_km ?? c.new);
+        s.target = [pace(c.new), ...(s.target?.split(" / ").slice(1) ?? [])].join(" / ");
+        if (s.target_pace_min_sec_km != null) s.target_pace_min_sec_km += by;
+        if (s.target_pace_max_sec_km != null) s.target_pace_max_sec_km += by;
+        s.target_pace_sec_km = c.new;
+      }
+    } else if (c.field === "type" && typeof c.new === "string" && c.new in TYPES) {
+      // the api's enum: the row becomes that kind of session (distance stays unless the card also changes it)
+      s.type = c.new as SessionType; s.label = typeLabel(s.type); s.content = null;
+      if (s.type === "rest") { s.target_distance_m = 0; s.target = null; s.note = null; }
+    }
+    if (c.field === "note") s.note = String(c.new ?? "") || null;
 
-    if (c.field === "scheduled_date" && typeof c.new === "string") {
-      const there = beforeByDate.get(c.new);
-      const moved = (s.target_distance_m ? `${kmPlan(s.target_distance_m)} km` : rowName(s));
-      note(s.id, [there && there.id !== s.id ? rowName(there) : null, `${moved} 從 ${md(b.scheduled_date)} 移來`].filter(Boolean).join(" · "));
-    } else note(s.id, oldText(c, b));
+    if (c.field === "scheduled_date" && typeof c.new === "string") moves.set(s.id, { there: beforeByDate.get(c.new), from: b.scheduled_date });
+    else note(s.id, oldText(c, b), FIELD_K[c.field] ?? null);
   }
   p.changes.forEach((c, i) => {
     const n = c.new_session;
@@ -96,14 +109,14 @@ export function buildPreview(plan: PlanResponse, p: ApiProposal): Preview {
 
   return {
     data: { ...plan, sessions, weeks },
-    was: new Map([...was].map(([id, t]) => [id, `原本：${t.join(" · ")}`])),
+    was: new Map([...new Set([...moves.keys(), ...was.keys()])].map((id) => {
+      // a moved session reads "原本：<what was on that day> · <its distance> 從 11/22 移來"; with other fields changed too, those are labelled (距離 32 km)
+      const m = moves.get(id), s = sessions.find((x) => x.id === id), f = was.get(id) ?? [];
+      const parts = [...(m && s ? [[m.there && m.there.id !== id ? rowName(m.there) : null, `${s.target_distance_m ? `${kmPlan(s.target_distance_m)} km` : rowName(s)} 從 ${md(m.from)} 移來`].filter(Boolean).join(" · ")] : []), ...f.map((x) => (m || f.length > 1) && x.k ? `${x.k} ${x.v}` : x.v)];
+      return [id, `原本：${parts.join(" · ")}`] as const;
+    })),
     changedWeeks,
     beforeM: sumM(plan.sessions),
     focusWas,
   };
-}
-
-/** "第 7 週 28 km、第 8 週 58 km": what the changed weeks add up to after the card. */
-export function afterSummary(pv: Preview, weekM: (n: number) => number): string {
-  return [...pv.changedWeeks].sort((a, b) => a - b).map((n) => `第 ${n} 週 ${kmPlan(weekM(n))} km`).join("、");
 }

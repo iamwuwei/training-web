@@ -39,6 +39,16 @@ const BY_TYPE: Record<SessionType, LabelStyle> = {
   rest: { kind: "rest", short: "休", name: "休息" },
 };
 
+/** The api's session type enum (what a `type` change carries) in words: 輕鬆跑／長跑／節奏跑／間歇跑／休息／比賽. */
+const TYPE_ZH: Record<SessionType, string> = { easy: "輕鬆跑", long: "長跑", tempo: "節奏跑", interval: "間歇跑", rest: "休息", race: "比賽" };
+export function typeName(t: string | number | null): string {
+  return typeof t === "string" && t in TYPE_ZH ? TYPE_ZH[t as SessionType] : String(t ?? "—");
+}
+/** The label the plan gives a session of that type (as when the api rewrites a type). */
+export function typeLabel(t: SessionType): string {
+  return BY_TYPE[t].name;
+}
+
 const SPORTS: Record<string, { short: string; name: string }> = {
   Run: { short: "跑", name: "跑步" },
   TrailRun: { short: "越", name: "越野跑" },

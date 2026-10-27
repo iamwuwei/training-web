@@ -700,8 +700,8 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 .proposal-card .basis .toggle, .proposal-card .fold { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; width: 100%; text-align: left; font-size: 12px; line-height: 1.5; color: var(--ink-3); border-radius: 0; }
 .proposal-card .basis .toggle b, .proposal-card .fold b { font-weight: 700; color: var(--ink-2); }
 .proposal-card .basis .more, .proposal-card .fold .more { flex: none; }
+.proposal-card .basis .what { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .proposal-card .basis p { margin: 4px 0 0; font-size: 13px; line-height: 1.55; color: var(--ink-2); }
-.proposal-card .basis.open .head { color: var(--ink-2); }
 .proposal-card .impact { padding-top: 10px; }
 .proposal-card .impact h4 { margin: 0; font-size: 12px; font-weight: 700; color: var(--ink-2); letter-spacing: 0.04em; }
 .proposal-card .impact .row { display: grid; grid-template-columns: 46px minmax(0, 1fr); gap: 8px; margin-top: 6px; font-size: 13px; line-height: 1.55; }
@@ -777,7 +777,9 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 .week-head2 .sub .was { color: var(--ink-3); }
 .week-head2 .sub .now { color: var(--ink-2); font-weight: 600; }
 .dayrow.changed { margin: 0 -20px; padding: 0 20px 0 17px; width: calc(100% + 40px); border-left: 3px solid var(--v-warn); }
-.dayrow .n .was { font-size: 12px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dayrow > .was { grid-column: 3 / -1; font-size: 12px; line-height: 1.35; color: var(--ink-3); margin-top: -4px; }
+.dayrow.changed { height: auto; min-height: 56px; grid-template-rows: minmax(44px, auto) auto; align-content: center; padding-top: 6px; padding-bottom: 8px; row-gap: 0; } /* the 原本 line gets its own full-width line */
+.dayrow.changed .r { max-width: 34vw; }
 .plan-note { margin: 12px 0 0; font-size: 12px; line-height: 1.5; color: var(--ink-3); }
 .plan-notice { margin: 8px 0 0; font-size: 12px; color: var(--ink-3); }
 

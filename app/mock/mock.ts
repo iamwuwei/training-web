@@ -18,8 +18,8 @@ import type { ActivitiesResponse, ApiActivity, ApiCoachMessage, ApiConstraint, A
   PutCoachSeenResponse, MatchStatus, MeResponse, PlanResponse, PostAdjustmentRequest, PostAdjustmentResponse, PutMemoRequest, PutMemoResponse, PutSessionRequest, PutSessionResponse, RereviewResponse, Verdict, WeeklyResponse } from "../types/api";
 import { ApiError } from "../lib/api";
 import { addDays, md, mdDow, todayJst } from "../lib/date";
-import { kmPlan } from "../lib/format";
-import { shortName } from "../lib/labels";
+import { kmPlan, pace } from "../lib/format";
+import { shortName, typeLabel, typeName } from "../lib/labels";
 const MOCK_USER_ID = "7d1c3a0e-4f7b-4d2e-9c1a-5b8e2f6a1c01"; // ww in training-api seed
 
 interface SeedSession {
@@ -408,6 +408,7 @@ const constraints: ApiConstraint[] = [
   { id: "k-trip", text: "11/3〜4 出差", start_date: "2026-11-03", end_date: "2026-11-04", kind: "period", weekday: null, source_message_id: null, status: "active", created_at: at("2026-10-09T21:30:00+09:00") },
   { id: "k-ankle", text: "左腳踝輕傷", start_date: "2026-10-01", end_date: "2026-10-10", kind: "period", weekday: null, source_message_id: null, status: "active", created_at: at("2026-10-02T08:00:00+09:00") },
   { id: "k-abroad", text: "11/21〜23 出國", start_date: "2026-11-21", end_date: "2026-11-23", kind: "period", weekday: null, source_message_id: "c-rp-a1", status: "proposed", created_at: todayAt("06:31") },
+  { id: "k-abroad-ab", text: "11/21〜23 出國", start_date: "2026-11-21", end_date: "2026-11-23", kind: "period", weekday: null, source_message_id: "c-rp-a3", status: "proposed", created_at: todayAt("06:41") },
   { id: "k-knee", text: "左膝不舒服", start_date: null, end_date: "2026-10-31", kind: "period", weekday: null, source_message_id: "c-rp-a4", status: "proposed", created_at: todayAt("06:51") },
   { id: "k-wed", text: "週三肌力不能動", start_date: null, end_date: null, kind: "fixed_day", weekday: 3, source_message_id: "c-rp-a5", status: "proposed", created_at: todayAt("06:53") },
 ];
@@ -445,7 +446,7 @@ const abroadChanges = (): ApiProposalChange[] => [
   chg({ op: "add", label: "休息", date: "2026-11-22", new_session: { scheduled_date: "2026-11-22", type: "rest", label: "休息", target_distance_m: 0, target_pace_sec_km: null, note: "出國" }, reason: "你 11/21〜23 不在，這天空出來。" }),
   chg({ op: "remove", session_id: "s-2026-11-25", label: "Easy 7 km", date: "2026-11-25", reason: "這天改跑 32 km，不另外加課。" }),
   chg({ op: "change", session_id: "s-2026-11-26", field: "skip", label: "Recovery 5 km", date: "2026-11-26", reason: "32 km 隔天，肌力也不做。" }),
-  chg({ op: "change", session_id: "s-2026-11-27", field: "target_pace_sec_km", old: "7:15〜7:45", new: "7:45+（恢復跑）", label: "Easy 5 km", date: "2026-11-27" }),
+  chg({ op: "change", session_id: "s-2026-11-27", field: "target_pace_sec_km", old: 450, new: 465, label: "Easy 5 km", date: "2026-11-27" }),
   chg({ op: "change", session_id: "s-2026-11-29", field: "target_distance_m", old: 20000, new: 16000, label: "Long 20 km", date: "2026-11-29", reason: "離 32 km 只隔 4 天，20 km 會疊進 taper。" }),
 ];
 
@@ -497,7 +498,7 @@ const proposals: ApiProposal[] = [
   // 409: the plan changed under it
   card({ id: "p-stale", message_id: "c-rp-c2", status: "stale", stale_reason: "11/29 長跑 20 km 在 10/27 被週回顧改過（現在是 18 km）",
     changes: [
-      chg({ op: "change", session_id: "s-2026-11-27", field: "target_pace_sec_km", old: "7:15〜7:45", new: "7:45+（恢復跑）", label: "Easy 5 km", date: "2026-11-27" }),
+      chg({ op: "change", session_id: "s-2026-11-27", field: "target_pace_sec_km", old: 450, new: 465, label: "Easy 5 km", date: "2026-11-27" }),
       chg({ op: "change", session_id: "s-2026-11-29", field: "target_distance_m", old: 20000, new: 16000, label: "Long 20 km", date: "2026-11-29", reason: "離 32 km 只隔 4 天，20 km 會疊進 taper。" }),
     ],
     weeks: [{ week_no: 8, phase: null, focus: "★ 峰值 32 km（11/25 週三），週末 16 km 收尾" }],
@@ -510,7 +511,8 @@ const proposals: ApiProposal[] = [
       chg({ op: "change", session_id: "s-2026-11-22", field: "scheduled_date", old: "2026-11-22", new: "2026-11-20", label: "Peak Long 32 km", date: "2026-11-22" }),
       chg({ op: "change", session_id: "s-2026-11-22", field: "target_distance_m", old: 32000, new: 26000, label: "Peak Long 32 km", date: "2026-11-22", flags: ["離 11/15 的 26 km 只隔 5 天"] }),
       chg({ op: "remove", session_id: "s-2026-11-20", label: "Easy 6 km", date: "2026-11-20", reason: "這天改跑 26 km。" }),
-      chg({ op: "change", session_id: "s-2026-11-18", field: "type", old: "坡跑＋MP", new: "輕鬆跑 6 km", label: "坡跑+MP 10 km", date: "2026-11-18", reason: "26 km 前兩天不排坡。" }),
+      chg({ op: "change", session_id: "s-2026-11-18", field: "type", old: "interval", new: "easy", label: "坡跑+MP 10 km", date: "2026-11-18", reason: "26 km 前兩天不排坡。" }),
+      chg({ op: "change", session_id: "s-2026-11-18", field: "target_distance_m", old: 10000, new: 6000, label: "坡跑+MP 10 km", date: "2026-11-18" }),
       chg({ op: "add", label: "休息", date: "2026-11-22", new_session: { scheduled_date: "2026-11-22", type: "rest", label: "休息", target_distance_m: 0, target_pace_sec_km: null, note: "出國" }, reason: "你 11/21〜23 不在。" }),
     ],
     weeks: [{ week_no: 7, phase: null, focus: "★ 峰值 26 km（11/20 週五），出國前跑完" }],
@@ -557,15 +559,16 @@ function applyToPlan(p: ApiProposal): string[] {
     if (!s) continue;
     if (c.field === "skip") { s.type = "rest"; s.label = "休息"; s.content = "休息"; s.target_distance_m = 0; s.target = null; s.note = null; parts.push(`${md(c.date ?? s.scheduled_date)} 改成休息`); }
     else if (c.field === "type") {
-      const n = String(c.new ?? "");
-      const m = /([\d.]+)\s*km/.exec(n);
-      s.type = "easy"; s.label = "Easy"; s.content = n; s.target = "7:15〜7:45 / 心拍 140〜150";
-      if (m) s.target_distance_m = Number(m[1]) * 1000;
-      parts.push(`${md(c.date ?? s.scheduled_date)} 改成 ${n}`);
-    } else if (c.field === "target_pace_sec_km" && typeof c.new === "string") {
-      const m = /^(\d+):(\d+)/.exec(c.new);
-      if (m) s.target_pace_sec_km = Number(m[1]) * 60 + Number(m[2]);
-      s.target = `${c.new} / 心拍 ≤140`;
+      // the api's enum: the session becomes that kind (label and content follow; distance is its own change)
+      const t = String(c.new) as ApiSession["type"];
+      s.type = t; s.label = typeLabel(t); s.content = null; s.target = t === "easy" ? "7:15〜7:45 / 心拍 140〜150" : null;
+      parts.push(`${md(c.date ?? s.scheduled_date)} 改成 ${typeName(t)}`);
+    } else if (c.field === "target_pace_sec_km" && typeof c.new === "number") {
+      const by = c.new - (s.target_pace_sec_km ?? c.new);
+      s.target = [pace(c.new), ...(s.target?.split(" / ").slice(1) ?? [])].join(" / ");
+      if (s.target_pace_min_sec_km != null) s.target_pace_min_sec_km += by;
+      if (s.target_pace_max_sec_km != null) s.target_pace_max_sec_km += by;
+      s.target_pace_sec_km = c.new;
     } else if (c.field) {
       (s as unknown as Record<string, unknown>)[c.field] = c.new;
       if (c.field === "scheduled_date" && typeof c.new === "string") s.week_no = weekOf(c.new);
@@ -626,7 +629,7 @@ function threadData(): ApiCoachMessage[] {
     { ...BLANK, id: "c-rp-a1", role: "coach", kind: "chat", text: "11/22 是 32 km 的峰值長跑，11/23 本來就是完全休息。32 km 是關卡 2 唯一一次測試，不縮、往後移到 11/25 週三；第 8 週因此從減量週變成峰值週，11/29 的 20 km 縮成 16 km 讓腿收回來。整張一起看：", proposal: proposals.find((x) => x.id === "p-replan") ?? null, constraint: constraints.find((x) => x.id === "k-abroad") ?? null, created_at: todayAt("06:31") },
     { ...BLANK, id: "c-rp-q2", role: "athlete", kind: "chat", text: "我 11/21〜23 出國，32 km 還跑得了嗎", created_at: todayAt("06:40") },
     { ...BLANK, id: "c-rp-a2", role: "coach", kind: "chat", text: "兩條路。A：32 km 後移到 11/25，關卡 2 照測，第 8 週變重。B：縮成 26 km 提前到 11/20 週五跑完再走，第 8 週照減量，但關卡 2 只能用 26 km 估。我偏 A；回程累不累你比我清楚。", proposal: proposals.find((x) => x.id === "p-ab-a") ?? null, created_at: todayAt("06:41") },
-    { ...BLANK, id: "c-rp-a3", role: "coach", kind: "chat", text: "", proposal: proposals.find((x) => x.id === "p-ab-b") ?? null, constraint: constraints.find((x) => x.id === "k-abroad") ?? null, created_at: todayAt("06:41") },
+    { ...BLANK, id: "c-rp-a3", role: "coach", kind: "chat", text: "", proposal: proposals.find((x) => x.id === "p-ab-b") ?? null, constraint: constraints.find((x) => x.id === "k-abroad-ab") ?? null, created_at: todayAt("06:41") },
     { ...BLANK, id: "c-rp-q3", role: "athlete", kind: "chat", text: "左膝有點不舒服，到月底都會小心一點", created_at: todayAt("06:50") },
     { ...BLANK, id: "c-rp-a4", role: "coach", kind: "chat", text: "好。到 10/31 的課沒有坡跑和 MP，照跑，Easy 一律壓在 7:30 以後。跑完有腫、下樓梯會痛就跟我說，我再動課表。", constraint: constraints.find((x) => x.id === "k-knee") ?? null, created_at: todayAt("06:51") },
     { ...BLANK, id: "c-rp-q4", role: "athlete", kind: "chat", text: "週三晚上有課，肌力不能動", created_at: todayAt("06:52") },
@@ -865,7 +868,7 @@ export function mockPostCoachMessage(body: PostCoachMessageRequest): PostCoachMe
       if (!next) {
         next = card({ id: "p-restale", message_id: null, created_at: new Date().toISOString(),
           changes: [
-            chg({ op: "change", session_id: "s-2026-11-27", field: "target_pace_sec_km", old: "7:15〜7:45", new: "7:45+（恢復跑）", label: "Easy 5 km", date: "2026-11-27" }),
+            chg({ op: "change", session_id: "s-2026-11-27", field: "target_pace_sec_km", old: 450, new: 465, label: "Easy 5 km", date: "2026-11-27" }),
             chg({ op: "change", session_id: "s-2026-11-29", field: "target_distance_m", old: 18000, new: 16000, label: "Long 18 km", date: "2026-11-29", reason: "離 32 km 只隔 4 天，18 km 還是會疊進 taper。" }),
           ],
           weeks: old.weeks, basis: old.basis, basis_text: old.basis_text, impact: old.impact });

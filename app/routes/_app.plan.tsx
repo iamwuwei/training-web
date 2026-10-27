@@ -12,7 +12,7 @@ import { activityDate, buildPlanView, isRunSport, type Day, type Week } from "..
 import { buildPreview, type Preview } from "../lib/preview";
 import { NoPlan, usePlan } from "../lib/use-plan";
 import { useProposal } from "../lib/use-proposal";
-import type { ApiActivity, ApiRoutine, ApiSession } from "../types/api";
+import type { ApiActivity, ApiRoutine, ApiSession, PlanResponse } from "../types/api";
 
 export function meta(): Route.MetaDescriptors {
   return [{ title: "課表 · 富士山マラソン 2026" }];
@@ -95,8 +95,9 @@ function DayRow({ day, isToday, onOpen, routine, was, preview }: { day: Day; isT
     <>
       <div className="d"><span className="dow">{DOW[date.getUTCDay()]}</span><span className="num dom">{date.getUTCDate()}</span></div>
       <Avatar session={s} sport={a?.sport_type} />
-      <div className="n"><div className={`t${rest && !strength ? " rest" : ""}`}>{rowName(s)}</div>{was ? <div className="was">{was}</div> : sub ? <div className="sub">{sub}</div> : null}</div>
+      <div className="n"><div className={`t${rest && !strength ? " rest" : ""}`}>{rowName(s)}</div>{!was && sub ? <div className="sub">{sub}</div> : null}</div>
       <div className="r">{right}{dot ? <i className={`dot ${dot}`} /> : null}</div>
+      {was ? <div className="was">{was}</div> : null}
     </>
   );
   const cls = `dayrow${isToday ? " today" : ""}${status === "skipped" ? " skipped" : ""}${was ? " changed" : ""}`;
@@ -153,13 +154,17 @@ export default function Plan() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [noticeGone, setNoticeGone] = useState<string | null>(null);
+  // 採用 went through: until the reloaded plan is in, keep showing the plan the athlete just saw
+  // (without markers) — laying the card over the already-changed plan would add a session twice.
+  const [applied, setApplied] = useState<{ id: string; data: PlanResponse } | null>(null);
+  const done = !!applied && applied.id === proposalId;
 
   // The card still waiting for an answer is previewed; one that was decided elsewhere (or is gone)
   // gets the plain plan and a grey line for 3 seconds.
-  const pending = !!proposal && proposal.status === "pending";
+  const pending = !!proposal && proposal.status === "pending" && !done;
   const preview: Preview | null = useMemo(() => (base && proposal && pending ? buildPreview(base.data, proposal) : null), [base, proposal, pending]);
-  const view = useMemo(() => (preview && base ? buildPlanView(preview.data, base.today) : base), [preview, base]);
-  const notice = !!proposalId && ready && !preview;
+  const view = useMemo(() => (done && base ? buildPlanView(applied.data, base.today) : preview && base ? buildPlanView(preview.data, base.today) : base), [done, applied, preview, base]);
+  const notice = !!proposalId && ready && !preview && !done;
   useEffect(() => {
     if (!notice) return;
     const t = window.setTimeout(() => setNoticeGone(proposalId), 3000);
@@ -185,6 +190,7 @@ export default function Plan() {
     try {
       await postProposal(proposal.id, action);
       if (action === "apply") {
+        if (preview) setApplied({ id: proposal.id, data: preview.data });
         setPicked(null);
         await revalidator.revalidate();
         void navigate("/plan", { replace: true });
@@ -241,7 +247,7 @@ export default function Plan() {
             {preview ? (
               <p className="plan-note">
                 琥珀線的列是這張提案會改的，下面一行是改前。
-                {changedList.filter((n) => n !== week.week_no).length ? `${changedList.filter((n) => n !== week.week_no).map((n) => `第 ${n} 週${n < week.week_no ? "（‹）" : "（›）"}`).join("、")}也有改。` : ""}
+                {changedList.filter((n) => n !== week.week_no).length ? `${changedList.filter((n) => n !== week.week_no).map((n) => `第 ${n} 週也有改${n < week.week_no ? "（‹）" : "（›）"}`).join("；")}。` : ""}
                 採用後{changedList.map(weekAfter).join("、")}。
               </p>
             ) : null}
