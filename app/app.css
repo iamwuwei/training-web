@@ -764,3 +764,19 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 .memo-card .hint { margin: 6px 0 0 48px; font-size: 12px; }
 .memo-card.dismissed .actions { display: none; }
 @media (prefers-reduced-motion: reduce) { .collapse, .collapse.open, .proposal-card.superseded { transition: none; } .proposal-card > .decided.applied, .memo-card .decided { animation: none; } }
+
+/* ---- 課表預覽: /plan?proposal=<id> (the title bar with a 2px amber underline is the whole marker) ---- */
+.plan-preview-bar { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 10px; padding: calc(10px + env(safe-area-inset-top)) 20px 10px; background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: saturate(180%) blur(12px); -webkit-backdrop-filter: saturate(180%) blur(12px); border-bottom: 2px solid var(--v-warn); }
+.plan-preview-bar .back { display: flex; align-items: center; justify-content: center; flex: none; width: 32px; height: 44px; margin-left: -8px; }
+.plan-preview-bar .mid { flex: 1 1 auto; min-width: 0; line-height: 1.2; }
+.plan-preview-bar .t { font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.plan-preview-bar .s { font-size: 12px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.plan-preview-bar .chip { height: 32px; padding: 0 14px; font-size: 13px; }
+.weekbars .labels .changed { color: var(--v-warn); font-weight: 700; }
+.week-head2 .kms .was { margin-right: 4px; font-size: 13px; color: var(--ink-3); }
+.week-head2 .sub .was { color: var(--ink-3); }
+.week-head2 .sub .now { color: var(--ink-2); font-weight: 600; }
+.dayrow.changed { margin: 0 -20px; padding: 0 20px 0 17px; width: calc(100% + 40px); border-left: 3px solid var(--v-warn); }
+.dayrow .n .was { font-size: 12px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.plan-note { margin: 12px 0 0; font-size: 12px; line-height: 1.5; color: var(--ink-3); }
+.plan-notice { margin: 8px 0 0; font-size: 12px; color: var(--ink-3); }
