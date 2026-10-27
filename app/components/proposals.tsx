@@ -119,6 +119,7 @@ function changeSession(c: ApiProposalChange, sessions: ApiSession[]): ApiSession
 
 /** One change line: "日期 → 10/24 週六" stays short; everything else is "欄位：舊 → 新". */
 function ChangeLine({ c }: { c: ApiProposalChange }) {
+  if (!c.field) return null;
   if (c.field === "skip") return <div className="change">整堂改成休息</div>;
   if (c.field === "scheduled_date") return <div className="change">日期 → <b>{fmt(c.field, c.new)}</b></div>;
   if (c.field === "note") {

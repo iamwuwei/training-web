@@ -159,6 +159,8 @@ export interface PlanResponse {
   unassigned: ApiActivity[];
   /** 肌力 checklists Woo wrote for sessions of this plan (see POST /sessions/{id}/routine). */
   routines: ApiRoutine[];
+  /** What Woo was told to remember (status active, expired ones included: the settings page marks them 已過期). */
+  constraints: ApiConstraint[];
 }
 
 // ---- 肌力 day: Woo's checklist ---------------------------------------------------
@@ -369,6 +371,8 @@ export interface ApiCoachMessage {
   weekly: ApiWeeklyMeta | null;
   /** A proposal card attached to a coach chat reply (see POST /proposals/{id}/apply). */
   proposal: ApiProposal | null;
+  /** A "記下來" card attached to a coach reply (see POST /constraints/{id}/accept | dismiss). Goes next to `proposal`, or alone. */
+  constraint: ApiConstraint | null;
   error: string | null;              // failed: a fixed line to show (the provider's wording stays in the logs)
   created_at: string;
 }
@@ -440,6 +444,11 @@ export interface PostCoachMessageRequest {
    * is posted). `text` is stored as the athlete's line; no model reply.
    */
   confirm_match?: boolean;
+  /**
+   * 請 Woo 重看: the id of a proposal that went `stale` (409). The api puts that card's content
+   * into the briefing and asks Woo to send a new one against today's plan.
+   */
+  re_propose?: string;
 }
 
 // ---- POST <ApiUrl>/weekly/{id}/asks/{session_id} -----------------------------------
@@ -457,19 +466,27 @@ export interface PostWeeklyAskResponse {
 }
 
 // ---- proposals (Woo's cards in chat) ------------------------------------------------
-// A coach chat reply may carry one card with one or more changes that are applied
-// together. Only sessions of this week and next; no adding/removing sessions, no race day.
+// A coach chat reply (or a weekly review) may carry a card with one or more changes that are
+// applied together, across weeks: any session from tomorrow to the day before the race, plus
+// new and removed sessions and new week descriptions. Never the race day.
 
 export type ProposalField = "type" | "target_distance_m" | "target_pace_sec_km" | "scheduled_date" | "note" | "skip";
 
 export interface ApiProposalChange {
-  session_id: string;         // the planned session as it was when proposed
-  field: ProposalField;       // skip: the whole session becomes a rest day (old/new unused)
+  op: "change" | "add" | "remove";          // 舊資料視為 "change"
+  session_id: string | null;                // add: null
+  field?: ProposalField;                    // op=change only; skip: the whole session becomes a rest day (old/new unused)
   old: string | number | null;
   new: string | number | null;
-  label: string | null;       // "長跑 16 km" — for the card's header line
-  date: string | null;        // the session's date when proposed, 'YYYY-MM-DD'
-  applied_session_id: string | null; // after apply: the new session row
+  label: string | null;                     // "長跑 16 km" — for the card's header line
+  date: string | null;                      // the session's date when proposed, 'YYYY-MM-DD'
+  new_session?: {                           // op=add
+    scheduled_date: string; type: ApiSession["type"]; label: string;
+    target_distance_m: number | null; target_pace_sec_km: number | null; note: string | null;
+  };
+  reason: string | null;                    // one line under the row; required for add / remove
+  flags: string[];                          // computed by the api, amber, under this row: "落到第 8 週：那週 42 → 58 km（+38%）"
+  applied_session_id: string | null;        // after apply: the new session row
 }
 
 export interface ApiProposal {
@@ -477,21 +494,59 @@ export interface ApiProposal {
   source: "weekly" | "chat";
   message_id: string | null;
   changes: ApiProposalChange[];
+  /** The week descriptions to rewrite with the sessions; only weeks that `changes` touch. */
+  weeks: { week_no: number; phase: string | null; focus: string | null }[];
   why: string | null;         // one sentence
-  basis: string[];            // "本週已跑 12.1 / 36 km" … the numbers Woo looked at
-  flags: string[];            // computed by the api, shown in amber: "比目前最長多 3.7 km"
-  status: "pending" | "applied" | "dismissed";
+  basis: string[];            // the folded line: "目標 4:45" · "最長 16.2 km" … 2–4 numbers Woo looked at
+  basis_text: string;         // the expanded paragraph: goal, current form, the training principles used
+  impact: { keep: string; change: string; risk: string };  // 不調整 / 調整後 / 風險, all required
+  flags: string[];            // week-level flags that belong to no row
+  group_id: string | null;    // A／B: the cards of one reply share it
+  option: { letter: "A" | "B"; title: string; recommended: boolean } | null;
+  /** superseded: another card of the group was applied. stale: apply hit a 409 (the plan changed since). */
+  status: "pending" | "applied" | "dismissed" | "superseded" | "stale";
+  stale_reason: string | null; // "11/29 長跑 20 km 在 10/27 被週回顧改過" / "11/25 已完成"
   created_at: string;
   decided_at: string | null;
 }
 
 // ---- POST <ApiUrl>/proposals/{id}/apply | /dismiss -----------------------------------
-// apply: every change of the card in one transaction (new session versions, old ones
-// superseded, activities moved; a date swap of two sessions is one commit). Woo posts a
-// one-line confirmation in the thread. 409 when already decided or a session changed since.
+// apply: every change of the card in one transaction (new session versions, new sessions
+// inserted, removed ones superseded, week descriptions written; a date swap of two sessions is
+// one commit). Woo posts a one-line confirmation in the thread. Other pending cards of the same
+// group_id become `superseded` (ids in `superseded`). 409 when already decided, or a session
+// changed / was completed since the card was made: { error: "plan_changed", changed: [...] } and
+// the card is stored as `stale`. 400 for any change on the race day or on a fixed day.
 
 export interface PostProposalResponse {
   proposal: ApiProposal;
+  superseded: string[];
+}
+
+// ---- constraints (what Woo was told to remember) -----------------------------------------
+// Woo proposes "記下來：11/21〜23 出國" as part of his reply: the api stores it as `proposed`
+// and attaches it to the message (`constraint`). The athlete accepts (→ active) or dismisses it
+// (→ dismissed); the settings page deletes an active one with the same dismiss call. Only
+// active ones are in GET /plan (expired ones included) and in Woo's briefing (unexpired).
+// There is no manual create.
+
+export interface ApiConstraint {
+  id: string;
+  text: string;                       // ≤ 60 chars: "11/21〜23 出國"
+  start_date: string | null;          // 'YYYY-MM-DD'
+  end_date: string | null;            // null = 長期
+  kind: "period" | "fixed_day" | "note";
+  weekday: number | null;             // kind fixed_day: 0 = Sunday
+  source_message_id: string | null;
+  status: "proposed" | "active" | "dismissed";
+  created_at: string;
+}
+
+// ---- POST <ApiUrl>/constraints/{id}/accept | /dismiss --------------------------------
+// 409 when already decided.
+
+export interface PostConstraintResponse {
+  constraint: ApiConstraint;
 }
 
 // ---- POST <ApiUrl>/coach/checkins/{id}/pick ---------------------------------------
