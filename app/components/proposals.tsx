@@ -121,11 +121,11 @@ function changeSession(c: ApiProposalChange, sessions: ApiSession[]): ApiSession
   return c.label ? { label: c.label.replace(/\s*[\d.]+\s*km$/, ""), type: "easy" } : null;
 }
 
-/** One change line: "日期 → 10/24 週六" stays short; everything else is "欄位：舊 → 新". */
+/** One change line: "日期 → 10/24 週六" stays short; everything else is "欄位：舊 → 新". A 補課 says which week it counts in once that is decided (after 採用). */
 function ChangeLine({ c }: { c: ApiProposalChange }) {
   if (!c.field) return null;
   if (c.field === "skip") return <div className="change">整堂改成休息</div>;
-  if (c.field === "scheduled_date") return <div className="change">日期 → <b>{fmt(c.field, c.new)}</b></div>;
+  if (c.field === "scheduled_date") return <div className="change">日期 → <b>{fmt(c.field, c.new)}</b>{c.makeup && c.counts_in_week_no != null ? <span className="counts"> · 算第 {c.counts_in_week_no} 週</span> : null}</div>;
   if (c.field === "note") {
     return (
       <>
@@ -142,6 +142,11 @@ const op = (c: ApiProposalChange): NonNullable<ApiProposalChange["op"]> => c.op 
 
 /** The date a change belongs to (an added session: the day it lands on). */
 const changeDate = (c: ApiProposalChange) => c.date ?? c.new_session?.scheduled_date ?? null;
+/** The date a row is grouped under: a 補課 goes with the week it moves to (its own week is over), the rest with their own date. */
+const rowDate = (r: { changes: ApiProposalChange[] }) => {
+  const mk = r.changes.find((c) => c.makeup && c.field === "scheduled_date" && typeof c.new === "string");
+  return mk ? (mk.new as string) : changeDate(r.changes[0]);
+};
 const weekNoOf = (date: string | null, weeks: ApiWeek[]) => (date ? weeks.find((w) => date >= w.week_start && date <= w.week_end)?.week_no ?? null : null);
 
 /** Several changes to one session (a move plus a distance) read as one row. */
@@ -172,7 +177,8 @@ function removedText(c: ApiProposalChange, s: ReturnType<typeof changeSession>):
 function ChangeRow({ row, sessions }: { row: Row; sessions: ApiSession[] }) {
   const first = row.changes[0];
   const s = changeSession(first, sessions);
-  const date = changeDate(first);
+  const date = changeDate(first); // a 補課 is titled with the day it was missed
+  const makeup = row.op === "change" && row.changes.some((c) => c.makeup);
   const title = row.op === "add" ? date && mdDow(date) : [date ? mdDow(date) : null, first.label ?? (s && "target_distance_m" in s ? shortName(s) : null)].filter(Boolean).join(" · ") || "課表上的一堂課";
   const flags = row.changes.flatMap((c) => c.flags ?? []);
   const reasons = row.changes.map((c) => c.reason).filter(Boolean);
@@ -181,7 +187,7 @@ function ChangeRow({ row, sessions }: { row: Row; sessions: ApiSession[] }) {
       <div className="who">
         <Avatar session={s} />
         <div className="txt">
-          <div className="t">{title}{row.op !== "change" ? <span className="op">{row.op === "add" ? "新增" : "刪除"}</span> : null}</div>
+          <div className="t">{title}{row.op !== "change" ? <span className="op">{row.op === "add" ? "新增" : "刪除"}</span> : makeup ? <span className="op">補課</span> : null}</div>
           {row.op === "add" ? <div className="change">{addedText(first)}</div>
             : row.op === "remove" ? <div className="change"><s>{removedText(first, s)}</s></div>
             : row.changes.map((c, i) => <ChangeLine key={i} c={c} />)}
@@ -240,7 +246,7 @@ export function ProposalCard({ proposal, status: st, sessions, weeks, chosen, on
 
   const changes = proposal.changes;
   const rows = toRows(changes);
-  const weekNos = new Set(changes.map((c) => weekNoOf(changeDate(c), weeks)));
+  const weekNos = new Set(rows.map((r) => weekNoOf(rowDate(r), weeks)));
   const multi = !!proposal.option || changes.some((c) => op(c) !== "change") || weekNos.size > 1 || (proposal.weeks?.length ?? 0) > 0;
   const pending = st === "pending";
   const opt = proposal.option;
@@ -259,7 +265,7 @@ export function ProposalCard({ proposal, status: st, sessions, weeks, chosen, on
       // 409: the plan changed since (the card is stale now), or it was already decided — reload so the server's word replaces the buttons.
       // 400: the card breaks a hard rule (race day, a day the athlete said is fixed); the api's sentence is English, so a fixed line.
       if (e instanceof ApiError && e.status === 409) onChanged();
-      else setError(e instanceof ApiError ? (e.status === 400 ? "這張卡不能採用（比賽日或固定日）" : e.message) : "送出失敗，再試一次");
+      else setError(e instanceof ApiError ? (e.status === 400 ? "這張卡不能照用了（撞到比賽日、固定日，或同一天兩堂）" : e.message) : "送出失敗，再試一次");
     } finally {
       setBusy(false);
     }
@@ -283,7 +289,7 @@ export function ProposalCard({ proposal, status: st, sessions, weeks, chosen, on
 
   const rowEls = multi ? weekNosAll.map((n) => {
     const plan = weeks.find((w) => w.week_no === n);
-    const inWeek = rows.filter((r) => weekNoOf(changeDate(r.changes[0]), weeks) === n);
+    const inWeek = rows.filter((r) => weekNoOf(rowDate(r), weeks) === n);
     return (
       <div key={n ?? "none"} className="wk">
         {plan ? <div className="wk-h">第 {plan.week_no} 週 <span>· {md(plan.week_start)}–{md(plan.week_end)}</span></div> : null}

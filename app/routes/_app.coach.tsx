@@ -10,6 +10,7 @@ import { md, mdDow, timeJst, toJstDate } from "../lib/date";
 import { km, pace } from "../lib/format";
 import { WooStatus } from "../components/woo-status";
 import { useReviewPolling } from "../lib/use-review-polling";
+import { movedCountsIn, type PlanView } from "../lib/plan";
 import { usePlan } from "../lib/use-plan";
 import type { ApiActivity, ApiCoachMessage, ApiProposal, ApiWeeklyAsk, ApiWeeklyReview } from "../types/api";
 
@@ -129,7 +130,7 @@ function CheckinChips({ m, busy, onPick }: { m: ApiCoachMessage; busy: boolean; 
  * answers under it, then what the review is waiting for. After 沒跑 the review is rewritten
  * in place — `rerun` is that wait ("Woo 在重寫…"), or that we gave up polling for it.
  */
-function WeeklyAskBlock({ ask, busy, rerun, stage, onAnswer }: { ask: ApiWeeklyAsk; busy: boolean; rerun: "pending" | "gave-up" | null; stage: string | null; onAnswer: (answer: "synced" | "skipped") => void }) {
+function WeeklyAskBlock({ ask, busy, rerun, stage, madeUp, onAnswer }: { ask: ApiWeeklyAsk; busy: boolean; rerun: "pending" | "gave-up" | null; stage: string | null; /** A 補課 closed this question ("已改期，補到 10/30 週五"), not the athlete's 沒跑. */ madeUp: string | null; onAnswer: (answer: "synced" | "skipped") => void }) {
   return (
     <div className="ask">
       <div className="ask-block"><div className="q">{ask.question}</div></div>
@@ -139,7 +140,7 @@ function WeeklyAskBlock({ ask, busy, rerun, stage, onAnswer }: { ask: ApiWeeklyA
           <button type="button" className="chip" disabled={busy} onClick={() => onAnswer("skipped")}>沒跑</button>
         </div>
       ) : (
-        <div className="said">你說：{ask.state === "synced" ? "還沒同步" : "沒跑"}</div>
+        <div className="said">{madeUp && ask.state === "skipped" ? madeUp : `你說：${ask.state === "synced" ? "還沒同步" : "沒跑"}`}</div>
       )}
       {rerun === "pending" ? <div className="said"><WooStatus stage={stage} fallback="Woo 在重寫這週的回顧" /></div>
         : rerun === "gave-up" ? <div className="said">回顧還在重寫，稍後再回來看</div>
@@ -147,6 +148,14 @@ function WeeklyAskBlock({ ask, busy, rerun, stage, onAnswer }: { ask: ApiWeeklyA
         : null}
     </div>
   );
+}
+
+/** The weekly question for a session a 補課 has since moved: "已改期，補到 10/30 週五" (· 算第 N 週 when it counts in another week). */
+function madeUpText(ask: ApiWeeklyAsk, view: PlanView | null): string | null {
+  const s = view?.data.sessions.find((x) => x.id === ask.session_id);
+  if (!view || !s?.moved_to_date) return null;
+  const n = movedCountsIn(view, s);
+  return `已改期，補到 ${mdDow(s.moved_to_date)}${n != null && n !== s.week_no ? ` · 算第 ${n} 週` : ""}`;
 }
 
 function quoteLine(a: ApiActivity): string {
@@ -469,7 +478,8 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
               <CoachMessage m={m} badge={wm?.updated ? "check" : null}>
                 {wm?.updated ? <div className="updated"><span aria-hidden="true">⟳</span> 已更新 · {wm.updated.reason}</div> : null}
                 <p className="text">{m.text}</p>
-                {wm?.asks.map((ask) => <WeeklyAskBlock key={ask.session_id} ask={ask} busy={busy} rerun={rewriting && ask.state === "skipped" ? (timedOut ? "gave-up" : "pending") : null} stage={m.stage} onAnswer={(answer) => void answerWeeklyAsk(m, ask, answer)} />)}
+                {wm?.makeups?.length ? <div className="makeups">{wm.makeups.map((x, i) => <div key={i}>這週有補課：{md(x.from)} 的 {x.label} 補到 {md(x.to)}（{x.done ? "已完成" : "待跑"}）</div>)}</div> : null}
+                {wm?.asks.map((ask) => <WeeklyAskBlock key={ask.session_id} ask={ask} busy={busy} madeUp={madeUpText(ask, view)} rerun={rewriting && ask.state === "skipped" ? (timedOut ? "gave-up" : "pending") : null} stage={m.stage} onAnswer={(answer) => void answerWeeklyAsk(m, ask, answer)} />)}
                 {w ? <CoachProposals review={w} sessions={sessions} embedded onChanged={() => void revalidator.revalidate()} /> : null}
                 {m.proposal || m.constraint ? cards([m]) : null}
                 {m.proposal_rejected ? <Rejected /> : null}
