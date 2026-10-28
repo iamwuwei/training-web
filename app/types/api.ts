@@ -127,9 +127,12 @@ export interface ApiActivity {
   memo: string | null;        // athlete's own note, PUT …/memo
   rpe: number | null;         // athlete's RPE 1-10, PUT …/memo
   memo_updated_at: string | null;
-  device_name: string | null;
-  gear_name: string | null;   // shoes
-  weather: string | null;     // free text, may be null
+  device_name: string | null; // the athlete's value when set, else Strava's
+  gear_name: string | null;   // shoes: the athlete's value when set, else Strava's
+  weather: string | null;     // free text; the athlete's value (no automatic source)
+  /** Where each of the three comes from, and Strava's own value for the editor's "清除後回到：…". */
+  details: Record<"gear_name" | "device_name" | "weather", { source: "user" | "strava" | null; strava: string | null }>;
+  details_updated_at: string | null; // last PUT …/details
   splits: ApiSplit[] | null;
   match_status: MatchStatus;
   review: ApiReview | null;
@@ -393,6 +396,14 @@ export interface ApiCoachMessage {
    * "Woo 的提案沒過格式檢查，再問他一次"; the reply text itself is fine.
    */
   proposal_rejected: boolean;
+  /**
+   * Where Woo is with this message while it is `pending` (the worker writes it as it goes; the
+   * thread polls for it). Values the api emits today: preparing, thinking, searching, writing
+   * (a chat reply); reading, judging (the verdict after the feel answer). Also on a weekly
+   * message while it is being rewritten (preparing, thinking). null when not pending or not
+   * known. Show unknown strings as "thinking": the list may grow without a web release.
+   */
+  stage: string | null;
   error: string | null;              // failed: a fixed line to show (the provider's wording stays in the logs)
   created_at: string;
 }
@@ -437,9 +448,15 @@ export interface ApiCheckin {
   candidates: { activity_id?: string; session_id?: string; label: string }[];
 }
 
+// ---- GET <ApiUrl>/coach?limit=10&before=<message id> ------------------------------
+// The newest `limit` messages (default 10, max 100), or with `before` the `limit`
+// messages older than that message (keyset on created_at + id). Oldest first within
+// the page. 400: limit not 1..100, before not a uuid, or not this user's message.
 export interface CoachResponse {
   coach: { name: string };
   messages: ApiCoachMessage[];
+  /** Older messages exist before `messages[0]`: ask again with before = messages[0].id. */
+  has_more: boolean;
 }
 
 // ---- POST <ApiUrl>/coach/messages ----------------------------------------------
@@ -676,4 +693,27 @@ export interface PostCoachMessageResponse {
  */
 export interface ErrorResponse {
   error: string;
+}
+
+// ---- PUT <ApiUrl>/activities/{id}/details ------------------------------------------
+// The athlete's own shoe / device / weather for one activity. A key that is present is
+// set: a string (trimmed, single line, ≤ 40 chars) becomes the athlete's value and is
+// shown over Strava's; "" or null clears it (back to Strava's value, or nothing for
+// weather). Keys that are absent are left alone. 400: no known key, a non-string, over
+// 40 chars. 404: not this user's activity. Does not touch memo / RPE / the review.
+export interface PutDetailsRequest {
+  gear_name?: string | null;
+  device_name?: string | null;
+  weather?: string | null;
+}
+export interface PutDetailsResponse {
+  activity: ApiActivity;
+}
+
+// ---- GET <ApiUrl>/activities/detail-options ---------------------------------------
+// Names this athlete used before (own values and Strava's), distinct, most recently
+// used first, at most 8 each. For the editor's suggestions.
+export interface DetailOptionsResponse {
+  gear_name: string[];
+  device_name: string[];
 }

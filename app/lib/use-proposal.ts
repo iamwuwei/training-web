@@ -12,7 +12,7 @@ export function useProposal(id: string | null): { proposal: ApiProposal | null; 
   useEffect(() => {
     if (!id) return;
     let live = true;
-    getCoach()
+    getCoach({ limit: 100 })
       .then((r) => { if (live) setFound({ id, proposal: r.messages.find((m) => m.proposal?.id === id)?.proposal ?? null }); })
       .catch(() => { if (live) setFound({ id, proposal: null }); });
     return () => { live = false; };

@@ -3,7 +3,7 @@
 // results become an activity + manual review on the same local date.
 
 import plans from "./plans.json";
-import type { ActivitiesResponse, ApiActivity, ApiCoachMessage, ApiConstraint, ApiProposal, ApiProposalChange, ApiRoutine, ApiSession, ApiSplit, ApiWeek, ApiWeeklyReview, CoachResponse, PostCoachMessageRequest, PostCoachMessageResponse,
+import type { ActivitiesResponse, ApiActivity, ApiCoachMessage, ApiConstraint, ApiProposal, ApiProposalChange, ApiRoutine, ApiSession, ApiSplit, ApiWeek, ApiWeeklyReview, CoachResponse, DetailOptionsResponse, PutDetailsRequest, PutDetailsResponse, PostCoachMessageRequest, PostCoachMessageResponse,
   PostCheckinPickRequest,
   PostCheckinPickResponse,
   PostCheckinResetResponse,
@@ -55,6 +55,38 @@ const DEMO_BRIEFS: Record<string, string> = {
   "2026-10-27": "跑完 Hyrox 隔天，心拍壓住就好",
   "2026-10-28": "MP 段看心拍，過 165 就放慢",
 };
+
+// ---- 裝備／裝置／天氣 (the report's details, editable) ----------------------------
+// The api keeps Strava's value and the athlete's own value side by side and shows the athlete's
+// when set. The mock keeps the same two maps and recomputes the shown values from them.
+type DetailKey = "gear_name" | "device_name" | "weather";
+const DETAIL_KEYS: DetailKey[] = ["gear_name", "device_name", "weather"];
+type Detail3 = Record<DetailKey, string | null>;
+const NO_DETAILS: ApiActivity["details"] = { gear_name: { source: null, strava: null }, device_name: { source: null, strava: null }, weather: { source: null, strava: null } };
+const stravaVals = new Map<string, Detail3>();
+const ownVals = new Map<string, Detail3>();
+
+/** Recompute an activity's shown values and `details` from the two maps. */
+function showDetails(a: ApiActivity) {
+  const sv = stravaVals.get(a.id), ov = ownVals.get(a.id);
+  if (!sv || !ov) return;
+  const details = { ...NO_DETAILS };
+  for (const k of DETAIL_KEYS) {
+    a[k] = ov[k] ?? sv[k];
+    details[k] = { source: ov[k] != null ? "user" : sv[k] != null ? "strava" : null, strava: sv[k] };
+  }
+  a.details = details;
+}
+/** First sight of an activity: what it carries is Strava's — except weather, which Strava does not have (the seed's weather text counts as the athlete's own, like the api where weather has no automatic source). */
+function seedDetails(a: ApiActivity, own: Partial<Detail3> = {}) {
+  stravaVals.set(a.id, { gear_name: a.gear_name, device_name: a.device_name, weather: null });
+  ownVals.set(a.id, { gear_name: null, device_name: null, weather: a.weather, ...own });
+  showDetails(a);
+}
+
+/** Mock-only switches for QA (set on window before the page needs them). */
+interface MockKnobs { __mockStage?: string | null; __mockNoReply?: boolean; __mockFailDetails?: boolean; __mockDetailsDelay?: number; __mockCoachPageSize?: number }
+const knobs = () => globalThis as unknown as MockKnobs;
 
 function build(): PlanResponse {
   const sessions: ApiSession[] = seed.sessions.map((s) => ({
@@ -109,6 +141,8 @@ function build(): PlanResponse {
       device_name: r.device,
       gear_name: r.shoes,
       weather: r.weather,
+      details: NO_DETAILS,
+      details_updated_at: null,
       splits: r.date === "2026-10-13" ? demoSplits([[395, 132], [455, 140], [450, 141], [447, 141], [447, 142], [481, 144]]) : null,
       match_status: session ? "auto" : "unplanned",
       review: {
@@ -128,13 +162,27 @@ function build(): PlanResponse {
   // Demo inbox: three things Strava "just synced" today, waiting for the athlete to pick a
   // session. The walk is there so the mismatch question can be tried (pick it as the run).
   const today = todayJst();
-  const base = { user_id: MOCK_USER_ID, description: null, memo: null, rpe: null, memo_updated_at: null, gear_name: null, weather: null, splits: null, session_id: null, match_status: "unplanned" as const, review: null };
+  const base = { user_id: MOCK_USER_ID, description: null, memo: null, rpe: null, memo_updated_at: null, gear_name: null, weather: null, details: NO_DETAILS, details_updated_at: null, splits: null, session_id: null, match_status: "unplanned" as const, review: null };
   const unassigned: ApiActivity[] = [
-    { ...base, id: "u-run", strava_activity_id: "900001", sport_type: "Run", start_time: new Date(`${today}T06:40:00+09:00`).toISOString(), distance_m: 7000, moving_time_sec: 2998, avg_pace_sec_km: 428, avg_hr: 152, max_hr: 171, avg_watts: 168, kcal: 512, device_name: "Apple Watch Series 11",
+    { ...base, id: "u-run", strava_activity_id: "900001", sport_type: "Run", start_time: new Date(`${today}T06:40:00+09:00`).toISOString(), distance_m: 7000, moving_time_sec: 2998, avg_pace_sec_km: 428, avg_hr: 152, max_hr: 171, avg_watts: 168, kcal: 512, device_name: "Apple Watch Series 11", gear_name: "Adidas Adizero EVO SL",
       splits: demoSplits([[442, 138], [435, 142], [401, 158], [404, 161], [413, 166], [448, 152], [455, 148]]) },
     { ...base, id: "u-walk", strava_activity_id: "900003", sport_type: "Walk", start_time: new Date(`${today}T17:30:00+09:00`).toISOString(), distance_m: 4900, moving_time_sec: 3840, avg_pace_sec_km: 784, avg_hr: 99, max_hr: 118, avg_watts: null, kcal: 290, device_name: "Apple Watch Series 11" },
     { ...base, id: "u-hyrox", strava_activity_id: "900002", sport_type: "WeightTraining", start_time: new Date(`${today}T18:30:00+09:00`).toISOString(), distance_m: 0, moving_time_sec: 3480, avg_pace_sec_km: null, avg_hr: 152, max_hr: 171, avg_watts: null, kcal: 620, device_name: "Apple Watch Series 11" },
   ];
+
+  // Test-only activities a few days back, `ignored` so no list shows them (open them by URL): a yoga
+  // session with nothing but a time (every detail empty), and a run whose Strava names are very long.
+  const back = addDays(today, -10);
+  const hidden = { ...base, match_status: "ignored" as const, avg_pace_sec_km: null, avg_hr: null, max_hr: null, avg_watts: null, kcal: null, device_name: null, gear_name: null };
+  unassigned.push(
+    { ...hidden, id: "u-yoga", strava_activity_id: "900101", sport_type: "Yoga", start_time: new Date(`${back}T20:00:00+09:00`).toISOString(), distance_m: 0, moving_time_sec: 2700 },
+    { ...hidden, id: "u-longname", strava_activity_id: "900102", sport_type: "Run", start_time: new Date(`${back}T07:00:00+09:00`).toISOString(), distance_m: 5000, moving_time_sec: 1750, avg_pace_sec_km: 350, avg_hr: 148, max_hr: 163, avg_watts: 201, kcal: 345,
+      device_name: "Garmin Forerunner 965 Black Titanium Edition", gear_name: "Adidas Adizero Boston 13 Prototype Racing Edition" },
+  );
+  for (const a of [...activities, ...unassigned]) {
+    // 10/10 is a run whose shoes the athlete corrected after Strava's default
+    if (a.id === "a-2026-10-10") { seedDetails(a, { gear_name: "Nike Pegasus 41" }); a.details_updated_at = new Date("2026-10-10T13:00:00+09:00").toISOString(); } else seedDetails(a);
+  }
 
   return {
     coach_unread: 0,
@@ -239,6 +287,47 @@ export function mockPutMemo(activityId: string, body: PutMemoRequest): PutMemoRe
   a.rpe = body.rpe ?? null;
   a.memo_updated_at = new Date().toISOString();
   return { activity: { ...a } };
+}
+
+/**
+ * Demo mode: the athlete's own shoe / device / weather. Same rules as the api: a present key is set
+ * (cleaned to one line, ≤ 40 chars), "" or null clears it. `window.__mockFailDetails = true` makes it fail.
+ */
+export async function mockPutDetails(activityId: string, body: PutDetailsRequest): Promise<PutDetailsResponse> {
+  await new Promise((r) => setTimeout(r, knobs().__mockDetailsDelay ?? 250));
+  if (knobs().__mockFailDetails) throw new ApiError(500, "伺服器錯誤，稍後再試");
+  const a = findActivity(activityId);
+  if (!a) throw new ApiError(404, "activity not found");
+  const keys = DETAIL_KEYS.filter((k) => k in body);
+  if (!keys.length) throw new ApiError(400, "nothing to update");
+  const next: Partial<Detail3> = {};
+  for (const k of keys) {
+    const v: unknown = body[k];
+    if (v == null) { next[k] = null; continue; }
+    if (typeof v !== "string") throw new ApiError(400, `${k} must be a string`);
+    const clean = v.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
+    if (clean.length > 40) throw new ApiError(400, `${k} too long (40 chars)`);
+    next[k] = clean || null;
+  }
+  ownVals.set(a.id, { ...(ownVals.get(a.id) as Detail3), ...next });
+  a.details_updated_at = new Date().toISOString();
+  showDetails(a);
+  return { activity: { ...a } };
+}
+
+/** Demo mode: names used before (own values and Strava's), distinct, most recently used first, at most 8 each. */
+export function mockDetailOptions(): DetailOptionsResponse {
+  const all = [...data().activities, ...data().unassigned];
+  const pick = (k: "gear_name" | "device_name") => {
+    const seen = new Map<string, string>();
+    for (const a of all) {
+      const sv = stravaVals.get(a.id)?.[k], ov = ownVals.get(a.id)?.[k];
+      if (sv) { const t = a.start_time; if (!seen.has(sv) || seen.get(sv)! < t) seen.set(sv, t); }
+      if (ov) { const t = a.details_updated_at ?? a.start_time; if (!seen.has(ov) || seen.get(ov)! < t) seen.set(ov, t); }
+    }
+    return [...seen.entries()].sort((x, y) => y[1].localeCompare(x[1])).slice(0, 8).map(([v]) => v);
+  };
+  return { gear_name: pick("gear_name"), device_name: pick("device_name") };
 }
 
 const findActivity = (id: string) => [...data().activities, ...data().unassigned].find((x) => x.id === id);
@@ -598,7 +687,14 @@ function applyToPlan(p: ApiProposal): string[] {
 
 // ---- the coach's thread (demo) ------------------------------------------------
 let thread: ApiCoachMessage[] | undefined;
-const BLANK = { activity_id: null, weekly_review_id: null, status: "sent" as const, review: null, quote: null, rpe: null, checkin: null, ask: null, weekly: null, proposal: null, constraint: null, proposal_rejected: false, error: null };
+const BLANK = { activity_id: null, weekly_review_id: null, status: "sent" as const, review: null, quote: null, rpe: null, checkin: null, ask: null, weekly: null, proposal: null, constraint: null, proposal_rejected: false, stage: null, error: null };
+
+/** Walk a pending message through Woo's stages on timers (in production the worker writes them), then run `done`. `window.__mockNoReply = true` never finishes. */
+function walkStages(m: ApiCoachMessage, steps: [string, number][], doneAt: number, done: () => void) {
+  m.stage = steps[0][0];
+  for (const [st, at] of steps.slice(1)) setTimeout(() => { if (m.stage) m.stage = st; }, at);
+  setTimeout(() => { if (knobs().__mockNoReply) return; m.stage = null; done(); }, doneAt);
+}
 function threadData(): ApiCoachMessage[] {
   if (thread) return thread;
   const w = weeklyData()[0];
@@ -658,7 +754,8 @@ export function mockPostWeeklyAsk(weeklyId: string, sessionId: string, body: Pos
     const d = data();
     const s = d.sessions.find((x) => x.id === sessionId);
     if (s) s.skipped_at = new Date().toISOString();
-    setTimeout(() => {
+    // Woo rewrites the review: preparing, then thinking, then it is updated in place (~3.5 s)
+    walkStages(m, [["preparing", 0], ["thinking", 1000]], 3500, () => {
       const now = new Date().toISOString();
       const reason = `你說 ${md(ask.date)} 沒跑`;
       const cancelled = supersedePending(w);
@@ -669,7 +766,7 @@ export function mockPostWeeklyAsk(weeklyId: string, sessionId: string, body: Pos
       w.update_reason = reason;
       m.text = WEEK3_TEXT_SKIPPED;
       m.weekly = { ...m.weekly!, updated: { at: now, reason }, cancelled };
-    }, 2000);
+    });
   }
   return { message: { ...m } };
 }
@@ -805,8 +902,37 @@ export function mockPostCheckinReset(checkinId: string): PostCheckinResetRespons
   return { checkin: { ...resetCheckin(c) } };
 }
 
-export function mockCoach(): CoachResponse {
-  return { coach: { name: "Woo" }, messages: threadData().map((m) => ({ ...m })) };
+/** What the api sends for a message: `stage` only while it is pending (or a weekly review being rewritten). `window.__mockStage` overrides it (a string, or null) to try unknown values. */
+function exposed(m: ApiCoachMessage): ApiCoachMessage {
+  const k = knobs();
+  const stage = m.status === "pending" || m.stage ? (k.__mockStage !== undefined ? k.__mockStage : m.stage) : null;
+  return { ...m, stage };
+}
+
+/** Every GET /coach the page made, for QA (`window.__coachCalls`). */
+export interface CoachCall { limit: number; before: string | null; at: number }
+export const coachCalls: CoachCall[] = [];
+if (typeof window !== "undefined") (window as unknown as { __coachCalls: CoachCall[] }).__coachCalls = coachCalls;
+
+/** Same order the client merges in: oldest first, same time → by id. */
+const byTime = (a: ApiCoachMessage, b: ApiCoachMessage) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id);
+
+/**
+ * The newest `limit` messages (default 10), or the `limit` before `before`; `has_more` = something older exists.
+ * `window.__mockCoachPageSize` replaces the requested limit (e.g. 100: the whole thread on the first page).
+ */
+export function mockCoach({ limit = 10, before }: { limit?: number; before?: string } = {}): CoachResponse {
+  const lim = knobs().__mockCoachPageSize ?? limit;
+  coachCalls.push({ limit: lim, before: before ?? null, at: Date.now() });
+  const all = [...threadData()].sort(byTime);
+  let end = all.length;
+  if (before) {
+    const i = all.findIndex((m) => m.id === before);
+    if (i < 0) throw new ApiError(400, "unknown before");
+    end = i;
+  }
+  const start = Math.max(0, end - lim);
+  return { coach: { name: "Woo" }, messages: all.slice(start, end).map(exposed), has_more: start > 0 };
 }
 /** Demo mode: Woo answers after ~3 s, off-topic gets the one-liner. */
 export function mockPostCoachMessage(body: PostCoachMessageRequest): PostCoachMessageResponse {
@@ -850,11 +976,12 @@ export function mockPostCoachMessage(body: PostCoachMessageRequest): PostCoachMe
     if (a) { a.memo = body.text; a.rpe = body.rpe ?? null; }
     const m: ApiCoachMessage = { ...BLANK, id: `c${t.length + 1}`, role: "athlete", kind: "chat", text: body.text, status: "pending", activity_id: ask.ask.activity_id, rpe: body.rpe ?? null, created_at: new Date().toISOString() };
     t.push(m);
-    setTimeout(() => {
+    // the verdict's wait: reading the run, then comparing pace and heart rate
+    walkStages(m, [["reading", 0], ["judging", 1500]], 3000, () => {
       if (a) a.review = { verdict: "達成但有提醒", comment: "MP 段 6:46 守住了，第 5 km 心拍 166 超過上限。第三公里開始腿重跟數字對得上。", reminders: ["MP 第 3 公里開始看心拍，過 160 就稍微放慢"], source: "claude", model: null, adjust_hint: null, failed: false, error: null, created_at: new Date().toISOString() };
       t.push({ ...BLANK, id: `c${t.length + 1}`, role: "coach", kind: "review", text: "MP 段 6:46 守住了，第 5 km 心拍 166 超過上限。第三公里開始腿重跟數字對得上。", activity_id: ask.ask!.activity_id, review: { label: "MP 7 km", verdict: "達成但有提醒", reminder: "MP 第 3 公里開始看心拍，過 160 就稍微放慢", date: todayJst() }, created_at: new Date().toISOString() });
       m.status = "sent";
-    }, 3000);
+    });
     return { message: { ...m } };
   }
   // 請 Woo 重看: he sends a new card against today's plan (the stale one stays as it was).
@@ -863,7 +990,7 @@ export function mockPostCoachMessage(body: PostCoachMessageRequest): PostCoachMe
     if (!old) throw new ApiError(404, "not found");
     const m: ApiCoachMessage = { ...BLANK, id: `c${t.length + 1}`, role: "athlete", kind: "chat", text: body.text, status: "pending", created_at: new Date().toISOString() };
     t.push(m);
-    setTimeout(() => {
+    walkStages(m, [["preparing", 0], ["thinking", 800], ["writing", 2200]], 3000, () => {
       let next = proposals.find((x) => x.id === "p-restale");
       if (!next) {
         next = card({ id: "p-restale", message_id: null, created_at: new Date().toISOString(),
@@ -878,17 +1005,18 @@ export function mockPostCoachMessage(body: PostCoachMessageRequest): PostCoachMe
       }
       t.push({ ...BLANK, id: `c${t.length + 1}`, role: "coach", kind: "chat", text: "用現在的課表重排了一張：11/29 已經是 18 km，改成 16 km；11/27 的 Easy 配速照放慢。", proposal: next, created_at: new Date().toISOString() });
       m.status = "sent";
-    }, 3000);
+    });
     return { message: { ...m } };
   }
   const quoted = body.activity_id ? findActivity(body.activity_id) : undefined;
   const quote = quoted ? `${quoted.start_time.slice(5, 10).replace("-", "/")} ${quoted.session_id ? "課表" : "未排課"} ${(quoted.distance_m / 1000).toFixed(2)} km` : null;
   const m: ApiCoachMessage = { ...BLANK, id: `c${t.length + 1}`, role: "athlete", kind: "chat", text: body.text, activity_id: body.activity_id ?? null, status: "pending", quote, created_at: new Date().toISOString() };
   t.push(m);
-  setTimeout(() => {
+  // preparing → thinking → searching → writing, then the reply (~4.5 s)
+  walkStages(m, [["preparing", 0], ["thinking", 800], ["searching", 2000], ["writing", 3200]], 4500, () => {
     const offTopic = /吃|電影|天氣|股票|工作/.test(body.text) && !/跑|課表|心拍|配速|腿/.test(body.text);
     t.push({ ...BLANK, id: `c${t.length + 1}`, role: "coach", kind: "chat", text: offTopic ? "這個不歸我管，我們回到課表。週五恢復跑完記得寫一下腿的感覺。" : "（示範）收到。以你最近 14 天的心拍來看，這個問題先用降速處理，不要先想拿掉課。週五恢復跑完再跟我說腿的狀況。", created_at: new Date().toISOString() });
     m.status = "sent";
-  }, 3000);
+  });
   return { message: { ...m } };
 }
