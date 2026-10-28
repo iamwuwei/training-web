@@ -127,10 +127,10 @@ export interface ApiActivity {
   memo: string | null;        // athlete's own note, PUT …/memo
   rpe: number | null;         // athlete's RPE 1-10, PUT …/memo
   memo_updated_at: string | null;
-  device_name: string | null; // the athlete's value when set, else Strava's
-  gear_name: string | null;   // shoes: the athlete's value when set, else Strava's
-  weather: string | null;     // free text; the athlete's value (no automatic source)
-  /** Where each of the three comes from, and Strava's own value for the editor's "清除後回到：…". */
+  device_name: string | null; // what to show: the athlete's value (PUT …/details) when set, else Strava's
+  gear_name: string | null;   // shoes; same rule
+  weather: string | null;     // free text; the athlete's value (no automatic source), may be null
+  /** Where each of the three above comes from, and Strava's own value for the editor's "清除後回到：…". */
   details: Record<"gear_name" | "device_name" | "weather", { source: "user" | "strava" | null; strava: string | null }>;
   details_updated_at: string | null; // last PUT …/details
   splits: ApiSplit[] | null;
@@ -282,6 +282,34 @@ export interface PutMemoResponse {
   activity: ApiActivity;
 }
 
+// ---- PUT <ApiUrl>/activities/{id}/details --------------------------------------
+// The athlete's own shoe / device / weather for one activity. A key that is present is
+// set: a string (trimmed, single line, ≤ 40 chars) becomes the athlete's value and is
+// shown over Strava's; "" or null clears it (back to Strava's value, or nothing for
+// weather). A string equal to Strava's own value for that field is stored as "no
+// override" (it shows as Strava's). Keys that are absent are left alone. 400: no known
+// key, a non-string, over 40 chars. 404: not this user's activity. Does not touch
+// memo / RPE / the review, and does not queue anything.
+
+export interface PutDetailsRequest {
+  gear_name?: string | null;
+  device_name?: string | null;
+  weather?: string | null;
+}
+
+export interface PutDetailsResponse {
+  activity: ApiActivity;
+}
+
+// ---- GET <ApiUrl>/activities/detail-options ------------------------------------
+// Names this athlete used before (own values and Strava's), distinct, most recently
+// used first, at most 8 each. For the editor's suggestions.
+
+export interface DetailOptionsResponse {
+  gear_name: string[];
+  device_name: string[];
+}
+
 // ---- POST <ApiUrl>/activities/{id}/rereview ------------------------------------
 // Drops the Claude review (failed or stale) and queues a new one; the result arrives
 // a few seconds to a minute later on /plan and /activities. 409 when the activity has no
@@ -337,10 +365,13 @@ export interface PostAdjustmentResponse {
   review: ApiWeeklyReview;
 }
 
-// ---- GET <ApiUrl>/coach ---------------------------------------------------------
-// The coach's thread, oldest first (last 100). Coach messages are posted by the
+// ---- GET <ApiUrl>/coach?limit=10&before=<message id> ----------------------------
+// The coach's thread, oldest first within the page. The newest `limit` messages
+// (default 10, max 100), or with `before` the `limit` messages older than that
+// message (keyset on created_at + id). Coach messages are posted by the
 // system (weekly review, each run's verdict) or written in reply; athlete messages
 // are `pending` until the coach answers, `failed` if the answer could not be made.
+// 400: limit not an integer 1..100, before not a uuid, or not this user's message.
 
 /**
  * Kinds: weekly (coach, Sunday review), review (coach, a run's verdict), chat
@@ -448,10 +479,6 @@ export interface ApiCheckin {
   candidates: { activity_id?: string; session_id?: string; label: string }[];
 }
 
-// ---- GET <ApiUrl>/coach?limit=10&before=<message id> ------------------------------
-// The newest `limit` messages (default 10, max 100), or with `before` the `limit`
-// messages older than that message (keyset on created_at + id). Oldest first within
-// the page. 400: limit not 1..100, before not a uuid, or not this user's message.
 export interface CoachResponse {
   coach: { name: string };
   messages: ApiCoachMessage[];
@@ -693,27 +720,4 @@ export interface PostCoachMessageResponse {
  */
 export interface ErrorResponse {
   error: string;
-}
-
-// ---- PUT <ApiUrl>/activities/{id}/details ------------------------------------------
-// The athlete's own shoe / device / weather for one activity. A key that is present is
-// set: a string (trimmed, single line, ≤ 40 chars) becomes the athlete's value and is
-// shown over Strava's; "" or null clears it (back to Strava's value, or nothing for
-// weather). Keys that are absent are left alone. 400: no known key, a non-string, over
-// 40 chars. 404: not this user's activity. Does not touch memo / RPE / the review.
-export interface PutDetailsRequest {
-  gear_name?: string | null;
-  device_name?: string | null;
-  weather?: string | null;
-}
-export interface PutDetailsResponse {
-  activity: ApiActivity;
-}
-
-// ---- GET <ApiUrl>/activities/detail-options ---------------------------------------
-// Names this athlete used before (own values and Strava's), distinct, most recently
-// used first, at most 8 each. For the editor's suggestions.
-export interface DetailOptionsResponse {
-  gear_name: string[];
-  device_name: string[];
 }
