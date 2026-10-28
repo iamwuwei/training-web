@@ -468,6 +468,7 @@ function weeklyData(): ApiWeeklyReview[] {
   return weekly!;
 }
 export function mockWeekly(): WeeklyResponse {
+  weeklyCalls.push(Date.now());
   return { reviews: weeklyData().map((w) => ({ ...w, adjustments: w.adjustments.map((a) => ({ ...a })) })) };
 }
 export function mockPostAdjustment(weeklyId: string, index: number, body: PostAdjustmentRequest): PostAdjustmentResponse {
@@ -908,6 +909,10 @@ function exposed(m: ApiCoachMessage): ApiCoachMessage {
   const stage = m.status === "pending" || m.stage ? (k.__mockStage !== undefined ? k.__mockStage : m.stage) : null;
   return { ...m, stage };
 }
+
+/** Every GET /weekly the page made, for QA (`window.__weeklyCalls`). */
+const weeklyCalls: number[] = [];
+if (typeof window !== "undefined") (window as unknown as { __weeklyCalls: number[] }).__weeklyCalls = weeklyCalls;
 
 /** Every GET /coach the page made, for QA (`window.__coachCalls`). */
 export interface CoachCall { limit: number; before: string | null; at: number }

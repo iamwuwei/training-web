@@ -11,7 +11,7 @@ import { km, pace } from "../lib/format";
 import { WooStatus } from "../components/woo-status";
 import { useReviewPolling } from "../lib/use-review-polling";
 import { usePlan } from "../lib/use-plan";
-import type { ApiActivity, ApiCoachMessage, ApiProposal, ApiWeeklyAsk } from "../types/api";
+import type { ApiActivity, ApiCoachMessage, ApiProposal, ApiWeeklyAsk, ApiWeeklyReview } from "../types/api";
 
 // Woo's thread: weekly reviews (with their proposals), each run's verdict, his
 // post-run check-in (which activity → how did it feel → verdict), and the
@@ -22,13 +22,19 @@ const MAX_CHARS = 500;
 const PAGE = 10;
 const RPE_WORDS = ["", "很輕鬆", "輕鬆", "輕鬆", "適中", "適中", "適中", "有點累", "累", "很累", "極限"];
 
+// While a chat reply / the verdict is on its way (polled every 2 s) nothing in the weekly reviews changes,
+// so those polls reuse the last /weekly answer instead of asking again; everything else (first visit,
+// after an action, while a review is being rewritten) fetches it. The component sets the flag.
+let reuseWeekly = false;
+let lastWeekly: ApiWeeklyReview[] | null = null;
+
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   if (!hasSession()) throw redirect("/login");
   const quoteId = new URL(request.url).searchParams.get("quote");
   try {
     const [coach, weekly, quoted] = await Promise.all([
       getCoach({ limit: PAGE }),
-      getWeekly().catch(() => ({ reviews: [] })),
+      reuseWeekly && lastWeekly ? Promise.resolve({ reviews: lastWeekly }) : getWeekly().then((w) => { lastWeekly = w.reviews; return w; }).catch(() => ({ reviews: lastWeekly ?? [] })),
       quoteId ? getActivities().then((r) => r.activities.find((a) => a.id === quoteId) ?? null).catch(() => null) : Promise.resolve(null),
     ]);
     putCoachSeen().catch(() => { /* the badge just stays until next time */ });
@@ -152,7 +158,7 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
   const { reviews, quoted } = loaderData;
   const view = usePlan();
   const revalidator = useRevalidator();
-  const [, setSearch] = useSearchParams();
+  const [searchParams, setSearch] = useSearchParams();
 
   const [text, setText] = useState("");
   const [rpe, setRpe] = useState<number | null>(null);
@@ -198,8 +204,12 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
   const [decisions, setDecisions] = useState<Record<string, ApiProposal["status"]>>({});
   const statusOf = (p: ApiProposal) => (p.status !== "pending" ? p.status : decisions[p.id] ?? "pending");
 
-  // A reply is on its way (waiting / expectPending): look every 2 s so the stage text keeps up; a rewritten review is not in a hurry.
-  const { timedOut, restart } = useReviewPolling(waiting || rerunPending || expectPending, waiting || expectPending);
+  // Something is on its way (a reply, the verdict, a rewritten review): look every 2 s so the stage text keeps up.
+  const polling = waiting || rerunPending || expectPending;
+  const { timedOut, restart } = useReviewPolling(polling, true);
+  // Polls for a reply do not need /weekly again (see clientLoader); a review being rewritten does.
+  useEffect(() => { reuseWeekly = (waiting || expectPending) && !rerunPending; }, [waiting, expectPending, rerunPending]);
+  useEffect(() => () => { reuseWeekly = false; lastWeekly = null; }, []);
   const typing = waiting || expectPending;
 
   // Woo's open "how did it feel?" (the last message) turns the composer into the answer
@@ -263,13 +273,18 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
     const el = topRef.current;
     if (!el || !hasMore || loadingOlder) return;
     let armed = !olderError;
+    let timer = 0;
     const io = new IntersectionObserver((entries) => {
       const e = entries[entries.length - 1];
-      if (!e.isIntersecting) armed = true;
-      else if (armed) void loadOlderRef.current();
+      window.clearTimeout(timer);
+      if (!e.isIntersecting) { armed = true; return; }
+      if (!armed) return;
+      // Look again after a moment: the router scrolls to the top for an instant on a navigation (sending
+      // a message clears ?quote), which must not read as "the athlete reached the top".
+      timer = window.setTimeout(() => { if (el.getBoundingClientRect().bottom > -200) void loadOlderRef.current(); }, 150);
     }, { rootMargin: "200px 0px 0px 0px" });
     io.observe(el);
-    return () => io.disconnect();
+    return () => { window.clearTimeout(timer); io.disconnect(); };
   }, [hasMore, loadingOlder, olderError]);
 
   // The weekly review rewritten after 沒跑 may sit on an older page, which polling (newest page only) does not
@@ -300,7 +315,7 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
       setText("");
       setRpe(null);
       setQuote(null);
-      setSearch({}, { replace: true });
+      if (searchParams.has("quote")) setSearch({}, { replace: true }); // a navigation: only when there is a quote to drop
       await revalidator.revalidate();
       restart();
     } catch (e) {
