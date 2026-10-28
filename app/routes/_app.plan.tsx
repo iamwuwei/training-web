@@ -5,14 +5,14 @@ import { BackIcon } from "../components/icons";
 import { SessionSheet } from "../components/session-sheet";
 import { Avatar, Bar, CoachAvatar, TopBar } from "../components/ui";
 import { ApiError, postProposal } from "../lib/api";
-import { md, timeJst } from "../lib/date";
+import { md, mdDow, timeJst } from "../lib/date";
 import { duration, km, kmPlan, pace } from "../lib/format";
 import { isStrengthDay, rowName, sportName, verdictKind } from "../lib/labels";
-import { activityDate, buildPlanView, isRunSport, type Day, type Week } from "../lib/plan";
+import { activityDate, buildPlanView, isRunSport, movedCountsIn, weekSubline, type Day, type PlanView, type Week } from "../lib/plan";
 import { buildPreview, type Preview } from "../lib/preview";
 import { NoPlan, usePlan } from "../lib/use-plan";
-import { useProposal } from "../lib/use-proposal";
-import type { ApiActivity, ApiRoutine, ApiSession, PlanResponse } from "../types/api";
+import { useProposal, useReviewedWeeks } from "../lib/use-proposal";
+import type { ApiActivity, ApiRoutine, ApiSession, ApiWeek, PlanResponse } from "../types/api";
 
 export function meta(): Route.MetaDescriptors {
   return [{ title: "課表 · 富士山マラソン 2026" }];
@@ -62,16 +62,20 @@ function firstSentence(t: string | null): string | null {
   return m ? m[0] : t;
 }
 
+const NO_WEEKS: ApiWeek[] = [];
 const DOW = ["日", "一", "二", "三", "四", "五", "六"];
 
-function DayRow({ day, isToday, onOpen, routine, was, preview }: { day: Day; isToday: boolean; onOpen: (s: ApiSession) => void; routine: ApiRoutine | null; was?: string; preview?: boolean }) {
+function DayRow({ day, view, weekNo, isToday, onOpen, routine, was, preview }: { day: Day; view: PlanView; weekNo: number; isToday: boolean; onOpen: (s: ApiSession) => void; routine: ApiRoutine | null; was?: string; preview?: boolean }) {
   const { session: s, activity: a, status } = day;
   const date = new Date(`${s.scheduled_date}T00:00:00Z`);
   const rest = s.type === "rest";
   const strength = rest && isStrengthDay(s);
   let right: React.ReactNode = null;
   let dot: string | null = null;
-  if (a) {
+  if (status === "moved") {
+    right = <span className="grey">已改期</span>;
+    dot = "moved";
+  } else if (a) {
     const run = isRunSport(a.sport_type);
     right = (
       <>
@@ -90,17 +94,22 @@ function DayRow({ day, isToday, onOpen, routine, was, preview }: { day: Day; isT
   } else if (!rest && s.target) {
     right = <span className="grey">{s.target.replace(/\s*\/\s*/g, " · ")}</span>;
   }
-  const sub = !a && !rest && status !== "skipped" ? s.brief ?? firstSentence(s.note) : null;
+  // 補課 rows: the second line is the row's identity ('補 10/27 的課'), kept after the run; 算第 N 週 only when it counts in another week than the one it sits in
+  const countsIn = status === "moved" ? movedCountsIn(view, s) : s.counts_in_week_no;
+  const other = countsIn != null && countsIn !== weekNo ? ` · 算第 ${countsIn} 週` : "";
+  const sub = status === "moved" && s.moved_to_date ? `補到 ${mdDow(s.moved_to_date)}${other}`
+    : s.moved_from_date ? `補 ${md(s.moved_from_date)} 的課${other}`
+    : !a && !rest && status !== "skipped" ? s.brief ?? firstSentence(s.note) : null;
   const inner = (
     <>
       <div className="d"><span className="dow">{DOW[date.getUTCDay()]}</span><span className="num dom">{date.getUTCDate()}</span></div>
       <Avatar session={s} sport={a?.sport_type} />
-      <div className="n"><div className={`t${rest && !strength ? " rest" : ""}`}>{rowName(s)}</div>{!was && sub ? <div className="sub">{sub}</div> : null}</div>
+      <div className="n"><div className={`t${rest && !strength ? " rest" : ""}`}>{rowName(s)}</div>{!was && sub ? <div className={`sub${s.moved_to_date || s.moved_from_date ? " wrap" : ""}`}>{sub}</div> : null}</div>
       <div className="r">{right}{dot ? <i className={`dot ${dot}`} /> : null}</div>
       {was ? <div className="was">{was}</div> : null}
     </>
   );
-  const cls = `dayrow${isToday ? " today" : ""}${status === "skipped" ? " skipped" : ""}${was ? " changed" : ""}`;
+  const cls = `dayrow${isToday ? " today" : ""}${status === "skipped" ? " skipped" : ""}${status === "moved" ? " moved" : ""}${was ? " changed" : ""}`;
   if (a) return <Link to={`/activities/${a.id}`} className={cls}>{inner}</Link>;
   if (preview || (rest && !s.note && !s.brief)) return <div className={cls}>{inner}</div>; // a preview row carries its "原本" line instead of a sheet
   return <button type="button" className={cls} onClick={() => onOpen(s)}>{inner}</button>;
@@ -133,14 +142,6 @@ function ExtraRows({ week, unassigned }: { week: Week; unassigned: ApiActivity[]
   );
 }
 
-/** This week: '這週還剩 輕鬆跑 6 km、長跑 16 km'; a past week: '跑了 3 / 4 堂'. */
-function remaining(week: Week): string {
-  const planned = week.days.filter((d) => d.session.type !== "rest");
-  if (week.isPast) return `跑了 ${planned.filter((d) => d.activity).length} / ${planned.length} 堂`;
-  const left = planned.filter((d) => !d.activity && d.status !== "skipped").map((d) => rowName(d.session));
-  return left.length ? `這週還剩 ${left.join("、")}` : "這週的課都跑完了";
-}
-
 // /plan?proposal=<id>: the plan as it would be after one of Woo's cards (本地疊上去，不打新 API),
 // with 採用／不用 in the top bar. Anything else is the plain plan.
 export default function Plan() {
@@ -162,9 +163,12 @@ export default function Plan() {
   // The card still waiting for an answer is previewed; one that was decided elsewhere (or is gone)
   // gets the plain plan and a grey line for 3 seconds.
   const pending = !!proposal && proposal.status === "pending" && !done;
-  const preview: Preview | null = useMemo(() => (base && proposal && pending ? buildPreview(base.data, proposal) : null), [base, proposal, pending]);
+  // a 補課 counts in its original week unless that week's review is already written: that needs GET /weekly
+  const makeup = pending && !!proposal?.changes.some((c) => c.makeup);
+  const { reviewed, ready: reviewsReady } = useReviewedWeeks(makeup, base?.data.weeks ?? NO_WEEKS);
+  const preview: Preview | null = useMemo(() => (base && proposal && pending && reviewsReady ? buildPreview(base.data, proposal, reviewed) : null), [base, proposal, pending, reviewsReady, reviewed]);
   const view = useMemo(() => (done && base ? buildPlanView(applied.data, base.today) : preview && base ? buildPlanView(preview.data, base.today) : base), [done, applied, preview, base]);
-  const notice = !!proposalId && ready && !preview && !done;
+  const notice = !!proposalId && ready && reviewsReady && !preview && !done;
   useEffect(() => {
     if (!notice) return;
     const t = window.setTimeout(() => setNoticeGone(proposalId), 3000);
@@ -174,7 +178,9 @@ export default function Plan() {
   if (!view || !base) return <NoPlan title="課表" />;
   const { weeks, currentWeek, today } = view;
   const current = currentWeek?.week_no ?? weeks.find((w) => w.isFuture)?.week_no ?? weeks[weeks.length - 1]?.week_no;
-  const firstChanged = preview ? weeks.find((w) => preview.changedWeeks.has(w.week_no))?.week_no : undefined;
+  // a 補課 card opens on the week it moves to: the week it came from is over, with one grey row in it
+  const changedIn = preview ? weeks.filter((w) => preview.changedWeeks.has(w.week_no)) : [];
+  const firstChanged = preview ? (preview.hasMakeup ? changedIn.find((w) => !w.isPast) : undefined)?.week_no ?? changedIn[0]?.week_no : undefined;
   const selected = picked ?? firstChanged ?? current;
   const idx = weeks.findIndex((w) => w.week_no === selected);
   const week = weeks[idx];
@@ -236,13 +242,13 @@ export default function Plan() {
                 </div>
                 {preview && preview.focusWas.has(week.week_no) ? (
                   <div className="sub">{md(week.week_start)}–{md(week.week_end)} · <span className="was"><s>{preview.focusWas.get(week.week_no)}</s></span><br /><span className="now">{week.focus}</span></div>
-                ) : <div className="sub">{md(week.week_start)}–{md(week.week_end)} · {week.isFuture ? (week.focus ?? "") : remaining(week)}</div>}
+                ) : <div className="sub">{md(week.week_start)}–{md(week.week_end)} · {weekSubline(week, view)}</div>}
               </div>
               <button type="button" className="step" onClick={go(idx + 1)} disabled={!go(idx + 1)} aria-label="下一週">›</button>
             </div>
             {!week.isFuture ? <Bar value={week.actual_m} max={week.plan_m} tone={week.isComplete ? "good" : "ink"} /> : null}
             <div className="dayrows">
-              {week.days.map((d) => <DayRow key={d.session.id} day={d} isToday={d.session.scheduled_date === today} onOpen={setOpen} routine={view.routineBySession.get(d.session.id) ?? null} was={preview?.was.get(d.session.id)} preview={!!preview} />)}
+              {week.days.map((d) => <DayRow key={d.session.id} day={d} view={view} weekNo={week.week_no} isToday={d.session.scheduled_date === today} onOpen={setOpen} routine={view.routineBySession.get(d.session.id) ?? null} was={preview?.was.get(d.session.id)} preview={!!preview} />)}
             </div>
             {preview ? (
               <p className="plan-note">
@@ -255,7 +261,7 @@ export default function Plan() {
           </>
         ) : null}
       </main>
-      <SessionSheet session={open} view={view} onClose={() => setOpen(null)} />
+      <SessionSheet session={open} view={view} onClose={() => setOpen(null)} onOpen={setOpen} />
     </>
   );
 }

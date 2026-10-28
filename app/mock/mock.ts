@@ -85,8 +85,30 @@ function seedDetails(a: ApiActivity, own: Partial<Detail3> = {}) {
 }
 
 /** Mock-only switches for QA (set on window before the page needs them). */
-interface MockKnobs { __mockStage?: string | null; __mockNoReply?: boolean; __mockFailDetails?: boolean; __mockDetailsDelay?: number; __mockCoachPageSize?: number; __mockCoachDelay?: number; __mockOlderFail?: boolean }
+interface MockKnobs { __mockStage?: string | null; __mockNoReply?: boolean; __mockFailDetails?: boolean; __mockDetailsDelay?: number; __mockCoachPageSize?: number; __mockCoachDelay?: number; __mockOlderFail?: boolean; __mockNoCounts?: boolean }
 const knobs = () => globalThis as unknown as MockKnobs;
+
+const weekNoOn = (weeks: ApiWeek[], date: string) => weeks.find((w) => date >= w.week_start && date <= w.week_end)?.week_no ?? null;
+
+/**
+ * Write a 補課 into the demo plan the way the api's applyMakeup does: the old row stays (已改期, pointing at the
+ * new one) and a new row appears on the new day. The new row counts in the old row's week unless that week
+ * has a review (`reviewed`) — then in the week of the new day. The old row counts as a missed one in its own
+ * week when the make-up counts elsewhere, and in no week when the make-up took its place.
+ */
+function makeUpSession(sessions: ApiSession[], weeks: ApiWeek[], old: ApiSession, toDate: string, reviewed: ReadonlySet<number>): ApiSession {
+  const originWeek = weekNoOn(weeks, old.scheduled_date), newWeek = weekNoOn(weeks, toDate);
+  const counts = originWeek != null && reviewed.has(originWeek) ? newWeek : originWeek;
+  const row: ApiSession = { ...old, id: `s-mk-${old.scheduled_date}`, scheduled_date: toDate, week_no: newWeek, phase: weeks.find((w) => w.week_no === newWeek)?.phase ?? old.phase,
+    version: old.version + 1, superseded: false, skipped_at: null, brief: null,
+    moved_to_session_id: null, moved_to_date: null, moved_from_session_id: old.id, moved_from_date: old.scheduled_date, counts_in_week_no: counts };
+  old.superseded = true;
+  old.moved_to_session_id = row.id;
+  old.moved_to_date = toDate;
+  old.counts_in_week_no = counts !== originWeek ? originWeek : null;
+  sessions.push(row);
+  return row;
+}
 
 function build(): PlanResponse {
   const sessions: ApiSession[] = seed.sessions.map((s) => ({
@@ -110,11 +132,28 @@ function build(): PlanResponse {
     skipped_at: null,
     version: 1,
     superseded: false,
+    moved_to_session_id: null,
+    moved_to_date: null,
+    moved_from_session_id: null,
+    moved_from_date: null,
+    counts_in_week_no: s.week_no,
   }));
 
   const weeks: ApiWeek[] = (seed.weeks ?? []).map((w) => ({
     week_no: w.week_no, week_start: w.start, week_end: w.end, phase: w.phase, focus: w.focus,
   }));
+
+  // Two 補課 already adopted (history, so the plan has 已改期 rows and make-up rows from the start). Both came from week 2 and
+  // use sessions the weekly texts never call done (10/16 and 10/18; the texts say 10/13, 10/14 and week 3's runs were done).
+  //  - 10/16 Recovery 4 km → 10/30: adopted before week 2's review was written → counts in week 2 (its original week); the 10/30 Easy made room.
+  //  - 10/18 Long 14 km → 11/3: adopted after the review → counts in week 5, where it is run; the 11/3 Easy made room.
+  const byId = (id: string) => sessions.find((x) => x.id === id)!;
+  const drop = (id: string) => sessions.splice(sessions.findIndex((x) => x.id === id), 1);
+  drop("s-2026-10-30");
+  makeUpSession(sessions, weeks, byId("s-2026-10-16"), "2026-10-30", new Set());
+  drop("s-2026-11-03");
+  makeUpSession(sessions, weeks, byId("s-2026-10-18"), "2026-11-03", new Set([2]));
+  sessions.sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date));
 
   const byDate = new Map(sessions.map((s) => [s.scheduled_date, s]));
   const activities: ApiActivity[] = (seed.results ?? []).map((r) => {
@@ -255,12 +294,21 @@ export function mockPutCoachSeen(): PutCoachSeenResponse {
   return { seen_at: new Date().toISOString() };
 }
 
+/** `window.__mockNoCounts = true`: the plan as an api from before coach-adjust-2 sends it (no 補課 fields, no 已改期 rows), to try web deployed first. */
+const withoutMakeupFields = (sessions: ApiSession[]): ApiSession[] =>
+  sessions.filter((s) => !s.moved_to_date).map((s) => {
+    const o = { ...s } as Partial<ApiSession>;
+    delete o.moved_to_session_id; delete o.moved_to_date; delete o.moved_from_session_id; delete o.moved_from_date; delete o.counts_in_week_no;
+    return o as ApiSession;
+  });
+
 export function mockPlan(): PlanResponse {
   const d = data();
   const t = threadData();
   const openAsk = [...t].reverse().find((m) => m.kind === "ask" && m.ask?.state === "open")?.ask ?? null;
   return {
     ...d,
+    sessions: knobs().__mockNoCounts ? withoutMakeupFields(d.sessions) : d.sessions,
     coach_unread: coachUnread,
     coach_checkin_open: !!openAsk || t.some((m) => m.kind === "checkin" && m.checkin?.state === "open"),
     coach_ask_kind: openAsk?.kind ?? null,
@@ -493,6 +541,7 @@ export function mockPostAdjustment(weeklyId: string, index: number, body: PostAd
 const at = (iso: string) => new Date(iso).toISOString();
 const TODAY = todayJst();
 const todayAt = (hm: string) => new Date(`${TODAY}T${hm}:00+09:00`).toISOString();
+const todayAtS = (hms: string) => new Date(`${TODAY}T${hms}+09:00`).toISOString();
 const constraints: ApiConstraint[] = [
   { id: "k-mon", text: "週一固定休息，不排課", start_date: null, end_date: null, kind: "fixed_day", weekday: 1, source_message_id: null, status: "active", created_at: at("2026-10-05T10:00:00+09:00") },
   { id: "k-trip", text: "11/3〜4 出差", start_date: "2026-11-03", end_date: "2026-11-04", kind: "period", weekday: null, source_message_id: null, status: "active", created_at: at("2026-10-09T21:30:00+09:00") },
@@ -518,7 +567,7 @@ export function mockPostConstraint(constraintId: string, action: "accept" | "dis
 // the card Woo sends after 請 Woo 重看. Applying changes the demo plan for real; two cards that touch
 // the same session make the second one a 409 (the card turns stale).
 const chg = (o: Pick<ApiProposalChange, "op" | "label" | "date"> & Partial<ApiProposalChange>): ApiProposalChange =>
-  ({ session_id: null, old: null, new: null, reason: null, flags: [], applied_session_id: null, ...o });
+  ({ session_id: null, old: null, new: null, reason: null, flags: [], applied_session_id: null, makeup: false, counts_in_week_no: null, ...o });
 
 const BASIS_TEXT = "目標 4:45（6:45/km）。目前最長 16.2 km（10/25）、週跑量 36 km，兩次 Easy 心拍 142〜149 在範圍內，關卡 1（11/15 的 26 km）還沒到。原則：32 km 是關卡 2 唯一一次測試，不縮、只移；長跑之間至少隔 6 天；賽前 14 天內不排 25 km 以上。";
 const BASIS = ["目標 4:45", "最長 16.2 km", "週 36 km", "關卡 1 未測"];
@@ -612,6 +661,80 @@ const proposals: ApiProposal[] = [
       change: "關卡 2 用 26 km 的最後 6 km 估，比賽配速最多押到 6:50；第 8 週照原本減量 42 km，taper 不受影響。",
       risk: "26 km 跑完兩天就上飛機，坐久腿會腫；回來 11/24 的恢復跑改走路也行。",
     } }),
+  // ---- coach-adjust-2 補課 (today = the demo's 10/28 Wed; week 3's review is written, week 4's is not) ----
+  // Yesterday's Easy 7 km (10/27) was missed: makeup to Thursday, the 肌力 day makes room and its core work moves into the note. Week 4 has no review yet → counts in week 4.
+  card({ id: "p-mk-this", message_id: "c-mk-a1",
+    changes: [
+      chg({ op: "change", session_id: "s-2026-10-27", field: "scheduled_date", old: "2026-10-27", new: "2026-10-29", label: "Easy 7 km", date: "2026-10-27", makeup: true, reason: "昨天漏的 Easy 補到週四，今天 MP 之後隔一天再跑。" }),
+      chg({ op: "change", session_id: "s-2026-10-27", field: "note", old: null, new: "跑完做核心＋臀腿 15 分", label: "Easy 7 km", date: "2026-10-27" }),
+      chg({ op: "remove", session_id: "s-2026-10-29", label: "肌力日", date: "2026-10-29", reason: "週四改跑 Easy，肌力併到這堂的備註。" }),
+    ],
+    why: "Easy 7 km 補到週四，肌力併進去，這週的量不掉。",
+    basis: ["目標 4:45", "本週已跑 0 / 34 km", "10/27 Easy 7 km 漏跑"],
+    basis_text: "目標 4:45（6:45/km）。本週 34 km，10/27 的 Easy 7 km 沒跑，今天 10/28 是 MP 9 km，週五有坡跑。原則：硬課前後 48 小時不疊另一堂硬課，Easy 補在兩個硬日中間剛好；肌力日不另外佔一天。",
+    impact: {
+      keep: "10/27 的 Easy 7 km 算沒跑，本週只剩 27 km（34 → 27），11/1 長跑 18 km 前的量少一截。",
+      change: "Easy 7 km 補到 10/29 週四。第 4 週的週報還沒出，這堂算在本週：本週維持 34 km，跑完就算這週的那堂。",
+      risk: "週四腿還重就把 Easy 縮成 5 km，週五的坡跑照排；週報出來前改成算在下週也行，跟我說。",
+    } }),
+  // Week 3's review is written, so a make-up counts in the week it is run. A／B for the missed 10/25 long run (its question in week 3's review is still open).
+  card({ id: "p-mk-a", message_id: "c-mk-a2", group_id: "g-mk", option: { letter: "A", title: "補：併進 11/1 的長跑", recommended: true },
+    changes: [
+      chg({ op: "change", session_id: "s-2026-10-25", field: "scheduled_date", old: "2026-10-25", new: "2026-11-01", label: "Long 16 km", date: "2026-10-25", makeup: true, reason: "11/1 本來就是長跑，補課那堂取代它，不疊兩堂。", flags: ["離 11/8 的 22 km 剛好 7 天"] }),
+      chg({ op: "change", session_id: "s-2026-10-25", field: "target_distance_m", old: 16000, new: 18000, label: "Long 16 km", date: "2026-10-25" }),
+      chg({ op: "change", session_id: "s-2026-10-25", field: "note", old: "找有起伏的路線（駒沢、代代木）", new: "每 40 分 1 包能量膠＋水，測試腸胃；穿比賽衣褲", label: "Long 16 km", date: "2026-10-25" }),
+      chg({ op: "remove", session_id: "s-2026-11-01", label: "Long 18 km", date: "2026-11-01", reason: "補課那堂已經是 18 km，原本這堂刪掉。" }),
+    ],
+    basis: ["目標 4:45", "最長 12 km（10/11）", "長跑間隔 7 天"], basis_text: "目標 4:45。目前最長 12 km（10/11），10/25 的 16 km 沒跑。原則：長跑每次最多比上一次多 2〜4 km，之間隔至少 7 天；補長跑不另外開一天，併進下一次長跑。",
+    impact: {
+      keep: "10/25 的 16 km 算沒跑，第 3 週剩 20 km；11/1 的 18 km 之前最長只有 12 km，一次跳 6 km。",
+      change: "10/25 的長跑併進 11/1 的 18 km。第 3 週的週報已經出了，補課算在補跑那週：這堂算在第 4 週，第 4 週維持 34 km；第 3 週維持沒跑。",
+      risk: "11/1 當天腿重就停在 16 km，不補最後 2 km；補給照 11/1 的備註試。",
+    } }),
+  card({ id: "p-mk-b", message_id: "c-mk-a3", group_id: "g-mk", option: { letter: "B", title: "不補：11/1 前段放慢", recommended: false },
+    changes: [
+      chg({ op: "change", session_id: "s-2026-11-01", field: "note", old: "每 40 分 1 包能量膠＋水，測試腸胃；穿比賽衣褲", new: "前 16 km 7:30 以後，最後 2 km 看腿；每 40 分 1 包能量膠＋水", label: "Long 18 km", date: "2026-11-01", reason: "10/25 沒跑，最長還是 12 km，前段放慢把最後 2 km 留給腿。" }),
+    ],
+    basis: ["目標 4:45", "最長 12 km（10/11）"], basis_text: "目標 4:45。目前最長 12 km，10/25 的 16 km 沒跑，11/1 的 18 km 之間沒有 16 km 的前置。原則：不補時把下一次長跑的前段放慢，把量留給最後。",
+    impact: {
+      keep: "同上：11/1 直接 18 km，之前最長只有 12 km。",
+      change: "不補。10/25 維持沒跑（第 3 週 2/3 堂不動），11/1 的 18 km 前 16 km 放慢到 7:30 以後。",
+      risk: "最長 12 km 直接上 18 km，跑到一半痠痛就走完剩下的，關卡 1 的 26 km 往後一週。",
+    } }),
+  // Yesterday evening, after the 10/27 the card moves to had passed by the time it was pressed (409 → 課表已變).
+  card({ id: "p-mk-stale", message_id: "c-mk-b2", status: "stale", stale_reason: "10/23 Easy 6 km 要移到的 10/27 已經過了",
+    changes: [
+      chg({ op: "change", session_id: "s-2026-10-23", field: "scheduled_date", old: "2026-10-23", new: "2026-10-27", label: "Easy 6 km", date: "2026-10-23", makeup: true, reason: "10/23 漏的 Easy 補到明天。" }),
+      chg({ op: "remove", session_id: "s-2026-10-27", label: "Easy 7 km", date: "2026-10-27", reason: "補課那堂取代它。" }),
+    ],
+    basis: ["目標 4:45", "10/23 Easy 6 km 漏跑"], basis_text: "目標 4:45。10/23 的 Easy 6 km 沒跑，明天 10/27 有 Easy 7 km，併成一堂。原則：Easy 漏了通常不補，要補就併進另一堂 Easy。",
+    impact: { keep: "10/23 的 Easy 6 km 算沒跑，第 3 週 3/4 堂。", change: "補到 10/27，取代那天的 Easy 7 km。第 3 週的週報已經出了，這堂算在第 4 週。", risk: "10/27 腿還重就照原本的 7 km 跑，不補。" } }),
+  // Today's session moved away (no new row there): 今天沒有排課.
+  card({ id: "p-today-move", message_id: "c-mk-a5",
+    changes: [
+      chg({ op: "change", session_id: "s-2026-10-28", field: "scheduled_date", old: "2026-10-28", new: "2026-10-31", label: "MP 9 km", date: "2026-10-28", flags: ["隔天 11/1 是 18 km 長跑"] }),
+      chg({ op: "change", session_id: "s-2026-10-28", field: "target_distance_m", old: 9000, new: 7000, label: "MP 9 km", date: "2026-10-28", reason: "長跑前一天，MP 縮成 7 km。" }),
+      chg({ op: "remove", session_id: "s-2026-10-31", label: "休息", date: "2026-10-31", reason: "這天改跑 MP。" }),
+    ],
+    basis: ["目標 4:45", "本週已跑 0 / 34 km", "11/1 長跑 18 km"], basis_text: "目標 4:45。今天 MP 9 km 你跑不了，週六本來休息。原則：MP 不能直接丟掉，移到長跑前一天要縮量。",
+    impact: { keep: "今天的 MP 算沒跑，本週少 9 km，MP 這週測不到。", change: "MP 移到 10/31 週六、縮成 7 km，今天沒有排課；本週 34 → 32 km。", risk: "週六腿重就改 Easy 5 km，11/1 的長跑不受影響。" } }),
+  // Today's session, shorter (a narrow card, one change)
+  card({ id: "p-today-short", message_id: "c-mk-a4",
+    changes: [chg({ op: "change", session_id: "s-2026-10-28", field: "target_distance_m", old: 9000, new: 7000, label: "MP 9 km", date: "2026-10-28", reason: "腿痠，MP 段縮短。" })],
+    why: "腿痠就把今天的 MP 縮短，心拍壓住比距離重要。",
+    basis: ["目標 4:45", "昨天沒跑"], basis_text: "目標 4:45。今天 MP 9 km，你說腿痠。原則：腿痠時保留強度、縮量。",
+    impact: { keep: "9 km 照跑，腿痠時 MP 段心拍容易衝過 165。", change: "今天 MP 7 km，本週 34 → 32 km。", risk: "跑到一半還是痠就停在熱身後的第一段 MP。" } }),
+  // An A／B reply where one card failed the api's check and the other was kept: a single card, and proposal_rejected is true (the grey line and the card show together)
+  card({ id: "p-kept", message_id: "c-mk-k2",
+    changes: [chg({ op: "change", session_id: "s-2026-11-13", field: "target_distance_m", old: 6000, new: 5000, label: "Easy 6 km", date: "2026-11-13", reason: "11/15 長跑前一天少一點。" })],
+    why: "長跑前兩天的 Easy 縮短 1 km。",
+    basis: ["目標 4:45", "11/15 長跑 26 km"], basis_text: "目標 4:45。11/15 是 26 km 的關卡 1，前兩天的 Easy 不用多。",
+    impact: { keep: "11/13 照 6 km 跑，量沒問題。", change: "11/13 縮成 5 km，第 6 週 55 → 54 km。", risk: "腿沒感覺就照原本的 6 km。" } }),
+  // Moves a missed session onto a day that already has one and does not deal with it: apply → 400 (an old card from before the check existed)
+  card({ id: "p-mk-two", message_id: "c-mk-a7",
+    changes: [chg({ op: "change", session_id: "s-2026-10-14", field: "scheduled_date", old: "2026-10-14", new: "2026-10-30", label: "MP 7 km", date: "2026-10-14", makeup: true, reason: "10/14 漏的 MP 補到週五。" })],
+    basis: ["目標 4:45", "10/14 MP 漏跑"], basis_text: "目標 4:45。10/14 的 MP 7 km 沒跑。",
+    impact: { keep: "10/14 的 MP 算沒跑。", change: "補到 10/30 週五。", risk: "週五本來有坡跑，兩堂疊在一起。" } }),
 ];
 
 /** What Woo says after 採用 (the api writes it; the demo has a few by hand). */
@@ -620,6 +743,11 @@ const CONFIRM: Record<string, () => string> = {
   "p-ab-a": () => "改好了。11/25 週三 32 km，前一天的恢復跑別偷快。出國那三天走路算活動，不用找我報到。",
   "p-ab-b": () => "改好了。11/20 週五 26 km 跑完再走，出國那三天走路就好；回來 11/24 的恢復跑看腿再決定。",
   "p-restale": () => "改好了。11/27 的 Easy 放慢，11/29 的長跑 18 → 16 km。",
+  "p-mk-this": () => "改好了。10/27 的 Easy 7 km 補到 10/29，算在第 4 週。肌力併進那堂的備註。",
+  "p-mk-a": () => "改好了。10/25 的 Long 16 km 併進 11/1 的 18 km，算在第 4 週。",
+  "p-mk-b": () => "改好了。10/25 不補，11/1 的 18 km 前 16 km 放慢到 7:30 以後。",
+  "p-mk-restale": () => "改好了。10/23 的 Easy 6 km 補到 10/29，算在第 4 週。",
+  "p-today-move": () => "改好了。今天沒有排課，MP 移到 10/31 週六、縮成 7 km。",
 };
 
 /** Why applying would be a 409: a session of the card moved, vanished, got a record, or no longer has the value the card started from. */
@@ -630,9 +758,25 @@ function planConflict(p: ApiProposal): string | null {
     const s = d.sessions.find((x) => x.id === c.session_id);
     const what = `${c.date ? md(c.date) : ""} ${c.label ?? "那堂"}`.trim();
     if (!s || (c.date && s.scheduled_date !== c.date)) return `${what} 在你按之前被別的提案改過`;
+    if (c.field === "scheduled_date" && typeof c.new === "string" && c.new < TODAY) return `${what} 要移到的 ${md(c.new)} 已經過了`;
     if ([...d.activities, ...d.unassigned].some((a) => a.session_id === s.id)) return `${what} 已完成`;
     if (c.op === "change" && c.field && c.field !== "scheduled_date" && typeof c.old === "number" && (s as unknown as Record<string, unknown>)[c.field] !== c.old) return `${what} 在你按之前被別的提案改過`;
   }
+  return null;
+}
+
+/** Two sessions on one day after the card (the api answers 400): only the days the card moves something onto are looked at. */
+function doubleBooked(p: ApiProposal): string | null {
+  const d = data();
+  const gone = new Set(p.changes.filter((c) => c.op === "remove" && c.session_id).map((c) => c.session_id as string));
+  const date = new Map(d.sessions.filter((x) => !x.moved_to_date && !gone.has(x.id)).map((x) => [x.id, x.scheduled_date]));
+  const touched = new Set<string>();
+  const added: string[] = [];
+  for (const c of p.changes) {
+    if (c.op === "add" && c.new_session) { added.push(c.new_session.scheduled_date); touched.add(c.new_session.scheduled_date); }
+    if (c.op === "change" && c.field === "scheduled_date" && c.session_id && typeof c.new === "string") { date.set(c.session_id, c.new); touched.add(c.new); }
+  }
+  for (const day of touched) if ([...date.values(), ...added].filter((x) => x === day).length > 1) return day;
   return null;
 }
 
@@ -641,13 +785,37 @@ function applyToPlan(p: ApiProposal): string[] {
   const d = data();
   const parts: string[] = [];
   const weekOf = (date: string) => d.weeks.find((w) => date >= w.week_start && date <= w.week_end)?.week_no ?? null;
+  const reviewed = new Set(weeklyData().map((w) => weekOf(w.week_start)).filter((n): n is number => n != null));
+  const landed = new Map<string, ApiSession>(); // 補課: later changes of the card to that session land on its new row
+  // a make-up row that is skipped or removed puts the original day back as a plain skipped session
+  const putBack = (row: ApiSession) => {
+    const origin = d.sessions.find((x) => x.id === row.moved_from_session_id);
+    if (!origin) return;
+    origin.superseded = false; origin.moved_to_session_id = null; origin.moved_to_date = null; origin.counts_in_week_no = origin.week_no;
+    row.moved_from_session_id = null; row.moved_from_date = null; row.counts_in_week_no = row.week_no;
+  };
   // removals first, so a session that moves onto the freed day does not meet the old one
-  for (const c of p.changes) if (c.op === "remove" && c.session_id) d.sessions = d.sessions.filter((x) => x.id !== c.session_id);
+  for (const c of p.changes) {
+    if (c.op !== "remove" || !c.session_id) continue;
+    const gone = d.sessions.find((x) => x.id === c.session_id);
+    if (gone?.moved_from_session_id) putBack(gone);
+    d.sessions = d.sessions.filter((x) => x.id !== c.session_id);
+  }
   for (const c of p.changes) {
     if (c.op !== "change" || !c.session_id) continue;
-    const s = d.sessions.find((x) => x.id === c.session_id);
+    const old = d.sessions.find((x) => x.id === c.session_id);
+    if (old && c.makeup && c.field === "scheduled_date" && typeof c.new === "string" && !landed.has(old.id)) {
+      const row = makeUpSession(d.sessions, d.weeks, old, c.new, reviewed);
+      landed.set(old.id, row);
+      c.applied_session_id = row.id;
+      c.counts_in_week_no = row.counts_in_week_no;
+      parts.push(`${md(old.scheduled_date)} 的 ${c.label ?? old.label} 補到 ${md(c.new)}，算在第 ${row.counts_in_week_no} 週`);
+      continue;
+    }
+    const s = landed.get(c.session_id) ?? old;
     if (!s) continue;
-    if (c.field === "skip") { s.type = "rest"; s.label = "休息"; s.content = "休息"; s.target_distance_m = 0; s.target = null; s.note = null; parts.push(`${md(c.date ?? s.scheduled_date)} 改成休息`); }
+    if (c.field === "skip") {
+      if (s.moved_from_session_id) putBack(s); s.type = "rest"; s.label = "休息"; s.content = "休息"; s.target_distance_m = 0; s.target = null; s.note = null; parts.push(`${md(c.date ?? s.scheduled_date)} 改成休息`); }
     else if (c.field === "type") {
       // the api's enum: the session becomes that kind (label and content follow; distance is its own change)
       const t = String(c.new) as ApiSession["type"];
@@ -661,7 +829,7 @@ function applyToPlan(p: ApiProposal): string[] {
       s.target_pace_sec_km = c.new;
     } else if (c.field) {
       (s as unknown as Record<string, unknown>)[c.field] = c.new;
-      if (c.field === "scheduled_date" && typeof c.new === "string") s.week_no = weekOf(c.new);
+      if (c.field === "scheduled_date" && typeof c.new === "string") { s.week_no = weekOf(c.new); if (!s.moved_from_session_id) s.counts_in_week_no = s.week_no; }
       if (c.field === "target_distance_m" && typeof c.new === "number") s.content = s.content?.replace(/\d+(?:〜\d+)?\s*km/, `${kmPlan(c.new)} km`) ?? s.content;
       parts.push(c.field === "scheduled_date" && typeof c.new === "string" ? `${mdDow(c.new)}是 ${c.label ?? s.label}`
         : c.field === "target_distance_m" && typeof c.new === "number" ? `${md(s.scheduled_date)} 的 ${(c.label ?? s.label ?? "").split(" ")[0]} 是 ${kmPlan(c.new)} km`
@@ -675,7 +843,8 @@ function applyToPlan(p: ApiProposal): string[] {
     const id = `s-add-${p.id}-${i}`;
     d.sessions.push({ id, plan_id: PLAN_ID, scheduled_date: n.scheduled_date, week_no: weekOf(n.scheduled_date), phase: d.weeks.find((w) => w.week_no === weekOf(n.scheduled_date))?.phase ?? null,
       label: n.label, type: n.type, content: n.label, note: n.note, target: null, target_distance_m: n.target_distance_m, target_pace_sec_km: n.target_pace_sec_km, target_pace_min_sec_km: null, target_pace_max_sec_km: null,
-      target_hr_min: null, target_hr_max: null, brief: null, skipped_at: null, version: 1, superseded: false });
+      target_hr_min: null, target_hr_max: null, brief: null, skipped_at: null, version: 1, superseded: false,
+      moved_to_session_id: null, moved_to_date: null, moved_from_session_id: null, moved_from_date: null, counts_in_week_no: weekOf(n.scheduled_date) });
     c.applied_session_id = id;
   });
   for (const w of p.weeks) {
@@ -702,9 +871,11 @@ function threadData(): ApiCoachMessage[] {
   const w3 = weeklyData()[1];
   const today = todayJst();
   const yAt = (hm: string) => new Date(`${addDays(today, -1)}T${hm}:00+09:00`).toISOString();
-  for (const p of proposals) p.created_at = p.id === "p-applied" ? yAt("21:01") : p.id === "p-stale" ? yAt("22:11") : todayAt("06:21");
+  for (const p of proposals) p.created_at = p.id === "p-applied" ? yAt("21:01") : p.id === "p-stale" ? yAt("22:11") : p.id === "p-mk-stale" ? yAt("22:31") : todayAt("06:21");
   thread = [
-    { id: "c1", role: "coach", kind: "weekly", text: w.summary ?? "", activity_id: null, weekly_review_id: w.id, status: "sent", review: null, quote: null, error: null, created_at: at("2026-10-12T12:00:00Z") },
+    { id: "c1", role: "coach", kind: "weekly", text: w.summary ?? "", activity_id: null, weekly_review_id: w.id, status: "sent", review: null, quote: null, error: null, created_at: at("2026-10-12T12:00:00Z"),
+      // 10/16 Recovery was moved to 10/30 before this review was written: it counts in this week and the review says so
+      weekly: { week_start: w.week_start, asks: [], updated: null, cancelled: [], makeups: [{ from: "2026-10-16", to: "2026-10-30", label: "Recovery 4 km", done: false }] } },
     { id: "c2", role: "coach", kind: "review", text: "心拍整段壓在 140，是四次 Easy 裡最穩的一次。第 1 km 6:35 偏快是錶的心拍延遲，不是真的用力；第 6 km 8:01 是坡後自然放慢，正常。", activity_id: "a-2026-10-13", weekly_review_id: null, status: "sent", review: { label: "Easy 6 km", verdict: "達成", reminder: "第 1 km 前 3 分鐘用呼吸不用錶", date: "2026-10-13" }, quote: null, error: null, created_at: at("2026-10-12T22:52:00Z") },
     { id: "c3", role: "athlete", kind: "chat", text: "第一公里又衝太快了，有什麼辦法壓住？", activity_id: "a-2026-10-13", weekly_review_id: null, status: "sent", review: null, quote: "10/13 Easy 6.01 km · 7:25/km · 心拍 140（最高 148） · 達成", error: null, created_at: at("2026-10-12T23:10:00Z") },
     { id: "c4", role: "coach", kind: "chat", text: "這是連續第二次了。前 3 分鐘不要看錶，用鼻子呼吸能撐住的速度就是對的；第 1 km 跑到 7:30 以上才算成功。明天 MP 課的前 2 km Easy 也照這個來。", activity_id: null, weekly_review_id: null, status: "sent", review: null, quote: null, error: null, created_at: at("2026-10-12T23:10:20Z") },
@@ -716,7 +887,7 @@ function threadData(): ApiCoachMessage[] {
     { ...BLANK, id: "c-rp-c2", role: "coach", kind: "chat", text: "11/29 那堂在你按之前已經改過了（週一的回顧把它改成 18 km）。這張不能照用。", proposal: proposals.find((x) => x.id === "p-stale") ?? null, created_at: yAt("22:11") },
     // Week 3's review, written before the 10/25 long run had a record: it asks (demo dates it this morning).
     { ...BLANK, id: "c-weekly-3", role: "coach", kind: "weekly", text: w3.summary ?? "", weekly_review_id: w3.id, created_at: w3.created_at,
-      weekly: { week_start: w3.week_start, asks: [{ session_id: "s-2026-10-25", label: "Long 16 km", date: "2026-10-25", question: "10/25 的 Long 16 km 我沒看到紀錄，是沒跑，還是還沒同步？", state: "open" }], updated: null, cancelled: [] } },
+      weekly: { week_start: w3.week_start, asks: [{ session_id: "s-2026-10-25", label: "Long 16 km", date: "2026-10-25", question: "10/25 的 Long 16 km 我沒看到紀錄，是沒跑，還是還沒同步？", state: "open" }], updated: null, cancelled: [], makeups: [] } },
     // A chat reply that carries a proposal card (two changes), and a flagged one.
     { ...BLANK, id: "c-ask-sun", role: "athlete", kind: "chat", text: "這週日有事，長跑跑不了", created_at: todayAt("06:20") },
     { ...BLANK, id: "c-prop-1", role: "coach", kind: "chat", text: "那把長跑提到週六，週日換成休息。週五的 Easy 當長跑前的放鬆，別跑快。", proposal: proposals[0], created_at: todayAt("06:21") },
@@ -734,6 +905,24 @@ function threadData(): ApiCoachMessage[] {
     // A card that failed the api's check: only his text stays, plus the grey line.
     { ...BLANK, id: "c-rp-q5", role: "athlete", kind: "chat", text: "11/16 那週全部改成輕鬆跑好了", created_at: todayAt("06:58") },
     { ...BLANK, id: "c-rp-a6", role: "coach", kind: "chat", text: "11/16 那週有 11/18 的坡跑加 MP，是第三階段最重要的一堂，整週改輕鬆跑我不建議；要動的話跟我說是哪幾天不方便。", proposal_rejected: true, created_at: todayAt("06:59") },
+    // coach-adjust-2 (older than the replan messages below, so the first page of the thread is what it was before): yesterday's card that went stale (the day it moved to was over by the time it was pressed), then today's 補課 and today's-session cards.
+    { ...BLANK, id: "c-mk-b1", role: "athlete", kind: "chat", text: "10/23 的 Easy 沒跑，明天補", created_at: yAt("22:30") },
+    { ...BLANK, id: "c-mk-b2", role: "coach", kind: "chat", text: "好，10/23 的 Easy 6 km 補到明天 10/27，取代那天的 Easy 7 km，不疊兩堂。這堂算在第 4 週（第 3 週的週報已經出了）。整張一起看：", proposal: proposals.find((x) => x.id === "p-mk-stale") ?? null, created_at: yAt("22:31") },
+    { ...BLANK, id: "c-mk-k1", role: "athlete", kind: "chat", text: "11/13 的 Easy 可以短一點嗎", created_at: todayAtS("05:05:00") },
+    { ...BLANK, id: "c-mk-k2", role: "coach", kind: "chat", text: "可以，11/13 的 Easy 6 km 縮成 5 km，整張看一下：", proposal: proposals.find((x) => x.id === "p-kept") ?? null, proposal_rejected: true, created_at: todayAtS("05:05:10") },
+    { ...BLANK, id: "c-mk-q1", role: "athlete", kind: "chat", text: "昨天的 Easy 沒跑，要補嗎？", created_at: todayAtS("05:00:00") },
+    { ...BLANK, id: "c-mk-a1", role: "coach", kind: "chat", text: "要補。Easy 7 km 補到週四 10/29，今天是 MP，隔一天再跑剛好；週四原本是肌力日，核心併到這堂的備註。第 4 週的週報還沒出，這堂算在本週，本週 34 km 不變。整張一起看：", proposal: proposals.find((x) => x.id === "p-mk-this") ?? null, created_at: todayAtS("05:00:10") },
+    { ...BLANK, id: "c-mk-q2", role: "athlete", kind: "chat", text: "10/25 的長跑沒跑，想補", created_at: todayAtS("05:01:00") },
+    { ...BLANK, id: "c-mk-a2", role: "coach", kind: "chat", text: "兩條路。A：補，但不另開一天，併進 11/1 的長跑，18 km 當成補的那堂；第 3 週的週報已經出了，這堂算在第 4 週。B：不補，11/1 前段放慢，把量留給最後 2 km。離比賽還有 6 週，我偏 A。", proposal: proposals.find((x) => x.id === "p-mk-a") ?? null, created_at: todayAtS("05:01:10") },
+    { ...BLANK, id: "c-mk-a3", role: "coach", kind: "chat", text: "", proposal: proposals.find((x) => x.id === "p-mk-b") ?? null, created_at: todayAtS("05:01:10") },
+    { ...BLANK, id: "c-mk-q3", role: "athlete", kind: "chat", text: "今天腿有點痠，MP 少跑一點", created_at: todayAtS("05:02:00") },
+    { ...BLANK, id: "c-mk-a4", role: "coach", kind: "chat", text: "9 km 縮成 7 km，心拍壓在 165 以下就好。", proposal: proposals.find((x) => x.id === "p-today-short") ?? null, created_at: todayAtS("05:02:10") },
+    { ...BLANK, id: "c-mk-q4", role: "athlete", kind: "chat", text: "今天臨時有事，MP 往後移", created_at: todayAtS("05:03:00") },
+    { ...BLANK, id: "c-mk-a5", role: "coach", kind: "chat", text: "移到週六 10/31，那天本來休息；隔天是 18 km 長跑，所以 MP 縮成 7 km。今天就沒有排課了。整張一起看：", proposal: proposals.find((x) => x.id === "p-today-move") ?? null, created_at: todayAtS("05:03:10") },
+    { ...BLANK, id: "c-mk-q5", role: "athlete", kind: "chat", text: "今天早上跑了 7 km，Strava 有進來", created_at: todayAtS("05:04:00") },
+    { ...BLANK, id: "c-mk-a6", role: "coach", kind: "chat", text: "那趟 7.00 km 還沒配到課，我不開提案卡。到「今天」頁，在「今天其他活動」那列按「算成 今天的課」就會配上；要算成別堂的話跟我說，我先把那堂移到今天，你再按。", created_at: todayAtS("05:04:10") },
+    { ...BLANK, id: "c-mk-q6", role: "athlete", kind: "chat", text: "10/14 的 MP 想補到週五", created_at: todayAtS("05:04:30") },
+    { ...BLANK, id: "c-mk-a7", role: "coach", kind: "chat", text: "10/14 的 MP 7 km 補到 10/30 週五。整張一起看：", proposal: proposals.find((x) => x.id === "p-mk-two") ?? null, created_at: todayAtS("05:04:40") },
     // Woo's check-in for today's run (demo: today's session is MP 7 km, three activities synced)
     { ...BLANK, id: "c5", role: "coach", kind: "checkin", text: "今天的課是 MP 7 km：2 km Easy + 3 km @ MP + 2 km Easy。Strava 剛進來 3 個活動，哪一個是這堂？", activity_id: "u-run", created_at: todayAt("07:05"),
       checkin: { state: "open", mode: "activity", date: today, session_id: todaySessionId(), session_label: "MP 7 km", candidates: [{ activity_id: "u-run", label: "跑步 06:40 · 7.00 km · 7:08/km" }, { activity_id: "u-walk", label: "走路 17:30 · 4.9 km · 64 分" }, { activity_id: "u-hyrox", label: "重訓 18:30 · 58 分 · 心拍 152" }] } },
@@ -789,7 +978,10 @@ export function mockPostProposal(proposalId: string, action: "apply" | "dismiss"
       p.stale_reason = why;
       throw new ApiError(409, "plan_changed");
     }
+    const day = doubleBooked(p);
+    if (day) throw new ApiError(400, `two sessions on ${day}`); // the card stays pending; the card shows its fixed sentence
     const parts = applyToPlan(p);
+    closeAsksFor(p);
     for (const q of proposals) if (p.group_id && q.group_id === p.group_id && q.id !== p.id && q.status === "pending") { q.status = "superseded"; q.decided_at = new Date().toISOString(); superseded.push(q.id); }
     const t = threadData();
     const text = CONFIRM[p.id]?.() ?? (parts.length ? `改好了，課表上${parts.join("、")}。前一天的 Easy 跑完記得跟我說腿的狀況。` : "改好了。");
@@ -798,6 +990,15 @@ export function mockPostProposal(proposalId: string, action: "apply" | "dismiss"
   p.status = action === "apply" ? "applied" : "dismissed";
   p.decided_at = new Date().toISOString();
   return { proposal: { ...p, changes: p.changes.map((c) => ({ ...c })) }, superseded };
+}
+
+/** A 補課 answers the weekly review's open question about that session: it closes as skipped, nothing is re-run (the api does the same). */
+function closeAsksFor(p: ApiProposal) {
+  const ids = new Set(p.changes.filter((c) => c.makeup && c.session_id).map((c) => c.session_id as string));
+  for (const m of threadData()) {
+    if (m.kind !== "weekly" || !m.weekly) continue;
+    m.weekly = { ...m.weekly, asks: m.weekly.asks.map((a) => (ids.has(a.session_id) && a.state === "open" ? { ...a, state: "skipped" as const } : a)) };
+  }
 }
 
 function todaySessionId(): string | null {
@@ -839,7 +1040,7 @@ function rerunWeek2(s: ApiSession) {
   w.updated_at = now;
   w.update_reason = reason;
   m.text = w.summary;
-  m.weekly = { week_start: w.week_start, asks: [], updated: { at: now, reason }, cancelled: [...(m.weekly?.cancelled ?? []), ...cancelled] };
+  m.weekly = { week_start: w.week_start, asks: [], updated: { at: now, reason }, cancelled: [...(m.weekly?.cancelled ?? []), ...cancelled], makeups: m.weekly?.makeups ?? [] };
 }
 
 /** Demo: the pick assigns the activity, then Woo's question arrives after ~2 s. */
@@ -1004,6 +1205,23 @@ export function mockPostCoachMessage(body: PostCoachMessageRequest): PostCoachMe
     const m: ApiCoachMessage = { ...BLANK, id: `c${t.length + 1}`, role: "athlete", kind: "chat", text: body.text, status: "pending", created_at: new Date().toISOString() };
     t.push(m);
     walkStages(m, [["preparing", 0], ["thinking", 2500], ["writing", 5000]], 7000, () => {
+      if (old.id === "p-mk-stale") {
+        // the 補課 whose day had passed: against today's plan, to Thursday (the 肌力 day makes room), counted in week 4
+        let again = proposals.find((x) => x.id === "p-mk-restale");
+        if (!again) {
+          again = card({ id: "p-mk-restale", message_id: null, created_at: new Date().toISOString(),
+            changes: [
+              chg({ op: "change", session_id: "s-2026-10-23", field: "scheduled_date", old: "2026-10-23", new: "2026-10-29", label: "Easy 6 km", date: "2026-10-23", makeup: true, reason: "10/23 漏的 Easy 補到週四。" }),
+              chg({ op: "remove", session_id: "s-2026-10-29", label: "肌力日", date: "2026-10-29", reason: "週四改跑 Easy。" }),
+            ],
+            basis: old.basis, basis_text: old.basis_text,
+            impact: { keep: "10/23 的 Easy 6 km 算沒跑，第 3 週 3/4 堂。", change: "補到 10/29 週四。第 3 週的週報已經出了，這堂算在第 4 週：第 4 週 34 → 40 km。", risk: "週四腿還重就不補，Easy 漏了本來就不用硬補。" } });
+          proposals.push(again);
+        }
+        t.push({ ...BLANK, id: `c${t.length + 1}`, role: "coach", kind: "chat", text: "用現在的課表重排了一張：10/27 已經過了，10/23 的 Easy 6 km 改補到 10/29 週四，這堂算在第 4 週。", proposal: again, created_at: new Date().toISOString() });
+        m.status = "sent";
+        return;
+      }
       let next = proposals.find((x) => x.id === "p-restale");
       if (!next) {
         next = card({ id: "p-restale", message_id: null, created_at: new Date().toISOString(),

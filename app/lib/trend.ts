@@ -171,7 +171,8 @@ export interface Totals {
 export function totals(view: PlanView): Totals {
   const { actual_m, plan_to_date_m, pct } = view.totals;
   // Numerator and denominator from the same set of days, so a strength day's activity (type "rest") can't push done past planned.
-  const toDate = view.days.filter((d) => d.session.scheduled_date <= view.today && d.session.type !== "rest");
+  // (an 已改期 row whose make-up took its place has no `counts_in_week_no` and is in no total)
+  const toDate = view.days.filter((d) => d.session.scheduled_date <= view.today && d.session.type !== "rest" && d.session.counts_in_week_no != null);
   const planned = toDate.length;
   const done = toDate.filter((d) => d.activity).length;
   let streak = 0;

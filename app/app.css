@@ -381,6 +381,8 @@ ul { padding: 0; list-style: none; }
 .proposal .t { font-size: 13px; color: var(--ink-3); }
 .proposal .change { font-size: 15px; font-weight: 600; }
 .proposal .change s { color: var(--ink-3); font-weight: 400; }
+/* 補課 after 採用: "· 算第 4 週" */
+.proposal .change .counts { font-size: 12px; font-weight: 400; color: var(--ink-3); }
 .proposal .old { font-size: 12px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .proposal .why { font-size: 13px; color: var(--ink-2); line-height: 1.55; }
 .proposal .actions { display: flex; gap: 8px; margin-left: 52px; }
@@ -408,6 +410,8 @@ ul { padding: 0; list-style: none; }
 .msg.coach .head b { font-size: 16px; }
 .msg.coach .text { margin: 4px 0 0; font-size: 15px; line-height: 1.6; white-space: pre-wrap; }
 .msg.coach .next { margin: 6px 0 0; font-size: 14px; color: var(--ink-2); }
+/* a weekly review's 補課 line: part of the review's content, after its text */
+.msg.coach .makeups { margin: 8px 0 0; font-size: 13px; line-height: 1.5; color: var(--ink-2); }
 .msg.coach.typing .body { display: flex; align-items: center; gap: 8px; height: 36px; font-size: 13px; color: var(--ink-3); }
 .typing-dots { display: inline-flex; flex-direction: row; gap: 3px; }
 .typing-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-3); animation: dot 1.2s infinite; }
@@ -583,6 +587,11 @@ ul { padding: 0; list-style: none; }
 .ss-head { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 12px; align-items: center; padding: 4px 0 14px; border-bottom: 1px solid var(--line); }
 .ss-head .t { font-size: 20px; font-weight: 700; line-height: 1.3; }
 .ss-head .s { font-size: 13px; color: var(--ink-3); }
+/* session sheet of a 補課: the 已改期 row and the new row */
+.ss-head.moved .avatar { background: transparent; color: var(--ink-3); border: 1.5px dashed var(--ink-3); }
+.ss-head.moved .t { color: var(--ink-2); }
+.ss-moved { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 10px 0 12px; border-bottom: 1px solid var(--line); font-size: 14px; line-height: 1.5; color: var(--ink); }
+.ss-moved .go { flex: none; display: inline-flex; align-items: center; min-height: 44px; margin: -12px 0; font-size: 13px; color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; }
 .ss-rows { border-bottom: 1px solid var(--line); padding-bottom: 6px; }
 .ss-row { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 10px; align-items: baseline; padding: 8px 0; border-top: 1px solid var(--line); }
 .ss-row:first-child { border-top: none; }
@@ -634,6 +643,12 @@ main > .bar { height: 4px; margin: 6px 0 6px; }
 .dayrow .r .num { font-size: 17px; color: var(--ink); }
 .dayrow .r .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--ink-3); }
 .dayrow .r .dot.good { background: var(--v-good); } .dayrow .r .dot.warn { background: var(--v-warn); } .dayrow .r .dot.bad { background: var(--v-bad); } .dayrow .r .dot.skip, .dayrow .r .dot.none { background: var(--chip-line); }
+/* 已改期 (a 補課's original day): not faded like 跳過 — grey name, dashed hollow disc, hollow dot */
+.dayrow.moved .n .t { font-weight: 400; color: var(--ink-3); }
+.dayrow.moved .avatar { background: transparent; color: var(--ink-3); border: 1.5px dashed var(--ink-3); }
+.dayrow .r .dot.moved { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ink-3); }
+/* the 補課 line ('補 10/21 的課 · 算第 3 週') is the row's identity: when the pace target on the right leaves it too little room it wraps to a second line (still inside the 56px) instead of being cut */
+.dayrow .n .sub.wrap { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.2; }
 
 /* ---- 課表: 其他活動 (unassigned, under the week's rows) ---- */
 .extras { padding-top: 4px; }

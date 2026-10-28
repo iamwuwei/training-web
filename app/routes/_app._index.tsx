@@ -231,7 +231,7 @@ export default function Today() {
         {todayDay ? (
           <TodayPost day={todayDay} view={view} slow={timedOut} onOpen={setOpen} />
         ) : (
-          <p className="empty">{today > data.plan.race_date ? "課表已結束，辛苦了。" : "課表還沒開始。"}</p>
+          <p className="empty">{today > data.plan.race_date ? "課表已結束，辛苦了。" : data.weeks[0] && today < data.weeks[0].week_start ? "課表還沒開始。" : "今天沒有排課。"}</p>
         )}
 
         {extras.length ? (
