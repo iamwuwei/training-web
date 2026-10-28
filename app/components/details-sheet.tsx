@@ -25,6 +25,12 @@ function DetailsForm({ activity, onClose, onSaved }: { activity: ApiActivity; on
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
   const refs = useRef<Partial<Record<Key, HTMLInputElement | null>>>({});
+  // Room under the last box while one has focus (so it can scroll above the keyboard). It is taken
+  // away 0.5 s after the blur, not at once: tapping 儲存 blurs the box first, and a sheet that shrinks
+  // between touch-down and touch-up moves the button out from under the finger.
+  const [room, setRoom] = useState(false);
+  const roomTimer = useRef(0);
+  useEffect(() => () => window.clearTimeout(roomTimer.current), []);
 
   // Suggestions are a nicety: when they do not load there are none, and nothing is said.
   useEffect(() => {
@@ -66,6 +72,7 @@ function DetailsForm({ activity, onClose, onSaved }: { activity: ApiActivity; on
 
   return (
     <>
+      {room ? <span className="ds-room" /> : null}
       <h2 className="sheet-title">裝備與天氣</h2>
       <p className="ds-sub">只改這一趟；Strava 那邊不會變。</p>
       {FIELDS.map((f) => {
@@ -87,7 +94,8 @@ function DetailsForm({ activity, onClose, onSaved }: { activity: ApiActivity; on
               type="text" className="oneline" value={v} maxLength={MAX} placeholder={f.placeholder} disabled={busy}
               autoCapitalize="off" autoCorrect="off" spellCheck={false} autoComplete="off" enterKeyHint="done"
               onChange={(e) => setVals({ ...vals, [f.key]: e.target.value })}
-              onFocus={(e) => focusIn(e.currentTarget)}
+              onFocus={(e) => { window.clearTimeout(roomTimer.current); setRoom(true); focusIn(e.currentTarget); }}
+              onBlur={() => { window.clearTimeout(roomTimer.current); roomTimer.current = window.setTimeout(() => setRoom(false), 500); }}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); e.currentTarget.blur(); } }}
             />
             {hint || v.length >= 30 ? (

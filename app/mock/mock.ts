@@ -754,8 +754,8 @@ export function mockPostWeeklyAsk(weeklyId: string, sessionId: string, body: Pos
     const d = data();
     const s = d.sessions.find((x) => x.id === sessionId);
     if (s) s.skipped_at = new Date().toISOString();
-    // Woo rewrites the review: preparing, then thinking, then it is updated in place (~3.5 s)
-    walkStages(m, [["preparing", 0], ["thinking", 1000]], 3500, () => {
+    // Woo rewrites the review: preparing, then thinking, then it is updated in place (5 s)
+    walkStages(m, [["preparing", 0], ["thinking", 2500]], 5000, () => {
       const now = new Date().toISOString();
       const reason = `你說 ${md(ask.date)} 沒跑`;
       const cancelled = supersedePending(w);
@@ -929,9 +929,9 @@ export function mockCoach(opts: { limit?: number; before?: string } = {}): Coach
 }
 function coachPage({ limit = 10, before }: { limit?: number; before?: string }): CoachResponse {
   const k = knobs();
-  if (before && k.__mockOlderFail) throw new ApiError(500, "伺服器錯誤，稍後再試");
   const lim = k.__mockCoachPageSize ?? limit;
   coachCalls.push({ limit: lim, before: before ?? null, at: Date.now() });
+  if (before && k.__mockOlderFail) throw new ApiError(500, "伺服器錯誤，稍後再試");
   const all = [...threadData()].sort(byTime);
   let end = all.length;
   if (before) {
@@ -942,7 +942,7 @@ function coachPage({ limit = 10, before }: { limit?: number; before?: string }):
   const start = Math.max(0, end - lim);
   return { coach: { name: "Woo" }, messages: all.slice(start, end).map(exposed), has_more: start > 0 };
 }
-/** Demo mode: Woo answers after ~3 s, off-topic gets the one-liner. */
+/** Demo mode: Woo answers after ~10 s, walking through the stages, off-topic gets the one-liner. */
 export function mockPostCoachMessage(body: PostCoachMessageRequest): PostCoachMessageResponse {
   const t = threadData();
   // 是／不是 on the mismatch question, same states as the api: the athlete's line is stored
@@ -985,7 +985,7 @@ export function mockPostCoachMessage(body: PostCoachMessageRequest): PostCoachMe
     const m: ApiCoachMessage = { ...BLANK, id: `c${t.length + 1}`, role: "athlete", kind: "chat", text: body.text, status: "pending", activity_id: ask.ask.activity_id, rpe: body.rpe ?? null, created_at: new Date().toISOString() };
     t.push(m);
     // the verdict's wait: reading the run, then comparing pace and heart rate
-    walkStages(m, [["reading", 0], ["judging", 1500]], 3000, () => {
+    walkStages(m, [["reading", 0], ["judging", 2500]], 5000, () => {
       if (a) a.review = { verdict: "達成但有提醒", comment: "MP 段 6:46 守住了，第 5 km 心拍 166 超過上限。第三公里開始腿重跟數字對得上。", reminders: ["MP 第 3 公里開始看心拍，過 160 就稍微放慢"], source: "claude", model: null, adjust_hint: null, failed: false, error: null, created_at: new Date().toISOString() };
       t.push({ ...BLANK, id: `c${t.length + 1}`, role: "coach", kind: "review", text: "MP 段 6:46 守住了，第 5 km 心拍 166 超過上限。第三公里開始腿重跟數字對得上。", activity_id: ask.ask!.activity_id, review: { label: "MP 7 km", verdict: "達成但有提醒", reminder: "MP 第 3 公里開始看心拍，過 160 就稍微放慢", date: todayJst() }, created_at: new Date().toISOString() });
       m.status = "sent";
@@ -998,7 +998,7 @@ export function mockPostCoachMessage(body: PostCoachMessageRequest): PostCoachMe
     if (!old) throw new ApiError(404, "not found");
     const m: ApiCoachMessage = { ...BLANK, id: `c${t.length + 1}`, role: "athlete", kind: "chat", text: body.text, status: "pending", created_at: new Date().toISOString() };
     t.push(m);
-    walkStages(m, [["preparing", 0], ["thinking", 800], ["writing", 2200]], 3000, () => {
+    walkStages(m, [["preparing", 0], ["thinking", 2500], ["writing", 5000]], 7000, () => {
       let next = proposals.find((x) => x.id === "p-restale");
       if (!next) {
         next = card({ id: "p-restale", message_id: null, created_at: new Date().toISOString(),
@@ -1020,8 +1020,8 @@ export function mockPostCoachMessage(body: PostCoachMessageRequest): PostCoachMe
   const quote = quoted ? `${quoted.start_time.slice(5, 10).replace("-", "/")} ${quoted.session_id ? "課表" : "未排課"} ${(quoted.distance_m / 1000).toFixed(2)} km` : null;
   const m: ApiCoachMessage = { ...BLANK, id: `c${t.length + 1}`, role: "athlete", kind: "chat", text: body.text, activity_id: body.activity_id ?? null, status: "pending", quote, created_at: new Date().toISOString() };
   t.push(m);
-  // preparing → thinking → searching → writing, then the reply (~4.5 s)
-  walkStages(m, [["preparing", 0], ["thinking", 800], ["searching", 2000], ["writing", 3200]], 4500, () => {
+  // preparing → thinking → searching → writing, then the reply (10 s: each stage outlasts the 2 s poll, so every one can be seen)
+  walkStages(m, [["preparing", 0], ["thinking", 2500], ["searching", 5000], ["writing", 7500]], 10000, () => {
     const offTopic = /吃|電影|天氣|股票|工作/.test(body.text) && !/跑|課表|心拍|配速|腿/.test(body.text);
     t.push({ ...BLANK, id: `c${t.length + 1}`, role: "coach", kind: "chat", text: offTopic ? "這個不歸我管，我們回到課表。週五恢復跑完記得寫一下腿的感覺。" : "（示範）收到。以你最近 14 天的心拍來看，這個問題先用降速處理，不要先想拿掉課。週五恢復跑完再跟我說腿的狀況。", created_at: new Date().toISOString() });
     m.status = "sent";
