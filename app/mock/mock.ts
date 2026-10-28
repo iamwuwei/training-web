@@ -85,7 +85,7 @@ function seedDetails(a: ApiActivity, own: Partial<Detail3> = {}) {
 }
 
 /** Mock-only switches for QA (set on window before the page needs them). */
-interface MockKnobs { __mockStage?: string | null; __mockNoReply?: boolean; __mockFailDetails?: boolean; __mockDetailsDelay?: number; __mockCoachPageSize?: number; __mockCoachDelay?: number; __mockOlderFail?: boolean }
+interface MockKnobs { __mockStage?: string | null; __mockNoReply?: boolean; __mockFailDetails?: boolean; __mockDetailsDelay?: number; __mockCoachPageSize?: number; __mockCoachDelay?: number; __mockOlderFail?: boolean; __mockNoCounts?: boolean }
 const knobs = () => globalThis as unknown as MockKnobs;
 
 const weekNoOn = (weeks: ApiWeek[], date: string) => weeks.find((w) => date >= w.week_start && date <= w.week_end)?.week_no ?? null;
@@ -294,12 +294,21 @@ export function mockPutCoachSeen(): PutCoachSeenResponse {
   return { seen_at: new Date().toISOString() };
 }
 
+/** `window.__mockNoCounts = true`: the plan as an api from before coach-adjust-2 sends it (no 補課 fields, no 已改期 rows), to try web deployed first. */
+const withoutMakeupFields = (sessions: ApiSession[]): ApiSession[] =>
+  sessions.filter((s) => !s.moved_to_date).map((s) => {
+    const o = { ...s } as Partial<ApiSession>;
+    delete o.moved_to_session_id; delete o.moved_to_date; delete o.moved_from_session_id; delete o.moved_from_date; delete o.counts_in_week_no;
+    return o as ApiSession;
+  });
+
 export function mockPlan(): PlanResponse {
   const d = data();
   const t = threadData();
   const openAsk = [...t].reverse().find((m) => m.kind === "ask" && m.ask?.state === "open")?.ask ?? null;
   return {
     ...d,
+    sessions: knobs().__mockNoCounts ? withoutMakeupFields(d.sessions) : d.sessions,
     coach_unread: coachUnread,
     coach_checkin_open: !!openAsk || t.some((m) => m.kind === "checkin" && m.checkin?.state === "open"),
     coach_ask_kind: openAsk?.kind ?? null,
@@ -715,6 +724,12 @@ const proposals: ApiProposal[] = [
     why: "腿痠就把今天的 MP 縮短，心拍壓住比距離重要。",
     basis: ["目標 4:45", "昨天沒跑"], basis_text: "目標 4:45。今天 MP 9 km，你說腿痠。原則：腿痠時保留強度、縮量。",
     impact: { keep: "9 km 照跑，腿痠時 MP 段心拍容易衝過 165。", change: "今天 MP 7 km，本週 34 → 32 km。", risk: "跑到一半還是痠就停在熱身後的第一段 MP。" } }),
+  // An A／B reply where one card failed the api's check and the other was kept: a single card, and proposal_rejected is true (the grey line and the card show together)
+  card({ id: "p-kept", message_id: "c-mk-k2",
+    changes: [chg({ op: "change", session_id: "s-2026-11-13", field: "target_distance_m", old: 6000, new: 5000, label: "Easy 6 km", date: "2026-11-13", reason: "11/15 長跑前一天少一點。" })],
+    why: "長跑前兩天的 Easy 縮短 1 km。",
+    basis: ["目標 4:45", "11/15 長跑 26 km"], basis_text: "目標 4:45。11/15 是 26 km 的關卡 1，前兩天的 Easy 不用多。",
+    impact: { keep: "11/13 照 6 km 跑，量沒問題。", change: "11/13 縮成 5 km，第 6 週 55 → 54 km。", risk: "腿沒感覺就照原本的 6 km。" } }),
   // Moves a missed session onto a day that already has one and does not deal with it: apply → 400 (an old card from before the check existed)
   card({ id: "p-mk-two", message_id: "c-mk-a7",
     changes: [chg({ op: "change", session_id: "s-2026-10-14", field: "scheduled_date", old: "2026-10-14", new: "2026-10-30", label: "MP 7 km", date: "2026-10-14", makeup: true, reason: "10/14 漏的 MP 補到週五。" })],
@@ -893,6 +908,8 @@ function threadData(): ApiCoachMessage[] {
     // coach-adjust-2 (older than the replan messages below, so the first page of the thread is what it was before): yesterday's card that went stale (the day it moved to was over by the time it was pressed), then today's 補課 and today's-session cards.
     { ...BLANK, id: "c-mk-b1", role: "athlete", kind: "chat", text: "10/23 的 Easy 沒跑，明天補", created_at: yAt("22:30") },
     { ...BLANK, id: "c-mk-b2", role: "coach", kind: "chat", text: "好，10/23 的 Easy 6 km 補到明天 10/27，取代那天的 Easy 7 km，不疊兩堂。這堂算在第 4 週（第 3 週的週報已經出了）。整張一起看：", proposal: proposals.find((x) => x.id === "p-mk-stale") ?? null, created_at: yAt("22:31") },
+    { ...BLANK, id: "c-mk-k1", role: "athlete", kind: "chat", text: "11/13 的 Easy 可以短一點嗎", created_at: todayAtS("05:05:00") },
+    { ...BLANK, id: "c-mk-k2", role: "coach", kind: "chat", text: "可以，11/13 的 Easy 6 km 縮成 5 km，整張看一下：", proposal: proposals.find((x) => x.id === "p-kept") ?? null, proposal_rejected: true, created_at: todayAtS("05:05:10") },
     { ...BLANK, id: "c-mk-q1", role: "athlete", kind: "chat", text: "昨天的 Easy 沒跑，要補嗎？", created_at: todayAtS("05:00:00") },
     { ...BLANK, id: "c-mk-a1", role: "coach", kind: "chat", text: "要補。Easy 7 km 補到週四 10/29，今天是 MP，隔一天再跑剛好；週四原本是肌力日，核心併到這堂的備註。第 4 週的週報還沒出，這堂算在本週，本週 34 km 不變。整張一起看：", proposal: proposals.find((x) => x.id === "p-mk-this") ?? null, created_at: todayAtS("05:00:10") },
     { ...BLANK, id: "c-mk-q2", role: "athlete", kind: "chat", text: "10/25 的長跑沒跑，想補", created_at: todayAtS("05:01:00") },

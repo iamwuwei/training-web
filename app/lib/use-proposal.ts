@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { getCoach, getWeekly } from "./api";
+import { addDays } from "./date";
 import type { ApiProposal, ApiWeek } from "../types/api";
 
 /**
@@ -27,15 +28,16 @@ export function useProposal(id: string | null): { proposal: ApiProposal | null; 
  * while it loads. A failed read gives an empty set (= "not reviewed yet", the original week).
  */
 export function useReviewedWeeks(on: boolean, weeks: ApiWeek[]): { reviewed: ReadonlySet<number>; ready: boolean } {
-  const [starts, setStarts] = useState<ReadonlySet<string> | null>(null);
+  const [starts, setStarts] = useState<readonly string[] | null>(null);
   useEffect(() => {
     if (!on) return;
     let live = true;
     getWeekly()
-      .then((r) => { if (live) setStarts(new Set(r.reviews.map((x) => x.week_start))); })
-      .catch(() => { if (live) setStarts(new Set()); });
+      .then((r) => { if (live) setStarts(r.reviews.map((x) => x.week_start)); })
+      .catch(() => { if (live) setStarts([]); });
     return () => { live = false; };
   }, [on]);
-  const reviewed = useMemo(() => new Set(weeks.filter((w) => starts?.has(w.week_start)).map((w) => w.week_no)), [starts, weeks]);
+  const reviewed = useMemo(() => // the api asks "is there a review whose 7 days hold this day": a week is reviewed when a review's week_start..+6 holds the week's first day
+    new Set(weeks.filter((w) => starts?.some((s) => s <= w.week_start && addDays(s, 6) >= w.week_start)).map((w) => w.week_no)), [starts, weeks]);
   return { reviewed, ready: !on || starts != null };
 }

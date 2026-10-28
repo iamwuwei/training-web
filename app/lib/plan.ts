@@ -64,7 +64,19 @@ export function sessionOf(view: PlanView, a: ApiActivity): ApiSession | null {
   return view.data.sessions.find((s) => s.id === a.session_id) ?? null;
 }
 
-export function buildPlanView(data: PlanResponse, today: string): PlanView {
+/**
+ * A row's `counts_in_week_no` when the api did not send it (web deployed before the api, or rows from before): an
+ * ordinary row counts in the calendar week it is on, so the numbers do not collapse to zero. A real null
+ * (an 已改期 row the make-up replaced) stays null: it has `moved_to_date`.
+ */
+function withCounts(data: PlanResponse): PlanResponse {
+  const weekOn = (date: string) => data.weeks.find((w) => date >= w.week_start && date <= w.week_end)?.week_no ?? null;
+  if (!data.sessions.some((s) => s.counts_in_week_no == null && !s.moved_to_date)) return data;
+  return { ...data, sessions: data.sessions.map((s) => (s.counts_in_week_no == null && !s.moved_to_date ? { ...s, counts_in_week_no: weekOn(s.scheduled_date) } : s)) };
+}
+
+export function buildPlanView(raw: PlanResponse, today: string): PlanView {
+  const data = withCounts(raw);
   const bySession = new Map<string, ApiActivity>();
   for (const a of data.activities) if (a.session_id) bySession.set(a.session_id, a);
 
@@ -82,7 +94,7 @@ export function buildPlanView(data: PlanResponse, today: string): PlanView {
     return { session, activity, status, verdict };
   });
 
-  // an 已改期 row shares its date with nothing live, but if it ever does the live one wins
+  // 已改期 rows sort last and a Map keeps the last entry per key, so an 已改期 row would win over a live row on the same date. That does not happen: its date is in the past and nothing new lands on a past date.
   const byDate = new Map([...days].sort((a, b) => Number(a.status === "moved") - Number(b.status === "moved")).map((d) => [d.session.scheduled_date, d]));
   const activityById = new Map(data.activities.map((a) => [a.id, a]));
 
