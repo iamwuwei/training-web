@@ -305,7 +305,7 @@ export async function mockPutDetails(activityId: string, body: PutDetailsRequest
     const v: unknown = body[k];
     if (v == null) { next[k] = null; continue; }
     if (typeof v !== "string") throw new ApiError(400, `${k} must be a string`);
-    const clean = v.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
+    const clean = [...v].map((ch) => (ch.charCodeAt(0) < 32 || ch.charCodeAt(0) === 127 ? " " : ch)).join("").replace(/\s+/g, " ").trim(); // control chars → space, like the api
     if (clean.length > 40) throw new ApiError(400, `${k} too long (40 chars)`);
     next[k] = clean || null;
   }
