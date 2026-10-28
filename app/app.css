@@ -389,7 +389,12 @@ ul { padding: 0; list-style: none; }
 .coach-head h1 { font-size: 17px; }
 .coach-head .sub { font-size: 12px; color: var(--ink-3); }
 /* --composer-h is the composer's measured height (ResizeObserver in the coach route); 69 = a one-line composer, the first frame's guess. 66 = tab bar, 16 = breathing room */
+.shell > main.thread { overflow-anchor: none; } /* the scroll fix after loading older messages is done by hand (Safari has no scroll anchoring; Chrome's would double it) */
 .shell > main.thread { padding-bottom: calc(var(--composer-h, 69px) + 66px + 16px + env(safe-area-inset-bottom)); }
+/* top of the list: 40px while older messages exist (so "loading" never pushes anything), 1px once there are none */
+.thread-top { display: flex; align-items: center; justify-content: center; height: 40px; font-size: 12px; color: var(--ink-3); }
+.thread-top .tt-load { display: inline-flex; align-items: baseline; }
+.thread-top.end { height: 1px; }
 .day-rule { display: flex; align-items: center; gap: 10px; margin: 12px 0 2px; font-size: 12px; color: var(--ink-3); }
 .day-rule span { flex: 1; height: 1px; background: var(--line); }
 .msg.coach { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 12px; padding: 12px 0; }

@@ -85,7 +85,7 @@ function seedDetails(a: ApiActivity, own: Partial<Detail3> = {}) {
 }
 
 /** Mock-only switches for QA (set on window before the page needs them). */
-interface MockKnobs { __mockStage?: string | null; __mockNoReply?: boolean; __mockFailDetails?: boolean; __mockDetailsDelay?: number; __mockCoachPageSize?: number }
+interface MockKnobs { __mockStage?: string | null; __mockNoReply?: boolean; __mockFailDetails?: boolean; __mockDetailsDelay?: number; __mockCoachPageSize?: number; __mockCoachDelay?: number; __mockOlderFail?: boolean }
 const knobs = () => globalThis as unknown as MockKnobs;
 
 function build(): PlanResponse {
@@ -919,10 +919,18 @@ const byTime = (a: ApiCoachMessage, b: ApiCoachMessage) => a.created_at.localeCo
 
 /**
  * The newest `limit` messages (default 10), or the `limit` before `before`; `has_more` = something older exists.
- * `window.__mockCoachPageSize` replaces the requested limit (e.g. 100: the whole thread on the first page).
+ * `window.__mockCoachPageSize` replaces the requested limit (e.g. 100: the whole thread on the first page),
+ * `__mockCoachDelay` (ms) slows every call, `__mockOlderFail` fails the ones with `before`.
  */
-export function mockCoach({ limit = 10, before }: { limit?: number; before?: string } = {}): CoachResponse {
-  const lim = knobs().__mockCoachPageSize ?? limit;
+export function mockCoach(opts: { limit?: number; before?: string } = {}): CoachResponse | Promise<CoachResponse> {
+  const delay = knobs().__mockCoachDelay;
+  if (!delay) return coachPage(opts);
+  return new Promise((resolve, reject) => setTimeout(() => { try { resolve(coachPage(opts)); } catch (e) { reject(e); } }, delay));
+}
+function coachPage({ limit = 10, before }: { limit?: number; before?: string }): CoachResponse {
+  const k = knobs();
+  if (before && k.__mockOlderFail) throw new ApiError(500, "伺服器錯誤，稍後再試");
+  const lim = k.__mockCoachPageSize ?? limit;
   coachCalls.push({ limit: lim, before: before ?? null, at: Date.now() });
   const all = [...threadData()].sort(byTime);
   let end = all.length;

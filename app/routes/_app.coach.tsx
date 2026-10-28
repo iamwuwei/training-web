@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, redirect, useRevalidator, useSearchParams } from "react-router";
 import type { Route } from "./+types/_app.coach";
 import { SendIcon } from "../components/icons";
@@ -18,6 +18,8 @@ import type { ApiActivity, ApiCoachMessage, ApiProposal, ApiWeeklyAsk } from "..
 // conversation. The athlete writes at the bottom; replies are polled for.
 
 const MAX_CHARS = 500;
+/** Messages per page: the first visit loads the newest 10, reaching the top loads 10 older ones. */
+const PAGE = 10;
 const RPE_WORDS = ["", "很輕鬆", "輕鬆", "輕鬆", "適中", "適中", "適中", "有點累", "累", "很累", "極限"];
 
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
@@ -25,7 +27,7 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   const quoteId = new URL(request.url).searchParams.get("quote");
   try {
     const [coach, weekly, quoted] = await Promise.all([
-      getCoach(),
+      getCoach({ limit: PAGE }),
       getWeekly().catch(() => ({ reviews: [] })),
       quoteId ? getActivities().then((r) => r.activities.find((a) => a.id === quoteId) ?? null).catch(() => null) : Promise.resolve(null),
     ]);
@@ -44,6 +46,20 @@ export function meta(): Route.MetaDescriptors {
 /** Woo's cards failed the api's check: only his text stays. */
 function Rejected() {
   return <p className="cancelled">Woo 的提案沒過格式檢查，再問他一次</p>;
+}
+
+const byTime = (a: ApiCoachMessage, b: ApiCoachMessage) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id);
+
+/** A copy of the cache with these messages in it (newer copies win). */
+function upsert(cache: Map<string, ApiCoachMessage>, msgs: ApiCoachMessage[]): Map<string, ApiCoachMessage> {
+  const next = new Map(cache);
+  for (const m of msgs) next.set(m.id, m);
+  return next;
+}
+
+/** Everything seen so far, oldest first; the loader's newest page wins over the cache for the same id (it is the fresh copy). */
+function mergeThread(cache: Map<string, ApiCoachMessage>, latest: ApiCoachMessage[]): ApiCoachMessage[] {
+  return [...upsert(cache, latest).values()].sort(byTime);
 }
 
 function DayRule({ date }: { date: string }) {
@@ -133,7 +149,7 @@ function quoteLine(a: ApiActivity): string {
 }
 
 export default function Coach({ loaderData }: Route.ComponentProps) {
-  const { messages, reviews, quoted } = loaderData;
+  const { reviews, quoted } = loaderData;
   const view = usePlan();
   const revalidator = useRevalidator();
   const [, setSearch] = useSearchParams();
@@ -143,6 +159,20 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
   const [quote, setQuote] = useState<ApiActivity | null>(quoted);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // The thread is the loader's newest page plus a cache of everything seen so far: older pages
+  // (loaded by scrolling to the top) and messages that a newer page has since pushed out of the
+  // newest one. Polling only refreshes the newest page; the cache keeps the rest.
+  const [cache, setCache] = useState<Map<string, ApiCoachMessage>>(() => new Map());
+  const [newest, setNewest] = useState(loaderData.messages);
+  if (newest !== loaderData.messages) {
+    setNewest(loaderData.messages);
+    setCache((c) => upsert(c, newest)); // the page being replaced: keep what it had
+  }
+  const messages = useMemo(() => mergeThread(cache, loaderData.messages), [cache, loaderData.messages]);
+  const [hasMore, setHasMore] = useState(loaderData.has_more);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [olderError, setOlderError] = useState(false);
 
   // The reply is on its way while the newest athlete message is still pending
   // (a chat reply, Woo's question after a pick, or the verdict after an answer).
@@ -192,8 +222,68 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
     return () => ro.disconnect();
   }, []);
 
-  const count = messages.length;
-  useEffect(() => { window.scrollTo({ top: document.documentElement.scrollHeight }); }, [count, typing, composerH]);
+  // To the bottom when the newest message changes, the wait row comes or goes, or the composer grows.
+  // Not when older messages are prepended (the newest id stays) and not when a stage text changes.
+  const newestId = messages[messages.length - 1]?.id;
+  useEffect(() => { window.scrollTo({ top: document.documentElement.scrollHeight }); }, [newestId, typing, composerH]);
+
+  // Older pages: the sentinel at the top of the list asks for the 10 before the oldest message we have.
+  const topRef = useRef<HTMLDivElement>(null);
+  const loadingRef = useRef(false);
+  const anchorRef = useRef<{ h: number; y: number } | null>(null);
+  const loadOlderRef = useRef<() => Promise<void>>(async () => {});
+  async function loadOlder() {
+    if (loadingRef.current || !hasMore || messages.length === 0) return;
+    loadingRef.current = true;
+    setLoadingOlder(true);
+    setOlderError(false);
+    try {
+      const r = await getCoach({ before: messages[0].id, limit: PAGE });
+      // what the athlete is looking at stays where it is: remember the page height, fix the scroll after the older ones are in
+      anchorRef.current = { h: document.documentElement.scrollHeight, y: window.scrollY };
+      setCache((c) => upsert(c, r.messages));
+      setHasMore(r.has_more);
+    } catch {
+      setOlderError(true);
+    } finally {
+      loadingRef.current = false;
+      setLoadingOlder(false);
+    }
+  }
+  useLayoutEffect(() => { loadOlderRef.current = loadOlder; }); // the observer's callback always calls the latest one
+  useLayoutEffect(() => {
+    const a = anchorRef.current;
+    if (!a) return;
+    anchorRef.current = null;
+    window.scrollTo(0, a.y + (document.documentElement.scrollHeight - a.h));
+  }, [messages]);
+  // (Re)armed after every load: a sentinel still in view (short messages) loads the next page at once.
+  // After a failure it waits until the sentinel has left the screen and come back, so it never loops.
+  useEffect(() => {
+    const el = topRef.current;
+    if (!el || !hasMore || loadingOlder) return;
+    let armed = !olderError;
+    const io = new IntersectionObserver((entries) => {
+      const e = entries[entries.length - 1];
+      if (!e.isIntersecting) armed = true;
+      else if (armed) void loadOlderRef.current();
+    }, { rootMargin: "200px 0px 0px 0px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [hasMore, loadingOlder, olderError]);
+
+  // The weekly review rewritten after 沒跑 may sit on an older page, which polling (newest page only) does not
+  // reach: while it is being rewritten, fetch the stretch just before the newest page along with each poll.
+  const refreshingRef = useRef(false);
+  useEffect(() => {
+    if (!rerunPending || !rerun || refreshingRef.current) return;
+    if (loaderData.messages.some((m) => m.id === rerun.id) || !loaderData.messages.length) return;
+    refreshingRef.current = true;
+    getCoach({ before: loaderData.messages[0].id, limit: 50 })
+      .then((r) => setCache((c) => upsert(c, r.messages)))
+      .catch(() => { /* the next poll tries again */ })
+      .finally(() => { refreshingRef.current = false; });
+  }, [loaderData, rerun, rerunPending]);
 
   // The layout's plan still says "unread" from before this page marked the thread
   // seen; reload it once so the tab's dot is gone when the athlete leaves.
@@ -259,7 +349,8 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
     setBusy(true);
     setError(null);
     try {
-      await postWeeklyAsk(m.weekly_review_id, ask.session_id, { answer });
+      const r = await postWeeklyAsk(m.weekly_review_id, ask.session_id, { answer });
+      setCache((c) => upsert(c, [r.message])); // the review may be on an older page that polling does not refresh
       if (answer === "skipped") setRerun({ id: m.id, at: m.weekly?.updated?.at ?? null });
       await revalidator.revalidate();
       restart();
@@ -341,6 +432,9 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
         <div><h1>Woo</h1><div className="sub">你的教練 · 只聊跑步和課表</div></div>
       </header>
       <main className="thread" style={{ "--composer-h": `${composerH}px` } as React.CSSProperties}>
+        <div className={`thread-top${hasMore ? "" : " end"}`} ref={topRef} aria-live="polite">
+          {loadingOlder ? <span className="tt-load">載入更早的對話<span className="typing-dots" aria-hidden="true"><i /><i /><i /></span></span> : olderError ? "載入失敗，往上滑再試一次" : null}
+        </div>
         {messages.length === 0 ? (
           <p className="empty">Woo 還沒說話。跑完第一堂課、或每週日的回顧之後，這裡會出現他的訊息。你也可以先問他。</p>
         ) : null}
