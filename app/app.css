@@ -217,7 +217,7 @@ ul { padding: 0; list-style: none; }
 .rpe button { height: 44px; border-radius: 8px; border: 1px solid var(--chip-line); font-family: var(--font-num); font-size: 15px; font-weight: 600; color: var(--ink-2); background: var(--bg); }
 .rpe button[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--bg); }
 .rpe-scale { display: flex; justify-content: space-between; font-size: 11px; color: var(--ink-3); }
-.memo textarea { width: 100%; min-height: 110px; padding: 10px 12px; border: 1px solid var(--chip-line); border-radius: 10px; font: inherit; font-size: 15px; line-height: 1.55; color: var(--ink); background: var(--bg); resize: vertical; }
+.memo textarea { width: 100%; min-height: 110px; padding: 10px 12px; border: 1px solid var(--chip-line); border-radius: 10px; font: inherit; font-size: 16px; line-height: 1.55; color: var(--ink); background: var(--bg); resize: vertical; }
 .memo textarea:focus { outline: none; border-color: var(--ink-2); }
 .memo .actions { display: flex; gap: 8px; }
 .memo .actions .btn { margin-top: 0; flex: 1 1 auto; height: 44px; }
@@ -374,7 +374,8 @@ ul { padding: 0; list-style: none; }
 .coach-head { align-items: center; gap: 12px; }
 .coach-head h1 { font-size: 17px; }
 .coach-head .sub { font-size: 12px; color: var(--ink-3); }
-.shell > main.thread { padding-bottom: calc(150px + env(safe-area-inset-bottom)); }
+/* --composer-h is the composer's measured height (ResizeObserver in the coach route); 69 = a one-line composer, the first frame's guess. 66 = tab bar, 16 = breathing room */
+.shell > main.thread { padding-bottom: calc(var(--composer-h, 69px) + 66px + 16px + env(safe-area-inset-bottom)); }
 .day-rule { display: flex; align-items: center; gap: 10px; margin: 12px 0 2px; font-size: 12px; color: var(--ink-3); }
 .day-rule span { flex: 1; height: 1px; background: var(--line); }
 .msg.coach { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 12px; padding: 12px 0; }
@@ -403,10 +404,14 @@ ul { padding: 0; list-style: none; }
 .proposal .decided.applied { color: var(--v-good); }
 .composer { position: fixed; left: 0; right: 0; bottom: calc(66px + env(safe-area-inset-bottom)); background: var(--bg); border-top: 1px solid var(--line); z-index: 5; }
 .composer .row, .composer .quote-chip, .composer .hint { max-width: 600px; margin: 0 auto; padding-left: 20px; padding-right: 20px; }
-.composer .row { display: flex; gap: 8px; align-items: flex-end; padding-top: 10px; padding-bottom: 10px; }
-.composer textarea { flex: 1 1 auto; min-width: 0; min-height: 44px; max-height: 120px; padding: 11px 14px; border: 1px solid var(--chip-line); border-radius: 22px; font: inherit; font-size: 15px; line-height: 1.4; color: var(--ink); background: var(--bg); resize: none; }
+.composer .row { display: flex; gap: 12px; align-items: flex-end; padding-top: 10px; padding-bottom: 10px; }
+.composer .rpe-row + .row { padding-top: 2px; }
+/* 16px: iOS Safari zooms the page when a field under 16px gets focus. field-sizing grows the box with the text (1 line 48px, up to 5 lines 136px, then it scrolls inside) */
+.composer textarea { flex: 1 1 auto; min-width: 0; min-height: 48px; max-height: 136px; padding: 12px 16px; border: 1px solid var(--chip-line); border-radius: 24px; font: inherit; font-size: 16px; line-height: 22px; field-sizing: content; color: var(--ink); background: var(--bg); resize: none; }
 .composer textarea:focus { outline: none; border-color: var(--ink-2); }
-.composer .send { flex: none; width: 44px; height: 44px; border-radius: 50%; background: var(--ink); color: var(--bg); display: flex; align-items: center; justify-content: center; }
+/* 48px hit area, 40px black disc (the 4px padding is transparent) */
+.composer .send { flex: none; width: 48px; height: 48px; padding: 4px; border-radius: 50%; background: var(--ink); background-clip: content-box; color: var(--bg); display: flex; align-items: center; justify-content: center; }
+.composer .send:focus-visible { outline-offset: 0; border-radius: 50%; }
 .composer .send:disabled { opacity: .35; }
 .composer .quote-chip { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 8px; font-size: 12px; color: var(--ink-2); }
 .composer .quote-chip span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 2px solid var(--chip-line); padding-left: 8px; }
@@ -426,10 +431,12 @@ ul { padding: 0; list-style: none; }
 .strava-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #FC5200; margin-right: 8px; vertical-align: middle; flex: none; }
 .msg.me .bubble.pick { display: inline-flex; align-items: center; }
 .msg.me .rpe-tag { display: inline-block; margin-left: 8px; font-family: "Barlow Condensed", sans-serif; font-weight: 700; font-size: 14px; color: var(--ink-2); }
-.composer .rpe-row { max-width: 600px; margin: 0 auto; padding: 8px 20px 0; display: flex; align-items: center; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+.composer .rpe-row { max-width: 600px; margin: 0 auto; padding: 8px 20px; display: flex; align-items: center; gap: 4px; overflow-x: auto; scrollbar-width: none; }
 .composer .rpe-row .k { flex: none; font-size: 12px; color: var(--ink-3); margin-right: 4px; }
-.composer .rpe { flex: none; width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--chip-line); background: var(--bg); color: var(--ink); font-family: "Barlow Condensed", sans-serif; font-size: 14px; font-weight: 700; }
-.composer .rpe.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+/* RPE button: 28px disc, 32x44 touch area (the ::before). Not .rpe: that is the report page's 10-column grid */
+.composer .rpe-btn { position: relative; flex: none; display: inline-flex; align-items: center; justify-content: center; padding: 0; width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--chip-line); background: var(--bg); color: var(--ink); font-family: "Barlow Condensed", sans-serif; font-size: 14px; font-weight: 700; line-height: 1; }
+.composer .rpe-btn::before { content: ""; position: absolute; inset: -8px -2px; }
+.composer .rpe-btn.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
 .btn.primary.woo { gap: 8px; }
 .btn.primary.woo .w { width: 22px; height: 22px; border-radius: 50%; background: var(--bg); color: var(--ink); display: inline-flex; align-items: center; justify-content: center; font-family: "Barlow Condensed", sans-serif; font-size: 12px; font-weight: 700; }
 
@@ -661,7 +668,7 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 .sheet-body .rpe-k { margin-top: 16px; font-size: 13px; font-weight: 700; color: var(--ink-2); letter-spacing: 0.04em; }
 .sheet-body .rpe { margin-top: 8px; }
 .sheet-body .rpe-scale { margin-top: 4px; }
-.sheet-body .oneline { width: 100%; margin-top: 14px; height: 44px; padding: 0 14px; border: 1px solid var(--chip-line); border-radius: 12px; font: inherit; font-size: 15px; color: var(--ink); background: var(--bg); }
+.sheet-body .oneline { width: 100%; margin-top: 14px; height: 44px; padding: 0 14px; border: 1px solid var(--chip-line); border-radius: 12px; font: inherit; font-size: 16px; color: var(--ink); background: var(--bg); }
 .sheet-body .oneline:focus { outline: none; border-color: var(--ink-2); }
 .sheet-body .btn.primary { margin-top: 14px; }
 .msg.coach .relink { margin-top: 8px; font-size: 13px; color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; }

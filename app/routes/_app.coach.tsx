@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, redirect, useRevalidator, useSearchParams } from "react-router";
 import type { Route } from "./+types/_app.coach";
 import { SendIcon } from "../components/icons";
@@ -176,8 +176,22 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
   const openAsk = last && last.kind === "ask" && last.ask?.state === "open" && last.ask.kind !== "mismatch" ? last : null;
   const mismatchOpen = !!last && last.kind === "ask" && last.ask?.kind === "mismatch" && last.ask.state === "open";
 
+  // The composer is fixed to the bottom and grows (RPE row, quote chip, an error line, a taller
+  // box): its measured height keeps the thread's bottom padding, so it never covers the last message.
+  const formRef = useRef<HTMLFormElement>(null);
+  const [composerH, setComposerH] = useState(69);
+  useLayoutEffect(() => {
+    const el = formRef.current;
+    if (!el) return;
+    const measure = () => setComposerH(Math.round(el.getBoundingClientRect().height));
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const count = messages.length;
-  useEffect(() => { window.scrollTo({ top: document.documentElement.scrollHeight }); }, [count, typing]);
+  useEffect(() => { window.scrollTo({ top: document.documentElement.scrollHeight }); }, [count, typing, composerH]);
 
   // The layout's plan still says "unread" from before this page marked the thread
   // seen; reload it once so the tab's dot is gone when the athlete leaves.
@@ -324,7 +338,7 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
         <CoachAvatar />
         <div><h1>Woo</h1><div className="sub">你的教練 · 只聊跑步和課表</div></div>
       </header>
-      <main className="thread">
+      <main className="thread" style={{ "--composer-h": `${composerH}px` } as React.CSSProperties}>
         {messages.length === 0 ? (
           <p className="empty">Woo 還沒說話。跑完第一堂課、或每週日的回顧之後，這裡會出現他的訊息。你也可以先問他。</p>
         ) : null}
@@ -410,7 +424,7 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
           </article>
         ) : null}
       </main>
-      <form className="composer" onSubmit={(e) => { e.preventDefault(); void send(text, quote?.id); }}>
+      <form className="composer" ref={formRef} onSubmit={(e) => { e.preventDefault(); void send(text, quote?.id); }}>
         {quote && !openAsk ? (
           <div className="quote-chip">
             <span>引用 {quoteLine(quote)}</span>
@@ -421,7 +435,7 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
           <div className="rpe-row" role="radiogroup" aria-label="累的程度 1 到 10">
             <span className="k">RPE</span>
             {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-              <button key={n} type="button" role="radio" aria-checked={rpe === n} className={`rpe${rpe === n ? " on" : ""}`} onClick={() => setRpe(rpe === n ? null : n)} title={RPE_WORDS[n]}>{n}</button>
+              <button key={n} type="button" role="radio" aria-checked={rpe === n} className={`rpe-btn${rpe === n ? " on" : ""}`} onClick={() => setRpe(rpe === n ? null : n)} title={RPE_WORDS[n]}>{n}</button>
             ))}
           </div>
         ) : null}
@@ -429,6 +443,7 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
           <textarea
             id="coach-text"
             rows={1}
+            enterKeyHint="send"
             value={text}
             maxLength={MAX_CHARS}
             placeholder={openAsk ? "回 Woo：感覺怎麼樣…" : "跟 Woo 聊跑步、課表…"}
