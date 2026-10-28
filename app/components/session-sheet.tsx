@@ -1,9 +1,9 @@
 import { Link } from "react-router";
 import type { ApiActivity, ApiSession } from "../types/api";
-import { mdDow } from "../lib/date";
+import { md, mdDow } from "../lib/date";
 import { duration, int, km, pace } from "../lib/format";
 import { labelStyle, rowName, shortName } from "../lib/labels";
-import { activityDate, isRunSport, lastReminderFor, type PlanView } from "../lib/plan";
+import { activityDate, isRunSport, lastReminderFor, movedCountsIn, type PlanView } from "../lib/plan";
 import { segmentRows } from "../lib/segments";
 import { BottomSheet } from "./sheet";
 import { Avatar, CoachAvatar, VerdictTag } from "./ui";
@@ -27,23 +27,35 @@ export function lastOfKind(view: PlanView, session: ApiSession): { a: ApiActivit
 }
 
 /** 課表細節: how to run it, Woo's one line, the full note, the last session of this kind. */
-export function SessionSheet({ session, view, onClose }: { session: ApiSession | null; view: PlanView; onClose: () => void }) {
+export function SessionSheet({ session, view, onClose, onOpen }: { session: ApiSession | null; view: PlanView; onClose: () => void; /** Swap the sheet to another session (an 已改期 row's 看 11/17 那堂 ›). */ onOpen?: (s: ApiSession) => void }) {
   const s = session;
   const rows = s ? segmentRows(s, easyTarget(view)) : [];
   const woo = s ? lastReminderFor(view, s) ?? s.brief : null;
   const last = s ? lastOfKind(view, s) : null;
   const isRest = s?.type === "rest";
+  // 補課: the row that was moved away says where it went; the new row says where it came from. N only when it counts in another week than the row's own.
+  const movedTo = s?.moved_to_date ? view.data.sessions.find((x) => x.id === s.moved_to_session_id) ?? null : null;
+  const countsIn = !s ? null : s.moved_to_date ? movedCountsIn(view, s) : s.moved_from_date ? s.counts_in_week_no : null;
+  const n = countsIn != null && countsIn !== s?.week_no ? countsIn : null;
   return (
     <BottomSheet open={!!s} onClose={onClose} label="課表細節">
       {s ? (
         <>
-          <div className="ss-head">
+          <div className={`ss-head${s.moved_to_date ? " moved" : ""}`}>
             <Avatar session={s} />
             <div>
               <div className="t">{rowName(s)}</div>
               <div className="s">{[mdDow(s.scheduled_date), s.week_no != null ? `第 ${s.week_no} 週` : null, s.phase].filter(Boolean).join(" · ")}</div>
             </div>
           </div>
+          {s.moved_to_date ? (
+            <div className="ss-moved">
+              <span>這堂沒跑，改到 {mdDow(s.moved_to_date)}補{n ? `，算在第 ${n} 週` : ""}。</span>
+              {movedTo && onOpen ? <button type="button" className="go" onClick={() => onOpen(movedTo)}>看 {md(movedTo.scheduled_date)} 那堂 ›</button> : null}
+            </div>
+          ) : s.moved_from_date ? (
+            <div className="ss-moved"><span>補 {mdDow(s.moved_from_date)}的課{n ? ` · 算在第 ${n} 週` : ""}</span></div>
+          ) : null}
           {!isRest && rows.length ? (
             <>
               <h2 className="section-h">怎麼跑</h2>

@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
-import { getCoach } from "./api";
-import type { ApiProposal } from "../types/api";
+import { useEffect, useMemo, useState } from "react";
+import { getCoach, getWeekly } from "./api";
+import type { ApiProposal, ApiWeek } from "../types/api";
 
 /**
  * One of Woo's proposal cards by id, found in his thread (the preview page needs it; there is
@@ -19,4 +19,23 @@ export function useProposal(id: string | null): { proposal: ApiProposal | null; 
   }, [id]);
   if (!id) return { proposal: null, ready: true };
   return found?.id === id ? { proposal: found.proposal, ready: true } : { proposal: null, ready: false };
+}
+
+/**
+ * The weeks (week_no) that already have a weekly review, for previewing a 補課: it counts in its original week
+ * unless that week's review is written (then in the week it moves to). Only fetched when `on`; `ready` is false
+ * while it loads. A failed read gives an empty set (= "not reviewed yet", the original week).
+ */
+export function useReviewedWeeks(on: boolean, weeks: ApiWeek[]): { reviewed: ReadonlySet<number>; ready: boolean } {
+  const [starts, setStarts] = useState<ReadonlySet<string> | null>(null);
+  useEffect(() => {
+    if (!on) return;
+    let live = true;
+    getWeekly()
+      .then((r) => { if (live) setStarts(new Set(r.reviews.map((x) => x.week_start))); })
+      .catch(() => { if (live) setStarts(new Set()); });
+    return () => { live = false; };
+  }, [on]);
+  const reviewed = useMemo(() => new Set(weeks.filter((w) => starts?.has(w.week_start)).map((w) => w.week_no)), [starts, weeks]);
+  return { reviewed, ready: !on || starts != null };
 }
