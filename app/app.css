@@ -120,7 +120,7 @@ ul { padding: 0; list-style: none; }
 .avatar.hard { background: var(--t-hard); }
 .avatar.race { background: var(--t-race); }
 .avatar.rest { background: transparent; color: var(--ink-3); border: 1.5px solid var(--chip-line); }
-.avatar.coach { background: var(--ink); color: var(--bg); font-family: var(--font-num); font-weight: 700; flex: none; }
+.avatar.woo { background: var(--ink); color: var(--bg); font-family: var(--font-num); font-weight: 700; flex: none; }
 
 .verdict { display: inline-flex; align-items: center; gap: 5px; font-weight: 600; font-size: 13px; }
 .verdict::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
@@ -265,7 +265,7 @@ ul { padding: 0; list-style: none; }
     color-scheme: dark;
   }
   .avatar.rest { color: var(--ink-3); }
-  .avatar:not(.rest):not(.coach) { color: var(--bg); } /* the dark-mode type colours are light: dark glyphs read better */
+  .avatar:not(.rest):not(.woo) { color: var(--bg); } /* the dark-mode type colours are light: dark glyphs read better */
   .sk { background: linear-gradient(90deg, var(--chip) 25%, #23262c 50%, var(--chip) 75%); background-size: 200% 100%; }
 }
 
@@ -444,7 +444,7 @@ ul { padding: 0; list-style: none; }
 .hero2 .mid.done { color: var(--accent); }
 .hero2 .bar { height: 4px; margin-top: 0; align-self: start; }
 .wooline { display: flex; align-items: flex-start; gap: 8px; margin-top: 10px; font-size: 14px; color: var(--ink-2); line-height: 1.5; }
-.wooline .avatar.coach { margin-top: 1px; }
+.wooline .avatar.woo { margin-top: 1px; }
 .wooline a { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
 .today-post .wooline { color: var(--ink-2); }
 .next-row.first { display: grid; grid-template-columns: 40px 1fr; gap: 12px; align-items: start; }
@@ -460,13 +460,13 @@ ul { padding: 0; list-style: none; }
 .rest-day.strength { align-items: flex-start; text-align: left; padding: 16px 0; }
 .rest-day.strength .t { margin-top: 10px; }
 .rest-day.strength .note { max-width: none; }
-.avatar.coach { position: relative; }
-.avatar.coach .badge { position: absolute; right: -3px; bottom: -3px; width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--bg); display: flex; align-items: center; justify-content: center; }
-.avatar.coach .badge.check { background: var(--accent); color: #fff; animation: pop 0.25s ease-out; }
-.avatar.coach .badge.warn { background: var(--v-warn); color: #fff; font-size: 10px; font-weight: 800; font-family: var(--font-num); }
-.avatar.coach .badge.typing { background: var(--bg); gap: 1.5px; }
-.avatar.coach .badge.typing i { width: 3px; height: 3px; border-radius: 50%; background: var(--ink); animation: dot 1.2s infinite; }
-.avatar.coach .badge.typing i:nth-child(2) { animation-delay: 0.2s; } .avatar.coach .badge.typing i:nth-child(3) { animation-delay: 0.4s; }
+.avatar.woo { position: relative; }
+.avatar.woo .badge { position: absolute; right: -3px; bottom: -3px; width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--bg); display: flex; align-items: center; justify-content: center; }
+.avatar.woo .badge.check { background: var(--accent); color: #fff; animation: pop 0.25s ease-out; }
+.avatar.woo .badge.warn { background: var(--v-warn); color: #fff; font-size: 10px; font-weight: 800; font-family: var(--font-num); }
+.avatar.woo .badge.typing { background: var(--bg); gap: 1.5px; }
+.avatar.woo .badge.typing i { width: 3px; height: 3px; border-radius: 50%; background: var(--ink); animation: dot 1.2s infinite; }
+.avatar.woo .badge.typing i:nth-child(2) { animation-delay: 0.2s; } .avatar.woo .badge.typing i:nth-child(3) { animation-delay: 0.4s; }
 .celebrate { margin-top: 8px; padding: 12px 14px; border-left: 3px solid var(--accent); background: var(--accent-bg); border-radius: 0 12px 12px 0; }
 .celebrate .k { font-size: 12px; color: var(--accent); font-weight: 700; letter-spacing: 0.04em; }
 .celebrate .v { display: flex; align-items: baseline; gap: 6px; }
@@ -485,7 +485,7 @@ ul { padding: 0; list-style: none; }
 @keyframes pop { 0% { transform: scale(0); } 70% { transform: scale(1.15); } 100% { transform: scale(1); } }
 @keyframes grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-@media (prefers-reduced-motion: reduce) { .verdict::before, .bar > i, .thread .msg:last-of-type, .avatar.coach .badge { animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { .verdict::before, .bar > i, .thread .msg:last-of-type, .avatar.woo .badge { animation: none !important; } }
 
 /* ---- 今天: 進步 (one sentence, one big number, three cards) + 累積 ---- */
 .progress { padding: 0 0 16px; border-bottom: 1px solid var(--line); }

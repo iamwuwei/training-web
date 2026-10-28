@@ -18,7 +18,7 @@ export function Avatar({ session, sport }: { session: Pick<ApiSession, "label" |
 /** The coach: an ink disc with a W. The only dark avatar in the app, so it reads as a person, not a session type. */
 export function CoachAvatar({ size = 36, badge }: { size?: number; badge?: "check" | "warn" | "typing" | null }) {
   return (
-    <div className="avatar coach" style={{ width: size, height: size, fontSize: Math.round(size * 0.44) }} aria-hidden="true">
+    <div className="avatar woo" style={{ width: size, height: size, fontSize: Math.round(size * 0.44) }} aria-hidden="true">
       W
       {badge === "check" ? <span className="badge check"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12l5 5L20 7" /></svg></span> : null}
       {badge === "warn" ? <span className="badge warn">!</span> : null}
