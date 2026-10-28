@@ -8,6 +8,7 @@ import { ApiError, getActivities, getCoach, getWeekly, postCheckinPick, postChec
 import { hasSession } from "../lib/auth";
 import { md, mdDow, timeJst, toJstDate } from "../lib/date";
 import { km, pace } from "../lib/format";
+import { WooStatus } from "../components/woo-status";
 import { useReviewPolling } from "../lib/use-review-polling";
 import { usePlan } from "../lib/use-plan";
 import type { ApiActivity, ApiCoachMessage, ApiProposal, ApiWeeklyAsk } from "../types/api";
@@ -49,7 +50,7 @@ function DayRule({ date }: { date: string }) {
   return <div className="day-rule"><span />{mdDow(date)}<span /></div>;
 }
 
-function CoachMessage({ m, children, badge }: { m: ApiCoachMessage; children: React.ReactNode; badge?: "check" | "warn" | "typing" | null }) {
+function CoachMessage({ m, children, badge }: { m: ApiCoachMessage; children: React.ReactNode; badge?: "check" | "warn" | null }) {
   return (
     <article className="msg coach">
       <CoachAvatar badge={badge} />
@@ -106,7 +107,7 @@ function CheckinChips({ m, busy, onPick }: { m: ApiCoachMessage; busy: boolean; 
  * answers under it, then what the review is waiting for. After 沒跑 the review is rewritten
  * in place — `rerun` is that wait ("Woo 在重寫…"), or that we gave up polling for it.
  */
-function WeeklyAskBlock({ ask, busy, rerun, onAnswer }: { ask: ApiWeeklyAsk; busy: boolean; rerun: "pending" | "gave-up" | null; onAnswer: (answer: "synced" | "skipped") => void }) {
+function WeeklyAskBlock({ ask, busy, rerun, stage, onAnswer }: { ask: ApiWeeklyAsk; busy: boolean; rerun: "pending" | "gave-up" | null; stage: string | null; onAnswer: (answer: "synced" | "skipped") => void }) {
   return (
     <div className="ask">
       <div className="ask-block"><div className="q">{ask.question}</div></div>
@@ -118,7 +119,7 @@ function WeeklyAskBlock({ ask, busy, rerun, onAnswer }: { ask: ApiWeeklyAsk; bus
       ) : (
         <div className="said">你說：{ask.state === "synced" ? "還沒同步" : "沒跑"}</div>
       )}
-      {rerun === "pending" ? <div className="said"><span className="typing-dots"><i /><i /><i /></span>Woo 在重寫這週的回顧…</div>
+      {rerun === "pending" ? <div className="said"><WooStatus stage={stage} fallback="Woo 在重寫這週的回顧" /></div>
         : rerun === "gave-up" ? <div className="said">回顧還在重寫，稍後再回來看</div>
         : ask.state !== "skipped" ? <div className="said">{ask.label} 確定之後我再給下週的建議。</div>
         : null}
@@ -167,7 +168,8 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
   const [decisions, setDecisions] = useState<Record<string, ApiProposal["status"]>>({});
   const statusOf = (p: ApiProposal) => (p.status !== "pending" ? p.status : decisions[p.id] ?? "pending");
 
-  const { timedOut, restart } = useReviewPolling(waiting || rerunPending || expectPending);
+  // A reply is on its way (waiting / expectPending): look every 2 s so the stage text keeps up; a rewritten review is not in a hurry.
+  const { timedOut, restart } = useReviewPolling(waiting || rerunPending || expectPending, waiting || expectPending);
   const typing = waiting || expectPending;
 
   // Woo's open "how did it feel?" (the last message) turns the composer into the answer
@@ -355,10 +357,10 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
             const wm = m.weekly;
             const rewriting = rerunPending && rerun?.id === m.id;
             node = (
-              <CoachMessage m={m} badge={rewriting && !timedOut ? "typing" : wm?.updated ? "check" : null}>
+              <CoachMessage m={m} badge={wm?.updated ? "check" : null}>
                 {wm?.updated ? <div className="updated"><span aria-hidden="true">⟳</span> 已更新 · {wm.updated.reason}</div> : null}
                 <p className="text">{m.text}</p>
-                {wm?.asks.map((ask) => <WeeklyAskBlock key={ask.session_id} ask={ask} busy={busy} rerun={rewriting && ask.state === "skipped" ? (timedOut ? "gave-up" : "pending") : null} onAnswer={(answer) => void answerWeeklyAsk(m, ask, answer)} />)}
+                {wm?.asks.map((ask) => <WeeklyAskBlock key={ask.session_id} ask={ask} busy={busy} rerun={rewriting && ask.state === "skipped" ? (timedOut ? "gave-up" : "pending") : null} stage={m.stage} onAnswer={(answer) => void answerWeeklyAsk(m, ask, answer)} />)}
                 {w ? <CoachProposals review={w} sessions={sessions} embedded onChanged={() => void revalidator.revalidate()} /> : null}
                 {m.proposal || m.constraint ? cards([m]) : null}
                 {m.proposal_rejected ? <Rejected /> : null}
@@ -419,8 +421,8 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
         })}
         {typing ? (
           <article className="msg coach typing">
-            <CoachAvatar badge="typing" />
-            <div className="body">{timedOut ? "Woo 回得比較慢，稍後再回來看。" : <><span className="typing-dots"><i /><i /><i /></span>Woo 輸入中…</>}</div>
+            <CoachAvatar />
+            <div className="body">{timedOut ? "Woo 回得比較慢，稍後再回來看。" : <WooStatus stage={last?.stage} />}</div>
           </article>
         ) : null}
       </main>
