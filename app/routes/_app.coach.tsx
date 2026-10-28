@@ -252,7 +252,7 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
       // what the athlete is looking at stays where it is: remember the page height, fix the scroll after the older ones are in
       anchorRef.current = { h: document.documentElement.scrollHeight, y: window.scrollY };
       setCache((c) => upsert(c, r.messages));
-      setHasMore(r.has_more);
+      setHasMore(r.has_more && r.messages.length > 0); // an empty page cannot be followed by another: no loop on a sentinel that stays in view
     } catch {
       setOlderError(true);
     } finally {

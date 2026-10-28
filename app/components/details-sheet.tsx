@@ -17,12 +17,11 @@ const MAX = 40;
 /** What the api stores: one line, single spaces, no ends. */
 const clean = (v: string) => v.replace(/\s+/g, " ").trim();
 
-function DetailsForm({ activity, onClose, onSaved }: { activity: ApiActivity; onClose: () => void; onSaved: (a: ApiActivity) => void }) {
+function DetailsForm({ activity, busy, setBusy, onClose, onSaved }: { activity: ApiActivity; busy: boolean; setBusy: (b: boolean) => void; onClose: () => void; onSaved: (a: ApiActivity) => void }) {
   const uid = useId();
   const initial: Record<Key, string> = { gear_name: activity.gear_name ?? "", device_name: activity.device_name ?? "", weather: activity.weather ?? "" };
   const [vals, setVals] = useState(initial);
   const [options, setOptions] = useState<DetailOptionsResponse | null>(null);
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
   const refs = useRef<Partial<Record<Key, HTMLInputElement | null>>>({});
   // Room under the last box while one has focus (so it can scroll above the keyboard). It is taken
@@ -126,9 +125,12 @@ function DetailsForm({ activity, onClose, onSaved }: { activity: ApiActivity; on
 
 /** `onSaved` gets the activity the api returns (with the new shown values and `details`). */
 export function DetailsSheet({ open, onClose, activity, onSaved }: { open: boolean; onClose: () => void; activity: ApiActivity; onSaved: (a: ApiActivity) => void }) {
+  // While saving, the sheet cannot be closed (backdrop, handle, Esc): a failure would have nowhere to show
+  // its line and the typed values would be lost. Success closes it (the form calls `onClose` itself).
+  const [busy, setBusy] = useState(false);
   return (
-    <BottomSheet open={open} onClose={onClose} label="裝備與天氣" className="details-sheet">
-      <DetailsForm activity={activity} onClose={onClose} onSaved={onSaved} />
+    <BottomSheet open={open} onClose={() => { if (!busy) onClose(); }} label="裝備與天氣" className="details-sheet">
+      <DetailsForm activity={activity} busy={busy} setBusy={setBusy} onClose={onClose} onSaved={onSaved} />
     </BottomSheet>
   );
 }

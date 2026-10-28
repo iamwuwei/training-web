@@ -17,7 +17,7 @@ const STAGE_FALLBACK = "Woo 在想";
  * re-created when the text changes, so their pulse does not restart on every stage.
  */
 export function WooStatus({ stage, fallback = STAGE_FALLBACK }: { stage: string | null | undefined; fallback?: string }) {
-  const text = STAGE_TEXT[stage ?? ""] ?? fallback;
+  const text = stage != null && Object.hasOwn(STAGE_TEXT, stage) ? STAGE_TEXT[stage] : fallback; // own keys only: "constructor" is not a stage
   return (
     <span className="woo-status" role="status" aria-live="polite">
       <span className="t" key={text}>{text}</span>

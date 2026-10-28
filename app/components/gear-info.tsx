@@ -17,7 +17,7 @@ export function GearInfo({ activity, onEdit }: { activity: ApiActivity; onEdit: 
       {groups.map((g) => (
         <div className="gi-group" key={g.title}>
           {g.title === "裝備" ? (
-            <div className="gi-head"><h2 className="gi-h">裝備</h2><button type="button" className="gi-edit" onClick={onEdit}>編輯 ›</button></div>
+            <div className="gi-head"><h2 className="gi-h">裝備</h2><button type="button" className="gi-edit" aria-label="編輯裝備與天氣" onClick={onEdit}>編輯 ›</button></div>
           ) : <h2 className="gi-h">{g.title}</h2>}
           {g.title === "這趟" ? (
             <dl className="gi-stats">
