@@ -3,6 +3,7 @@ import { Link, redirect, useLocation, useNavigate, useRevalidator } from "react-
 import { useReviewPolling } from "../lib/use-review-polling";
 import type { Route } from "./+types/_app.activities.$id";
 import { BackIcon } from "../components/icons";
+import { GearInfo } from "../components/gear-info";
 import { MemoEditor } from "../components/memo";
 import { SessionSheet } from "../components/session-sheet";
 import { BottomSheet } from "../components/sheet";
@@ -302,12 +303,6 @@ export default function Report({ loaderData }: Route.ComponentProps) {
   const date = mdDow(activityDate(a));
   const meta = s ? [date, s.week_no != null ? `第 ${s.week_no} 週` : null, s.phase].filter(Boolean).join(" · ") : `${date} · 未排課`;
   const run = isRunSport(a.sport_type);
-  const extra = [
-    duration(a.moving_time_sec),
-    a.avg_watts != null ? `功率 ${a.avg_watts} W` : null,
-    a.kcal != null ? `${a.kcal} kcal` : null,
-    a.max_hr != null ? `最高心拍 ${a.max_hr}` : null,
-  ].filter(Boolean).join(" · ");
 
   return (
     <>
@@ -387,11 +382,7 @@ export default function Report({ loaderData }: Route.ComponentProps) {
         <SplitDots a={a} s={s} plan={plan} />
         {s ? <Trend current={a} session={s} all={all} sessions={sessions} /> : null}
 
-        <section className="gear">
-          {extra}
-          {a.weather ? <><br />{a.weather}</> : null}
-          {a.gear_name || a.device_name ? <><br />{[a.gear_name, a.device_name].filter(Boolean).join(" · ")}</> : null}
-        </section>
+        <GearInfo activity={a} />
 
         {s ? (
           <p className="swap-line">

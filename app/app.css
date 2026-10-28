@@ -204,7 +204,21 @@ ul { padding: 0; list-style: none; }
 .compare .num.under { color: var(--v-good); }
 .compare .legend { display: flex; justify-content: flex-end; gap: 10px; font-size: 11px; color: var(--ink-3); }
 
-.gear { padding: 14px 0; font-size: 12px; color: var(--ink-3); line-height: 1.8; border-bottom: 1px solid var(--line); }
+/* 報告頁底部：這趟／裝備／天氣。（舊的 .gear 規則刪掉：今天頁的設定齒輪也用到同一個 class，被吃進 padding 和底線） */
+.gear-info { padding: 16px 0 10px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 18px; }
+.gear-info .gi-h { margin: 0 0 6px; font-size: 12px; font-weight: 700; color: var(--ink-3); letter-spacing: 0.04em; }
+.gear-info .gi-stats { margin: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.gear-info .gi-stat { min-width: 0; }
+.gear-info .gi-stat dt { font-size: 12px; color: var(--ink-3); white-space: nowrap; }
+.gear-info .gi-stat dd { margin: 4px 0 0; display: flex; align-items: baseline; gap: 3px; white-space: nowrap; }
+.gear-info .gi-stat .num { font-size: 22px; color: var(--ink); }
+.gear-info .gi-stat .unit { font-size: 12px; color: var(--ink-2); }
+.gear-info .gi-item { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 10px; align-items: center; height: 44px; border-top: 1px solid var(--line); }
+.gear-info .gi-item:first-child { border-top: 0; }
+.gear-info .gi-item svg { display: block; color: var(--ink-2); }
+.gear-info .gi-v { font-size: 15px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gear-info .gi-k { font-size: 12px; color: var(--ink-3); white-space: nowrap; }
+@media (max-width: 359px) { .gear-info .gi-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 10px; } }
 
 /* ---- memo editor (報告頁 · 我的心得) ------------------------------------------ */
 .memo { padding: 16px 0; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; }

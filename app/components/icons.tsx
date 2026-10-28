@@ -39,3 +39,12 @@ export const AppleIcon = (p: SVGProps<SVGSVGElement>) => (
     <path d="M16.37 12.64c.02 2.72 2.39 3.63 2.42 3.64-.02.06-.38 1.3-1.25 2.57-.75 1.1-1.53 2.2-2.77 2.22-1.21.02-1.6-.72-2.99-.72-1.39 0-1.82.7-2.97.74-1.19.04-2.1-1.19-2.86-2.28-1.55-2.24-2.73-6.33-1.14-9.09.79-1.37 2.2-2.24 3.74-2.26 1.17-.02 2.27.79 2.99.79.71 0 2.05-.97 3.46-.83.59.03 2.24.24 3.3 1.8-.09.05-1.97 1.15-1.95 3.42zM14.1 5.9c.63-.76 1.06-1.83.94-2.9-.91.04-2.01.61-2.66 1.37-.58.67-1.1 1.76-.96 2.8 1.01.08 2.05-.52 2.68-1.27z" />
   </svg>
 );
+export const ShoeIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base({ width: 20, height: 20, viewBox: "0 0 24 24", strokeWidth: 2, ...p })}><path d="M3 16.5V10l3-1.2L8.4 5l3.4 1.9c.8 2.1 2.6 3.4 5 3.6l2.6.3c1.6.2 3.1 1.6 3.1 3.3v2.4z" /><path d="M3 16.5v1.7c0 .5.4.8.8.8h17.9c.4 0 .8-.3.8-.8v-1.7" /><path d="M9.7 9.3l1.4-1.7M12.2 11l1.3-1.6" /></svg>
+);
+export const WatchIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base({ width: 20, height: 20, viewBox: "0 0 24 24", strokeWidth: 2, ...p })}><rect x="6.5" y="7" width="11" height="10" rx="3" /><path d="M9 7l.6-3.5h4.8L15 7M9 17l.6 3.5h4.8L15 17" /><path d="M12 10v2.2l1.5 1" /></svg>
+);
+export const CloudIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base({ width: 20, height: 20, viewBox: "0 0 24 24", strokeWidth: 2, ...p })}><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" /></svg>
+);
