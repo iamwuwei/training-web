@@ -80,7 +80,8 @@ function DetailsForm({ activity, busy, setBusy, onClose, onSaved }: { activity: 
         const isWeather = f.key === "weather";
         const showClear = isWeather ? clean(v) !== "" : clean(v) !== (s ?? "");
         const hint = isWeather ? null : s == null ? "Strava 沒有這項" : clean(v) === s ? `Strava：${s}` : `清除後回到：${s}`;
-        const sug = f.key === "weather" ? [] : (options?.[f.key] ?? []).filter((n) => n !== clean(v));
+        // a name over 40 chars (Strava allows them; the api does not store them) is no suggestion: it could not be saved
+        const sug = f.key === "weather" ? [] : (options?.[f.key] ?? []).filter((n) => n !== clean(v) && n.length <= MAX);
         const id = `${uid}-${f.key}`;
         return (
           <div className="ds-field" key={f.key}>
@@ -107,7 +108,7 @@ function DetailsForm({ activity, busy, setBusy, onClose, onSaved }: { activity: 
               <div className="ds-sug">
                 <span className="k">用過的</span>
                 {sug.map((n) => (
-                  <button key={n} type="button" className="chip" disabled={busy} onClick={() => { setVals({ ...vals, [f.key]: n }); refs.current[f.key]?.focus(); }}>{n}</button>
+                  <button key={n} type="button" className="chip" disabled={busy} onClick={() => { setVals({ ...vals, [f.key]: n.slice(0, MAX) }); refs.current[f.key]?.focus(); }}>{n}</button>
                 ))}
               </div>
             ) : null}
