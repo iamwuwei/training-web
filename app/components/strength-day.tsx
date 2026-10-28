@@ -4,6 +4,7 @@ import type { ApiRoutine, ApiSession } from "../types/api";
 import { ApiError, postRoutine, putRoutine } from "../lib/api";
 import { useReviewPolling } from "../lib/use-review-polling";
 import { BottomSheet } from "./sheet";
+import { WooStatus } from "./woo-status";
 import { Avatar, CoachAvatar } from "./ui";
 
 // 肌力 day on the today page: one line, Woo asks where (home / gym), then his
@@ -139,7 +140,7 @@ export function StrengthDay({ session, routine, title }: { session: ApiSession; 
     return (
       <div className="strength-day">
         {head}
-        <div className="strength-ask"><div className="wooline"><CoachAvatar size={20} badge="typing" /><span>Woo 在開菜單，幾秒就好…</span></div></div>
+        <div className="strength-ask"><div className="wooline"><CoachAvatar size={20} /><WooStatus stage={null} fallback="Woo 在開菜單，幾秒就好" /></div></div>
       </div>
     );
   }

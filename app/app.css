@@ -120,7 +120,7 @@ ul { padding: 0; list-style: none; }
 .avatar.hard { background: var(--t-hard); }
 .avatar.race { background: var(--t-race); }
 .avatar.rest { background: transparent; color: var(--ink-3); border: 1.5px solid var(--chip-line); }
-.avatar.coach { background: var(--ink); color: var(--bg); font-family: var(--font-num); font-weight: 700; flex: none; }
+.avatar.woo { background: var(--ink); color: var(--bg); font-family: var(--font-num); font-weight: 700; flex: none; }
 
 .verdict { display: inline-flex; align-items: center; gap: 5px; font-weight: 600; font-size: 13px; }
 .verdict::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
@@ -204,7 +204,24 @@ ul { padding: 0; list-style: none; }
 .compare .num.under { color: var(--v-good); }
 .compare .legend { display: flex; justify-content: flex-end; gap: 10px; font-size: 11px; color: var(--ink-3); }
 
-.gear { padding: 14px 0; font-size: 12px; color: var(--ink-3); line-height: 1.8; border-bottom: 1px solid var(--line); }
+/* 報告頁底部：這趟／裝備／天氣。（舊的 .gear 規則刪掉：今天頁的設定齒輪也用到同一個 class，被吃進 padding 和底線） */
+.gear-info { padding: 16px 0 10px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 18px; }
+.gear-info .gi-h { margin: 0 0 6px; font-size: 12px; font-weight: 700; color: var(--ink-3); letter-spacing: 0.04em; }
+.gear-info .gi-stats { margin: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.gear-info .gi-stat { min-width: 0; }
+.gear-info .gi-stat dt { font-size: 12px; color: var(--ink-3); white-space: nowrap; }
+.gear-info .gi-stat dd { margin: 4px 0 0; display: flex; align-items: baseline; gap: 3px; white-space: nowrap; }
+.gear-info .gi-stat .num { font-size: 22px; color: var(--ink); }
+.gear-info .gi-stat .unit { font-size: 12px; color: var(--ink-2); }
+.gear-info .gi-item { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 10px; align-items: center; height: 44px; border-top: 1px solid var(--line); }
+.gear-info .gi-item:first-child { border-top: 0; }
+.gear-info .gi-item svg { display: block; color: var(--ink-2); }
+.gear-info .gi-v { font-size: 15px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gear-info .gi-k { font-size: 12px; color: var(--ink-3); white-space: nowrap; }
+.gear-info .gi-head { display: flex; align-items: center; justify-content: space-between; height: 18px; margin: 0 0 6px; }
+.gear-info .gi-head .gi-h { margin: 0; }
+.gear-info .gi-edit { display: inline-flex; align-items: center; height: 44px; margin: -13px -4px -13px 0; padding: 0 4px; font-size: 13px; font-weight: 500; color: var(--ink-2); }
+@media (max-width: 359px) { .gear-info .gi-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 10px; } }
 
 /* ---- memo editor (報告頁 · 我的心得) ------------------------------------------ */
 .memo { padding: 16px 0; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
@@ -217,7 +234,7 @@ ul { padding: 0; list-style: none; }
 .rpe button { height: 44px; border-radius: 8px; border: 1px solid var(--chip-line); font-family: var(--font-num); font-size: 15px; font-weight: 600; color: var(--ink-2); background: var(--bg); }
 .rpe button[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--bg); }
 .rpe-scale { display: flex; justify-content: space-between; font-size: 11px; color: var(--ink-3); }
-.memo textarea { width: 100%; min-height: 110px; padding: 10px 12px; border: 1px solid var(--chip-line); border-radius: 10px; font: inherit; font-size: 15px; line-height: 1.55; color: var(--ink); background: var(--bg); resize: vertical; }
+.memo textarea { width: 100%; min-height: 110px; padding: 10px 12px; border: 1px solid var(--chip-line); border-radius: 10px; font: inherit; font-size: 16px; line-height: 1.55; color: var(--ink); background: var(--bg); resize: vertical; }
 .memo textarea:focus { outline: none; border-color: var(--ink-2); }
 .memo .actions { display: flex; gap: 8px; }
 .memo .actions .btn { margin-top: 0; flex: 1 1 auto; height: 44px; }
@@ -265,7 +282,7 @@ ul { padding: 0; list-style: none; }
     color-scheme: dark;
   }
   .avatar.rest { color: var(--ink-3); }
-  .avatar:not(.rest):not(.coach) { color: var(--bg); } /* the dark-mode type colours are light: dark glyphs read better */
+  .avatar:not(.rest):not(.woo) { color: var(--bg); } /* the dark-mode type colours are light: dark glyphs read better */
   .sk { background: linear-gradient(90deg, var(--chip) 25%, #23262c 50%, var(--chip) 75%); background-size: 200% 100%; }
 }
 
@@ -374,7 +391,13 @@ ul { padding: 0; list-style: none; }
 .coach-head { align-items: center; gap: 12px; }
 .coach-head h1 { font-size: 17px; }
 .coach-head .sub { font-size: 12px; color: var(--ink-3); }
-.shell > main.thread { padding-bottom: calc(150px + env(safe-area-inset-bottom)); }
+/* --composer-h is the composer's measured height (ResizeObserver in the coach route); 69 = a one-line composer, the first frame's guess. 66 = tab bar, 16 = breathing room */
+.shell > main.thread { overflow-anchor: none; } /* the scroll fix after loading older messages is done by hand (Safari has no scroll anchoring; Chrome's would double it) */
+.shell > main.thread { padding-bottom: calc(var(--composer-h, 69px) + 66px + 16px + env(safe-area-inset-bottom)); }
+/* top of the list: 40px while older messages exist (so "loading" never pushes anything), 1px once there are none */
+.thread-top { display: flex; align-items: center; justify-content: center; height: 40px; font-size: 12px; color: var(--ink-3); }
+.thread-top .tt-load { display: inline-flex; align-items: baseline; }
+.thread-top.end { height: 1px; }
 .day-rule { display: flex; align-items: center; gap: 10px; margin: 12px 0 2px; font-size: 12px; color: var(--ink-3); }
 .day-rule span { flex: 1; height: 1px; background: var(--line); }
 .msg.coach { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 12px; padding: 12px 0; }
@@ -390,7 +413,15 @@ ul { padding: 0; list-style: none; }
 .typing-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-3); animation: dot 1.2s infinite; }
 .typing-dots i:nth-child(2) { animation-delay: .2s; } .typing-dots i:nth-child(3) { animation-delay: .4s; }
 @keyframes dot { 0%, 60%, 100% { opacity: .3; } 30% { opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .typing-dots i { animation: none; } }
+/* WooStatus: text, then the dots (4px, sitting on the text baseline like an ellipsis). A new stage's text fades in; the dots are never re-created, so the pulse does not restart. */
+.woo-status { display: inline-flex; align-items: baseline; font-size: 13px; line-height: 1.4; color: var(--ink-3); }
+.woo-status .t { display: inline-block; animation: woo-swap 240ms ease-out; }
+.woo-status .typing-dots, .thread-top .typing-dots { gap: 3px; margin-left: 4px; }
+.woo-status .typing-dots i, .thread-top .typing-dots i { width: 4px; height: 4px; background: currentColor; }
+@keyframes woo-swap { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+.wooline .woo-status { min-height: 20px; align-items: center; }
+/* reduced motion: no dots at all (and no "…" in their place), just the text, swapped without a fade */
+@media (prefers-reduced-motion: reduce) { .typing-dots { display: none; } .woo-status .t { animation: none; } }
 .msg.me { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; padding: 6px 0 10px; }
 .msg.me .bubble { max-width: 82%; background: var(--chip); border-radius: 18px 18px 4px 18px; padding: 10px 14px; font-size: 15px; line-height: 1.55; white-space: pre-wrap; }
 .msg.me .quote { border-left: 2px solid var(--chip-line); padding-left: 10px; margin-bottom: 6px; font-size: 13px; color: var(--ink-2); }
@@ -403,10 +434,14 @@ ul { padding: 0; list-style: none; }
 .proposal .decided.applied { color: var(--v-good); }
 .composer { position: fixed; left: 0; right: 0; bottom: calc(66px + env(safe-area-inset-bottom)); background: var(--bg); border-top: 1px solid var(--line); z-index: 5; }
 .composer .row, .composer .quote-chip, .composer .hint { max-width: 600px; margin: 0 auto; padding-left: 20px; padding-right: 20px; }
-.composer .row { display: flex; gap: 8px; align-items: flex-end; padding-top: 10px; padding-bottom: 10px; }
-.composer textarea { flex: 1 1 auto; min-width: 0; min-height: 44px; max-height: 120px; padding: 11px 14px; border: 1px solid var(--chip-line); border-radius: 22px; font: inherit; font-size: 15px; line-height: 1.4; color: var(--ink); background: var(--bg); resize: none; }
+.composer .row { display: flex; gap: 12px; align-items: flex-end; padding-top: 10px; padding-bottom: 10px; }
+.composer .rpe-row + .row { padding-top: 2px; }
+/* 16px: iOS Safari zooms the page when a field under 16px gets focus. field-sizing grows the box with the text (1 line 48px, up to 5 lines 136px, then it scrolls inside) */
+.composer textarea { flex: 1 1 auto; min-width: 0; min-height: 48px; max-height: 136px; padding: 12px 16px; border: 1px solid var(--chip-line); border-radius: 24px; font: inherit; font-size: 16px; line-height: 22px; field-sizing: content; color: var(--ink); background: var(--bg); resize: none; }
 .composer textarea:focus { outline: none; border-color: var(--ink-2); }
-.composer .send { flex: none; width: 44px; height: 44px; border-radius: 50%; background: var(--ink); color: var(--bg); display: flex; align-items: center; justify-content: center; }
+/* 48px hit area, 40px black disc (the 4px padding is transparent) */
+.composer .send { flex: none; width: 48px; height: 48px; padding: 4px; border-radius: 50%; background: var(--ink); background-clip: content-box; color: var(--bg); display: flex; align-items: center; justify-content: center; }
+.composer .send:focus-visible { outline-offset: 0; border-radius: 50%; }
 .composer .send:disabled { opacity: .35; }
 .composer .quote-chip { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 8px; font-size: 12px; color: var(--ink-2); }
 .composer .quote-chip span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 2px solid var(--chip-line); padding-left: 8px; }
@@ -426,10 +461,12 @@ ul { padding: 0; list-style: none; }
 .strava-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #FC5200; margin-right: 8px; vertical-align: middle; flex: none; }
 .msg.me .bubble.pick { display: inline-flex; align-items: center; }
 .msg.me .rpe-tag { display: inline-block; margin-left: 8px; font-family: "Barlow Condensed", sans-serif; font-weight: 700; font-size: 14px; color: var(--ink-2); }
-.composer .rpe-row { max-width: 600px; margin: 0 auto; padding: 8px 20px 0; display: flex; align-items: center; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+.composer .rpe-row { max-width: 600px; margin: 0 auto; padding: 8px 20px; display: flex; align-items: center; gap: 4px; overflow-x: auto; scrollbar-width: none; }
 .composer .rpe-row .k { flex: none; font-size: 12px; color: var(--ink-3); margin-right: 4px; }
-.composer .rpe { flex: none; width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--chip-line); background: var(--bg); color: var(--ink); font-family: "Barlow Condensed", sans-serif; font-size: 14px; font-weight: 700; }
-.composer .rpe.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+/* RPE button: 28px disc, 32x44 touch area (the ::before). Not .rpe: that is the report page's 10-column grid */
+.composer .rpe-btn { position: relative; flex: none; display: inline-flex; align-items: center; justify-content: center; padding: 0; width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--chip-line); background: var(--bg); color: var(--ink); font-family: "Barlow Condensed", sans-serif; font-size: 14px; font-weight: 700; line-height: 1; }
+.composer .rpe-btn::before { content: ""; position: absolute; inset: -9px -3px; } /* the 1px border sits outside the abs-positioning box: -9/-3 from it = a 32x44 hit area */
+.composer .rpe-btn.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
 .btn.primary.woo { gap: 8px; }
 .btn.primary.woo .w { width: 22px; height: 22px; border-radius: 50%; background: var(--bg); color: var(--ink); display: inline-flex; align-items: center; justify-content: center; font-family: "Barlow Condensed", sans-serif; font-size: 12px; font-weight: 700; }
 
@@ -444,7 +481,7 @@ ul { padding: 0; list-style: none; }
 .hero2 .mid.done { color: var(--accent); }
 .hero2 .bar { height: 4px; margin-top: 0; align-self: start; }
 .wooline { display: flex; align-items: flex-start; gap: 8px; margin-top: 10px; font-size: 14px; color: var(--ink-2); line-height: 1.5; }
-.wooline .avatar.coach { margin-top: 1px; }
+.wooline .avatar.woo { margin-top: 1px; }
 .wooline a { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
 .today-post .wooline { color: var(--ink-2); }
 .next-row.first { display: grid; grid-template-columns: 40px 1fr; gap: 12px; align-items: start; }
@@ -460,13 +497,10 @@ ul { padding: 0; list-style: none; }
 .rest-day.strength { align-items: flex-start; text-align: left; padding: 16px 0; }
 .rest-day.strength .t { margin-top: 10px; }
 .rest-day.strength .note { max-width: none; }
-.avatar.coach { position: relative; }
-.avatar.coach .badge { position: absolute; right: -3px; bottom: -3px; width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--bg); display: flex; align-items: center; justify-content: center; }
-.avatar.coach .badge.check { background: var(--accent); color: #fff; animation: pop 0.25s ease-out; }
-.avatar.coach .badge.warn { background: var(--v-warn); color: #fff; font-size: 10px; font-weight: 800; font-family: var(--font-num); }
-.avatar.coach .badge.typing { background: var(--bg); gap: 1.5px; }
-.avatar.coach .badge.typing i { width: 3px; height: 3px; border-radius: 50%; background: var(--ink); animation: dot 1.2s infinite; }
-.avatar.coach .badge.typing i:nth-child(2) { animation-delay: 0.2s; } .avatar.coach .badge.typing i:nth-child(3) { animation-delay: 0.4s; }
+.avatar.woo { position: relative; }
+.avatar.woo .badge { position: absolute; right: -3px; bottom: -3px; width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--bg); display: flex; align-items: center; justify-content: center; }
+.avatar.woo .badge.check { background: var(--accent); color: #fff; animation: pop 0.25s ease-out; }
+.avatar.woo .badge.warn { background: var(--v-warn); color: #fff; font-size: 10px; font-weight: 800; font-family: var(--font-num); }
 .celebrate { margin-top: 8px; padding: 12px 14px; border-left: 3px solid var(--accent); background: var(--accent-bg); border-radius: 0 12px 12px 0; }
 .celebrate .k { font-size: 12px; color: var(--accent); font-weight: 700; letter-spacing: 0.04em; }
 .celebrate .v { display: flex; align-items: baseline; gap: 6px; }
@@ -485,7 +519,7 @@ ul { padding: 0; list-style: none; }
 @keyframes pop { 0% { transform: scale(0); } 70% { transform: scale(1.15); } 100% { transform: scale(1); } }
 @keyframes grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-@media (prefers-reduced-motion: reduce) { .verdict::before, .bar > i, .thread .msg:last-of-type, .avatar.coach .badge { animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { .verdict::before, .bar > i, .thread .msg:last-of-type, .avatar.woo .badge { animation: none !important; } }
 
 /* ---- 今天: 進步 (one sentence, one big number, three cards) + 累積 ---- */
 .progress { padding: 0 0 16px; border-bottom: 1px solid var(--line); }
@@ -661,7 +695,7 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 .sheet-body .rpe-k { margin-top: 16px; font-size: 13px; font-weight: 700; color: var(--ink-2); letter-spacing: 0.04em; }
 .sheet-body .rpe { margin-top: 8px; }
 .sheet-body .rpe-scale { margin-top: 4px; }
-.sheet-body .oneline { width: 100%; margin-top: 14px; height: 44px; padding: 0 14px; border: 1px solid var(--chip-line); border-radius: 12px; font: inherit; font-size: 15px; color: var(--ink); background: var(--bg); }
+.sheet-body .oneline { width: 100%; margin-top: 14px; height: 44px; padding: 0 14px; border: 1px solid var(--chip-line); border-radius: 12px; font: inherit; font-size: 16px; color: var(--ink); background: var(--bg); }
 .sheet-body .oneline:focus { outline: none; border-color: var(--ink-2); }
 .sheet-body .btn.primary { margin-top: 14px; }
 .msg.coach .relink { margin-top: 8px; font-size: 13px; color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; }
@@ -795,3 +829,28 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 .constraints .empty-line { margin: 8px 0 0; font-size: 13px; color: var(--ink-3); }
 .constraints .note-line { margin: 8px 0 0; font-size: 12px; line-height: 1.5; color: var(--ink-3); }
 @media (prefers-reduced-motion: reduce) { .constraint-wrap { transition: none; } }
+
+/* ---- 報告頁：編輯裝備與天氣 sheet ---- */
+.details-sheet .ds-sub { font-size: 13px; color: var(--ink-3); margin-top: -8px; }
+.details-sheet .ds-field { margin-top: 18px; }
+.details-sheet .ds-sub + .ds-field { margin-top: 6px; }
+.details-sheet .ds-label { display: flex; align-items: center; justify-content: space-between; height: 20px; }
+.details-sheet .ds-label label { font-size: 13px; font-weight: 700; color: var(--ink-2); letter-spacing: 0.04em; }
+.details-sheet .ds-clear { height: 32px; margin: -6px -4px -6px 0; padding: 0 4px; font-size: 13px; color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; }
+.details-sheet .oneline { margin-top: 6px; }
+.details-sheet .oneline:disabled { opacity: 0.6; }
+.details-sheet .ds-hint { display: flex; justify-content: space-between; gap: 10px; margin-top: 6px; font-size: 12px; line-height: 1.4; color: var(--ink-3); }
+.details-sheet .ds-hint > span:first-child { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.details-sheet .ds-count { flex: none; margin-left: auto; font-family: var(--font-num); font-size: 13px; font-weight: 600; }
+.details-sheet .ds-count.max { color: var(--v-warn); }
+.details-sheet .ds-sug { display: flex; align-items: center; gap: 6px; margin: 8px -20px 0; padding: 0 20px; overflow-x: auto; scrollbar-width: none; }
+.details-sheet .ds-sug::-webkit-scrollbar { display: none; }
+.details-sheet .ds-sug .k { flex: none; font-size: 12px; color: var(--ink-3); margin-right: 2px; }
+.details-sheet .ds-sug .chip { max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-block; line-height: 30px; }
+.details-sheet .ds-error { margin: 14px 0 0; font-size: 13px; color: var(--v-bad); }
+.details-sheet .ds-actions { display: flex; gap: 8px; margin-top: 20px; }
+.details-sheet .ds-actions .btn { margin-top: 0; }
+.details-sheet .ds-actions .btn:not(.primary) { flex: 0 0 96px; }
+.details-sheet .ds-error + .ds-actions { margin-top: 10px; }
+/* room to scroll the last box above the keyboard while a box has focus (the form renders .ds-room then; see DetailsForm) */
+.details-sheet .sheet-body:has(.ds-room) { padding-bottom: calc(40vh + env(safe-area-inset-bottom)); }

@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, redirect, useRevalidator, useSearchParams } from "react-router";
 import type { Route } from "./+types/_app.coach";
 import { SendIcon } from "../components/icons";
@@ -8,24 +8,33 @@ import { ApiError, getActivities, getCoach, getWeekly, postCheckinPick, postChec
 import { hasSession } from "../lib/auth";
 import { md, mdDow, timeJst, toJstDate } from "../lib/date";
 import { km, pace } from "../lib/format";
+import { WooStatus } from "../components/woo-status";
 import { useReviewPolling } from "../lib/use-review-polling";
 import { usePlan } from "../lib/use-plan";
-import type { ApiActivity, ApiCoachMessage, ApiProposal, ApiWeeklyAsk } from "../types/api";
+import type { ApiActivity, ApiCoachMessage, ApiProposal, ApiWeeklyAsk, ApiWeeklyReview } from "../types/api";
 
 // Woo's thread: weekly reviews (with their proposals), each run's verdict, his
 // post-run check-in (which activity → how did it feel → verdict), and the
 // conversation. The athlete writes at the bottom; replies are polled for.
 
 const MAX_CHARS = 500;
+/** Messages per page: the first visit loads the newest 10, reaching the top loads 10 older ones. */
+const PAGE = 10;
 const RPE_WORDS = ["", "很輕鬆", "輕鬆", "輕鬆", "適中", "適中", "適中", "有點累", "累", "很累", "極限"];
+
+// While a chat reply / the verdict is on its way (polled every 2 s) nothing in the weekly reviews changes,
+// so those polls reuse the last /weekly answer instead of asking again; everything else (first visit,
+// after an action, while a review is being rewritten) fetches it. The component sets the flag.
+let reuseWeekly = false;
+let lastWeekly: ApiWeeklyReview[] | null = null;
 
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   if (!hasSession()) throw redirect("/login");
   const quoteId = new URL(request.url).searchParams.get("quote");
   try {
     const [coach, weekly, quoted] = await Promise.all([
-      getCoach(),
-      getWeekly().catch(() => ({ reviews: [] })),
+      getCoach({ limit: PAGE }),
+      reuseWeekly && lastWeekly ? Promise.resolve({ reviews: lastWeekly }) : getWeekly().then((w) => { lastWeekly = w.reviews; return w; }).catch(() => ({ reviews: lastWeekly ?? [] })),
       quoteId ? getActivities().then((r) => r.activities.find((a) => a.id === quoteId) ?? null).catch(() => null) : Promise.resolve(null),
     ]);
     putCoachSeen().catch(() => { /* the badge just stays until next time */ });
@@ -45,11 +54,25 @@ function Rejected() {
   return <p className="cancelled">Woo 的提案沒過格式檢查，再問他一次</p>;
 }
 
+const byTime = (a: ApiCoachMessage, b: ApiCoachMessage) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id);
+
+/** A copy of the cache with these messages in it (newer copies win). */
+function upsert(cache: Map<string, ApiCoachMessage>, msgs: ApiCoachMessage[]): Map<string, ApiCoachMessage> {
+  const next = new Map(cache);
+  for (const m of msgs) next.set(m.id, m);
+  return next;
+}
+
+/** Everything seen so far, oldest first; the loader's newest page wins over the cache for the same id (it is the fresh copy). */
+function mergeThread(cache: Map<string, ApiCoachMessage>, latest: ApiCoachMessage[]): ApiCoachMessage[] {
+  return [...upsert(cache, latest).values()].sort(byTime);
+}
+
 function DayRule({ date }: { date: string }) {
   return <div className="day-rule"><span />{mdDow(date)}<span /></div>;
 }
 
-function CoachMessage({ m, children, badge }: { m: ApiCoachMessage; children: React.ReactNode; badge?: "check" | "warn" | "typing" | null }) {
+function CoachMessage({ m, children, badge }: { m: ApiCoachMessage; children: React.ReactNode; badge?: "check" | "warn" | null }) {
   return (
     <article className="msg coach">
       <CoachAvatar badge={badge} />
@@ -106,7 +129,7 @@ function CheckinChips({ m, busy, onPick }: { m: ApiCoachMessage; busy: boolean; 
  * answers under it, then what the review is waiting for. After 沒跑 the review is rewritten
  * in place — `rerun` is that wait ("Woo 在重寫…"), or that we gave up polling for it.
  */
-function WeeklyAskBlock({ ask, busy, rerun, onAnswer }: { ask: ApiWeeklyAsk; busy: boolean; rerun: "pending" | "gave-up" | null; onAnswer: (answer: "synced" | "skipped") => void }) {
+function WeeklyAskBlock({ ask, busy, rerun, stage, onAnswer }: { ask: ApiWeeklyAsk; busy: boolean; rerun: "pending" | "gave-up" | null; stage: string | null; onAnswer: (answer: "synced" | "skipped") => void }) {
   return (
     <div className="ask">
       <div className="ask-block"><div className="q">{ask.question}</div></div>
@@ -118,7 +141,7 @@ function WeeklyAskBlock({ ask, busy, rerun, onAnswer }: { ask: ApiWeeklyAsk; bus
       ) : (
         <div className="said">你說：{ask.state === "synced" ? "還沒同步" : "沒跑"}</div>
       )}
-      {rerun === "pending" ? <div className="said"><span className="typing-dots"><i /><i /><i /></span>Woo 在重寫這週的回顧…</div>
+      {rerun === "pending" ? <div className="said"><WooStatus stage={stage} fallback="Woo 在重寫這週的回顧" /></div>
         : rerun === "gave-up" ? <div className="said">回顧還在重寫，稍後再回來看</div>
         : ask.state !== "skipped" ? <div className="said">{ask.label} 確定之後我再給下週的建議。</div>
         : null}
@@ -132,16 +155,30 @@ function quoteLine(a: ApiActivity): string {
 }
 
 export default function Coach({ loaderData }: Route.ComponentProps) {
-  const { messages, reviews, quoted } = loaderData;
+  const { reviews, quoted } = loaderData;
   const view = usePlan();
   const revalidator = useRevalidator();
-  const [, setSearch] = useSearchParams();
+  const [searchParams, setSearch] = useSearchParams();
 
   const [text, setText] = useState("");
   const [rpe, setRpe] = useState<number | null>(null);
   const [quote, setQuote] = useState<ApiActivity | null>(quoted);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // The thread is the loader's newest page plus a cache of everything seen so far: older pages
+  // (loaded by scrolling to the top) and messages that a newer page has since pushed out of the
+  // newest one. Polling only refreshes the newest page; the cache keeps the rest.
+  const [cache, setCache] = useState<Map<string, ApiCoachMessage>>(() => new Map());
+  const [newest, setNewest] = useState(loaderData.messages);
+  if (newest !== loaderData.messages) {
+    setNewest(loaderData.messages);
+    setCache((c) => upsert(c, newest)); // the page being replaced: keep what it had
+  }
+  const messages = useMemo(() => mergeThread(cache, loaderData.messages), [cache, loaderData.messages]);
+  const [hasMore, setHasMore] = useState(loaderData.has_more);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [olderError, setOlderError] = useState(false);
 
   // The reply is on its way while the newest athlete message is still pending
   // (a chat reply, Woo's question after a pick, or the verdict after an answer).
@@ -167,7 +204,12 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
   const [decisions, setDecisions] = useState<Record<string, ApiProposal["status"]>>({});
   const statusOf = (p: ApiProposal) => (p.status !== "pending" ? p.status : decisions[p.id] ?? "pending");
 
-  const { timedOut, restart } = useReviewPolling(waiting || rerunPending || expectPending);
+  // Something is on its way (a reply, the verdict, a rewritten review): look every 2 s so the stage text keeps up.
+  const polling = waiting || rerunPending || expectPending;
+  const { timedOut, restart } = useReviewPolling(polling, true);
+  // Polls for a reply do not need /weekly again (see clientLoader); a review being rewritten does.
+  useEffect(() => { reuseWeekly = (waiting || expectPending) && !rerunPending; }, [waiting, expectPending, rerunPending]);
+  useEffect(() => () => { reuseWeekly = false; lastWeekly = null; }, []);
   const typing = waiting || expectPending;
 
   // Woo's open "how did it feel?" (the last message) turns the composer into the answer
@@ -176,8 +218,87 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
   const openAsk = last && last.kind === "ask" && last.ask?.state === "open" && last.ask.kind !== "mismatch" ? last : null;
   const mismatchOpen = !!last && last.kind === "ask" && last.ask?.kind === "mismatch" && last.ask.state === "open";
 
-  const count = messages.length;
-  useEffect(() => { window.scrollTo({ top: document.documentElement.scrollHeight }); }, [count, typing]);
+  // The composer is fixed to the bottom and grows (RPE row, quote chip, an error line, a taller
+  // box): its measured height keeps the thread's bottom padding, so it never covers the last message.
+  const formRef = useRef<HTMLFormElement>(null);
+  const [composerH, setComposerH] = useState(69);
+  useLayoutEffect(() => {
+    const el = formRef.current;
+    if (!el) return;
+    const measure = () => setComposerH(Math.round(el.getBoundingClientRect().height));
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // To the bottom when the newest message changes, the wait row comes or goes, or the composer grows.
+  // Not when older messages are prepended (the newest id stays) and not when a stage text changes.
+  const newestId = messages[messages.length - 1]?.id;
+  useEffect(() => { window.scrollTo({ top: document.documentElement.scrollHeight }); }, [newestId, typing, composerH]);
+
+  // Older pages: the sentinel at the top of the list asks for the 10 before the oldest message we have.
+  const topRef = useRef<HTMLDivElement>(null);
+  const loadingRef = useRef(false);
+  const anchorRef = useRef<{ h: number; y: number } | null>(null);
+  const loadOlderRef = useRef<() => Promise<void>>(async () => {});
+  async function loadOlder() {
+    if (loadingRef.current || !hasMore || messages.length === 0) return;
+    loadingRef.current = true;
+    setLoadingOlder(true);
+    setOlderError(false);
+    try {
+      const r = await getCoach({ before: messages[0].id, limit: PAGE });
+      // what the athlete is looking at stays where it is: remember the page height, fix the scroll after the older ones are in
+      anchorRef.current = { h: document.documentElement.scrollHeight, y: window.scrollY };
+      setCache((c) => upsert(c, r.messages));
+      setHasMore(r.has_more && r.messages.length > 0); // an empty page cannot be followed by another: no loop on a sentinel that stays in view
+    } catch {
+      setOlderError(true);
+    } finally {
+      loadingRef.current = false;
+      setLoadingOlder(false);
+    }
+  }
+  useLayoutEffect(() => { loadOlderRef.current = loadOlder; }); // the observer's callback always calls the latest one
+  useLayoutEffect(() => {
+    const a = anchorRef.current;
+    if (!a) return;
+    anchorRef.current = null;
+    window.scrollTo(0, a.y + (document.documentElement.scrollHeight - a.h));
+  }, [messages]);
+  // (Re)armed after every load: a sentinel still in view (short messages) loads the next page at once.
+  // After a failure it waits until the sentinel has left the screen and come back, so it never loops.
+  useEffect(() => {
+    const el = topRef.current;
+    if (!el || !hasMore || loadingOlder) return;
+    let armed = !olderError;
+    let timer = 0;
+    const io = new IntersectionObserver((entries) => {
+      const e = entries[entries.length - 1];
+      window.clearTimeout(timer);
+      if (!e.isIntersecting) { armed = true; return; }
+      if (!armed) return;
+      // Look again after a moment: the router scrolls to the top for an instant on a navigation (sending
+      // a message clears ?quote), which must not read as "the athlete reached the top".
+      timer = window.setTimeout(() => { if (el.getBoundingClientRect().bottom > -200) void loadOlderRef.current(); }, 150);
+    }, { rootMargin: "200px 0px 0px 0px" });
+    io.observe(el);
+    return () => { window.clearTimeout(timer); io.disconnect(); };
+  }, [hasMore, loadingOlder, olderError]);
+
+  // The weekly review rewritten after 沒跑 may sit on an older page, which polling (newest page only) does not
+  // reach: while it is being rewritten, fetch the stretch just before the newest page along with each poll.
+  const refreshingRef = useRef(false);
+  useEffect(() => {
+    if (!rerunPending || !rerun || refreshingRef.current) return;
+    if (loaderData.messages.some((m) => m.id === rerun.id) || !loaderData.messages.length) return;
+    refreshingRef.current = true;
+    getCoach({ before: loaderData.messages[0].id, limit: 50 })
+      .then((r) => setCache((c) => upsert(c, r.messages)))
+      .catch(() => { /* the next poll tries again */ })
+      .finally(() => { refreshingRef.current = false; });
+  }, [loaderData, rerun, rerunPending]);
 
   // The layout's plan still says "unread" from before this page marked the thread
   // seen; reload it once so the tab's dot is gone when the athlete leaves.
@@ -194,7 +315,7 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
       setText("");
       setRpe(null);
       setQuote(null);
-      setSearch({}, { replace: true });
+      if (searchParams.has("quote")) setSearch({}, { replace: true }); // a navigation: only when there is a quote to drop
       await revalidator.revalidate();
       restart();
     } catch (e) {
@@ -243,7 +364,8 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
     setBusy(true);
     setError(null);
     try {
-      await postWeeklyAsk(m.weekly_review_id, ask.session_id, { answer });
+      const r = await postWeeklyAsk(m.weekly_review_id, ask.session_id, { answer });
+      setCache((c) => upsert(c, [r.message])); // the review may be on an older page that polling does not refresh
       if (answer === "skipped") setRerun({ id: m.id, at: m.weekly?.updated?.at ?? null });
       await revalidator.revalidate();
       restart();
@@ -324,7 +446,10 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
         <CoachAvatar />
         <div><h1>Woo</h1><div className="sub">你的教練 · 只聊跑步和課表</div></div>
       </header>
-      <main className="thread">
+      <main className="thread" style={{ "--composer-h": `${composerH}px` } as React.CSSProperties}>
+        <div className={`thread-top${hasMore ? "" : " end"}`} ref={topRef} aria-live="polite">
+          {loadingOlder ? <span className="tt-load">載入更早的對話<span className="typing-dots" aria-hidden="true"><i /><i /><i /></span></span> : olderError ? "載入失敗，往上滑再試一次" : null}
+        </div>
         {messages.length === 0 ? (
           <p className="empty">Woo 還沒說話。跑完第一堂課、或每週日的回顧之後，這裡會出現他的訊息。你也可以先問他。</p>
         ) : null}
@@ -341,10 +466,10 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
             const wm = m.weekly;
             const rewriting = rerunPending && rerun?.id === m.id;
             node = (
-              <CoachMessage m={m} badge={rewriting && !timedOut ? "typing" : wm?.updated ? "check" : null}>
+              <CoachMessage m={m} badge={wm?.updated ? "check" : null}>
                 {wm?.updated ? <div className="updated"><span aria-hidden="true">⟳</span> 已更新 · {wm.updated.reason}</div> : null}
                 <p className="text">{m.text}</p>
-                {wm?.asks.map((ask) => <WeeklyAskBlock key={ask.session_id} ask={ask} busy={busy} rerun={rewriting && ask.state === "skipped" ? (timedOut ? "gave-up" : "pending") : null} onAnswer={(answer) => void answerWeeklyAsk(m, ask, answer)} />)}
+                {wm?.asks.map((ask) => <WeeklyAskBlock key={ask.session_id} ask={ask} busy={busy} rerun={rewriting && ask.state === "skipped" ? (timedOut ? "gave-up" : "pending") : null} stage={m.stage} onAnswer={(answer) => void answerWeeklyAsk(m, ask, answer)} />)}
                 {w ? <CoachProposals review={w} sessions={sessions} embedded onChanged={() => void revalidator.revalidate()} /> : null}
                 {m.proposal || m.constraint ? cards([m]) : null}
                 {m.proposal_rejected ? <Rejected /> : null}
@@ -405,12 +530,12 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
         })}
         {typing ? (
           <article className="msg coach typing">
-            <CoachAvatar badge="typing" />
-            <div className="body">{timedOut ? "Woo 回得比較慢，稍後再回來看。" : <><span className="typing-dots"><i /><i /><i /></span>Woo 輸入中…</>}</div>
+            <CoachAvatar />
+            <div className="body">{timedOut ? "Woo 回得比較慢，稍後再回來看。" : <WooStatus stage={last?.stage} />}</div>
           </article>
         ) : null}
       </main>
-      <form className="composer" onSubmit={(e) => { e.preventDefault(); void send(text, quote?.id); }}>
+      <form className="composer" ref={formRef} onSubmit={(e) => { e.preventDefault(); void send(text, quote?.id); }}>
         {quote && !openAsk ? (
           <div className="quote-chip">
             <span>引用 {quoteLine(quote)}</span>
@@ -421,7 +546,7 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
           <div className="rpe-row" role="radiogroup" aria-label="累的程度 1 到 10">
             <span className="k">RPE</span>
             {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-              <button key={n} type="button" role="radio" aria-checked={rpe === n} className={`rpe${rpe === n ? " on" : ""}`} onClick={() => setRpe(rpe === n ? null : n)} title={RPE_WORDS[n]}>{n}</button>
+              <button key={n} type="button" role="radio" aria-checked={rpe === n} className={`rpe-btn${rpe === n ? " on" : ""}`} onClick={() => setRpe(rpe === n ? null : n)} title={RPE_WORDS[n]}>{n}</button>
             ))}
           </div>
         ) : null}
@@ -429,6 +554,7 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
           <textarea
             id="coach-text"
             rows={1}
+            enterKeyHint="send"
             value={text}
             maxLength={MAX_CHARS}
             placeholder={openAsk ? "回 Woo：感覺怎麼樣…" : "跟 Woo 聊跑步、課表…"}
