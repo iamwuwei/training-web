@@ -143,15 +143,16 @@ function build(): PlanResponse {
     week_no: w.week_no, week_start: w.start, week_end: w.end, phase: w.phase, focus: w.focus,
   }));
 
-  // Two 補課 already adopted (history, so the plan has 已改期 rows and make-up rows from the start). Both came from week 3.
-  //  - 10/21 坡跑 8 km → 10/30: adopted 10/25, before week 3's review was written → counts in week 3 (its original week); the 10/30 Easy made room.
-  //  - 10/20 Easy 6 km → 11/7: adopted after the review → counts in week 5, where it is run; the 11/7 rest day made room.
+  // Two 補課 already adopted (history, so the plan has 已改期 rows and make-up rows from the start). Both came from week 2 and
+  // use sessions the weekly texts never call done (10/16 and 10/18; the texts say 10/13, 10/14 and week 3's runs were done).
+  //  - 10/16 Recovery 4 km → 10/30: adopted before week 2's review was written → counts in week 2 (its original week); the 10/30 Easy made room.
+  //  - 10/18 Long 14 km → 11/3: adopted after the review → counts in week 5, where it is run; the 11/3 Easy made room.
   const byId = (id: string) => sessions.find((x) => x.id === id)!;
   const drop = (id: string) => sessions.splice(sessions.findIndex((x) => x.id === id), 1);
   drop("s-2026-10-30");
-  makeUpSession(sessions, weeks, byId("s-2026-10-21"), "2026-10-30", new Set());
-  drop("s-2026-11-07");
-  makeUpSession(sessions, weeks, byId("s-2026-10-20"), "2026-11-07", new Set([3]));
+  makeUpSession(sessions, weeks, byId("s-2026-10-16"), "2026-10-30", new Set());
+  drop("s-2026-11-03");
+  makeUpSession(sessions, weeks, byId("s-2026-10-18"), "2026-11-03", new Set([2]));
   sessions.sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date));
 
   const byDate = new Map(sessions.map((s) => [s.scheduled_date, s]));
@@ -857,7 +858,9 @@ function threadData(): ApiCoachMessage[] {
   const yAt = (hm: string) => new Date(`${addDays(today, -1)}T${hm}:00+09:00`).toISOString();
   for (const p of proposals) p.created_at = p.id === "p-applied" ? yAt("21:01") : p.id === "p-stale" ? yAt("22:11") : p.id === "p-mk-stale" ? yAt("22:31") : todayAt("06:21");
   thread = [
-    { id: "c1", role: "coach", kind: "weekly", text: w.summary ?? "", activity_id: null, weekly_review_id: w.id, status: "sent", review: null, quote: null, error: null, created_at: at("2026-10-12T12:00:00Z") },
+    { id: "c1", role: "coach", kind: "weekly", text: w.summary ?? "", activity_id: null, weekly_review_id: w.id, status: "sent", review: null, quote: null, error: null, created_at: at("2026-10-12T12:00:00Z"),
+      // 10/16 Recovery was moved to 10/30 before this review was written: it counts in this week and the review says so
+      weekly: { week_start: w.week_start, asks: [], updated: null, cancelled: [], makeups: [{ from: "2026-10-16", to: "2026-10-30", label: "Recovery 4 km", done: false }] } },
     { id: "c2", role: "coach", kind: "review", text: "心拍整段壓在 140，是四次 Easy 裡最穩的一次。第 1 km 6:35 偏快是錶的心拍延遲，不是真的用力；第 6 km 8:01 是坡後自然放慢，正常。", activity_id: "a-2026-10-13", weekly_review_id: null, status: "sent", review: { label: "Easy 6 km", verdict: "達成", reminder: "第 1 km 前 3 分鐘用呼吸不用錶", date: "2026-10-13" }, quote: null, error: null, created_at: at("2026-10-12T22:52:00Z") },
     { id: "c3", role: "athlete", kind: "chat", text: "第一公里又衝太快了，有什麼辦法壓住？", activity_id: "a-2026-10-13", weekly_review_id: null, status: "sent", review: null, quote: "10/13 Easy 6.01 km · 7:25/km · 心拍 140（最高 148） · 達成", error: null, created_at: at("2026-10-12T23:10:00Z") },
     { id: "c4", role: "coach", kind: "chat", text: "這是連續第二次了。前 3 分鐘不要看錶，用鼻子呼吸能撐住的速度就是對的；第 1 km 跑到 7:30 以上才算成功。明天 MP 課的前 2 km Easy 也照這個來。", activity_id: null, weekly_review_id: null, status: "sent", review: null, quote: null, error: null, created_at: at("2026-10-12T23:10:20Z") },
@@ -869,9 +872,7 @@ function threadData(): ApiCoachMessage[] {
     { ...BLANK, id: "c-rp-c2", role: "coach", kind: "chat", text: "11/29 那堂在你按之前已經改過了（週一的回顧把它改成 18 km）。這張不能照用。", proposal: proposals.find((x) => x.id === "p-stale") ?? null, created_at: yAt("22:11") },
     // Week 3's review, written before the 10/25 long run had a record: it asks (demo dates it this morning).
     { ...BLANK, id: "c-weekly-3", role: "coach", kind: "weekly", text: w3.summary ?? "", weekly_review_id: w3.id, created_at: w3.created_at,
-      weekly: { week_start: w3.week_start, asks: [{ session_id: "s-2026-10-25", label: "Long 16 km", date: "2026-10-25", question: "10/25 的 Long 16 km 我沒看到紀錄，是沒跑，還是還沒同步？", state: "open" }], updated: null, cancelled: [],
-        // adopted 10/25, before this review was written: it counts in this week and the review says so
-        makeups: [{ from: "2026-10-21", to: "2026-10-30", label: "坡跑 8 km", done: false }] } },
+      weekly: { week_start: w3.week_start, asks: [{ session_id: "s-2026-10-25", label: "Long 16 km", date: "2026-10-25", question: "10/25 的 Long 16 km 我沒看到紀錄，是沒跑，還是還沒同步？", state: "open" }], updated: null, cancelled: [], makeups: [] } },
     // A chat reply that carries a proposal card (two changes), and a flagged one.
     { ...BLANK, id: "c-ask-sun", role: "athlete", kind: "chat", text: "這週日有事，長跑跑不了", created_at: todayAt("06:20") },
     { ...BLANK, id: "c-prop-1", role: "coach", kind: "chat", text: "那把長跑提到週六，週日換成休息。週五的 Easy 當長跑前的放鬆，別跑快。", proposal: proposals[0], created_at: todayAt("06:21") },

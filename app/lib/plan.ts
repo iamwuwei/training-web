@@ -198,8 +198,9 @@ export function weekSubline(week: Week, view: Pick<PlanView, "data">): string {
     }
     return out;
   }
-  // this week: what is still to run, in date order; a make-up is marked, with its day when it is run in another calendar week
-  const left = [...week.days, ...week.counted.filter((d) => !week.days.includes(d))]
+  // this week: what is still to run among the rows that count in this week, in date order. A make-up is marked; one run in
+  // another calendar week also says its day. (A make-up that counts in another week is not listed: its km are not in this week's numbers.)
+  const left = week.counted
     .filter((d) => d.session.type !== "rest" && !d.activity && d.status !== "skipped" && d.status !== "moved")
     .sort((a, b) => a.session.scheduled_date.localeCompare(b.session.scheduled_date))
     .map((d) => {
