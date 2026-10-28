@@ -12,6 +12,9 @@ import type {
   PutSessionRequest,
   PutSessionResponse,
   CoachResponse,
+  DetailOptionsResponse,
+  PutDetailsRequest,
+  PutDetailsResponse,
   PostAdjustmentRequest,
   PostAdjustmentResponse,
   PostCoachMessageRequest,
@@ -108,6 +111,18 @@ export function putReview(activityId: string, body: PutReviewRequest): Promise<P
   return request<PutReviewResponse>(`/activities/${activityId}/review`, { method: "PUT", body: JSON.stringify(body) });
 }
 
+/** The athlete's own shoe / device / weather for one activity ("" or null clears it). Does not touch the memo or the review. */
+export function putActivityDetails(activityId: string, body: PutDetailsRequest): Promise<PutDetailsResponse> {
+  if (useMock) return mock().then((m) => m.mockPutDetails(activityId, body));
+  return request<PutDetailsResponse>(`/activities/${encodeURIComponent(activityId)}/details`, { method: "PUT", body: JSON.stringify(body) });
+}
+
+/** Shoe / device names this athlete used before, for the editor's suggestions. */
+export function getDetailOptions(): Promise<DetailOptionsResponse> {
+  if (useMock) return mock().then((m) => m.mockDetailOptions());
+  return request<DetailOptionsResponse>("/activities/detail-options");
+}
+
 /** Drop the coach's (failed or stale) review and queue a fresh one. */
 export function rereview(activityId: string): Promise<RereviewResponse> {
   if (useMock) return mock().then((m) => m.mockRereview(activityId));
@@ -155,10 +170,17 @@ export function postConstraint(constraintId: string, action: "accept" | "dismiss
   return request<PostConstraintResponse>(`/constraints/${encodeURIComponent(constraintId)}/${action}`, { method: "POST" });
 }
 
-/** The coach's thread, oldest first. */
-export function getCoach(): Promise<CoachResponse> {
-  if (useMock) return mock().then((m) => m.mockCoach());
-  return request<CoachResponse>("/coach");
+/**
+ * The coach's thread, oldest first: the newest `limit` messages (the api's default is 10, max 100), or
+ * with `before` (a message id) the `limit` messages older than it. `has_more`: older ones exist.
+ */
+export function getCoach(opts: { limit?: number; before?: string } = {}): Promise<CoachResponse> {
+  if (useMock) return mock().then((m) => m.mockCoach(opts));
+  const q = new URLSearchParams();
+  if (opts.limit != null) q.set("limit", String(opts.limit));
+  if (opts.before) q.set("before", opts.before);
+  const qs = q.toString();
+  return request<CoachResponse>(qs ? `/coach?${qs}` : "/coach");
 }
 
 /** A chip on Woo's check-in: which activity (or session) it was, or none. */
