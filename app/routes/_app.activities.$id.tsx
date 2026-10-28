@@ -3,6 +3,7 @@ import { Link, redirect, useLocation, useNavigate, useRevalidator } from "react-
 import { useReviewPolling } from "../lib/use-review-polling";
 import type { Route } from "./+types/_app.activities.$id";
 import { BackIcon } from "../components/icons";
+import { DetailsSheet } from "../components/details-sheet";
 import { GearInfo } from "../components/gear-info";
 import { MemoEditor } from "../components/memo";
 import { SessionSheet } from "../components/session-sheet";
@@ -255,11 +256,11 @@ export default function Report({ loaderData }: Route.ComponentProps) {
   // entry, key "default") there is no source page, so 課表. Any other key means the app
   // itself pushed this entry, so there is always something to go back to.
   const cameFromApp = location.key !== "default";
-  // A memo save shows immediately through `override`; once a revalidation brings the
-  // same memo_updated_at back from the server, the loader's copy (with the new review) wins.
+  // A memo or details save shows immediately through `override`; once a revalidation brings the
+  // same memo_updated_at / details_updated_at back from the server, the loader's copy (with the new review) wins.
   const [override, setOverride] = useState<ApiActivity | null>(null);
   const L = loaderData.activity;
-  const a = override && override.id === L.id && override.memo_updated_at !== L.memo_updated_at ? override : L;
+  const a = override && override.id === L.id && (override.memo_updated_at !== L.memo_updated_at || override.details_updated_at !== L.details_updated_at) ? override : L;
 
   const sessions = view?.data.sessions ?? [];
   const s = sessions.find((x) => x.id === a.session_id) ?? null;
@@ -294,6 +295,7 @@ export default function Report({ loaderData }: Route.ComponentProps) {
   }
   const [showPlan, setShowPlan] = useState(false);
   const [showSwap, setShowSwap] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
   const retryChip = (
     <button type="button" className="chip" onClick={() => void askAgain()} disabled={rereviewBusy}>
       {rereviewBusy ? "送出中…" : "重新分析"}
@@ -382,7 +384,7 @@ export default function Report({ loaderData }: Route.ComponentProps) {
         <SplitDots a={a} s={s} plan={plan} />
         {s ? <Trend current={a} session={s} all={all} sessions={sessions} /> : null}
 
-        <GearInfo activity={a} />
+        <GearInfo activity={a} onEdit={() => setShowDetails(true)} />
 
         {s ? (
           <p className="swap-line">
@@ -391,6 +393,7 @@ export default function Report({ loaderData }: Route.ComponentProps) {
           </p>
         ) : null}
       </main>
+      <DetailsSheet open={showDetails} onClose={() => setShowDetails(false)} activity={a} onSaved={setOverride} />
       {view && s ? <SessionSheet session={showPlan ? s : null} view={view} onClose={() => setShowPlan(false)} /> : null}
       {s ? <SwapSheet open={showSwap} onClose={() => setShowSwap(false)} a={a} s={s} all={all} view={view} /> : null}
     </>

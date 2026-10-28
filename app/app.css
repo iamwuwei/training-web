@@ -218,6 +218,9 @@ ul { padding: 0; list-style: none; }
 .gear-info .gi-item svg { display: block; color: var(--ink-2); }
 .gear-info .gi-v { font-size: 15px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .gear-info .gi-k { font-size: 12px; color: var(--ink-3); white-space: nowrap; }
+.gear-info .gi-head { display: flex; align-items: center; justify-content: space-between; height: 18px; margin: 0 0 6px; }
+.gear-info .gi-head .gi-h { margin: 0; }
+.gear-info .gi-edit { display: inline-flex; align-items: center; height: 44px; margin: -13px -4px -13px 0; padding: 0 4px; font-size: 13px; font-weight: 500; color: var(--ink-2); }
 @media (max-width: 359px) { .gear-info .gi-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 10px; } }
 
 /* ---- memo editor (報告頁 · 我的心得) ------------------------------------------ */
@@ -826,3 +829,27 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 .constraints .empty-line { margin: 8px 0 0; font-size: 13px; color: var(--ink-3); }
 .constraints .note-line { margin: 8px 0 0; font-size: 12px; line-height: 1.5; color: var(--ink-3); }
 @media (prefers-reduced-motion: reduce) { .constraint-wrap { transition: none; } }
+
+/* ---- 報告頁：編輯裝備與天氣 sheet ---- */
+.details-sheet .ds-sub { font-size: 13px; color: var(--ink-3); margin-top: -8px; }
+.details-sheet .ds-field { margin-top: 18px; }
+.details-sheet .ds-sub + .ds-field { margin-top: 6px; }
+.details-sheet .ds-label { display: flex; align-items: center; justify-content: space-between; height: 20px; }
+.details-sheet .ds-label label { font-size: 13px; font-weight: 700; color: var(--ink-2); letter-spacing: 0.04em; }
+.details-sheet .ds-clear { height: 32px; margin: -6px -4px -6px 0; padding: 0 4px; font-size: 13px; color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; }
+.details-sheet .oneline { margin-top: 6px; }
+.details-sheet .oneline:disabled { opacity: 0.6; }
+.details-sheet .ds-hint { display: flex; justify-content: space-between; gap: 10px; margin-top: 6px; font-size: 12px; line-height: 1.4; color: var(--ink-3); }
+.details-sheet .ds-hint > span:first-child { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.details-sheet .ds-count { flex: none; margin-left: auto; font-family: var(--font-num); font-size: 13px; font-weight: 600; }
+.details-sheet .ds-count.max { color: var(--v-warn); }
+.details-sheet .ds-sug { display: flex; align-items: center; gap: 6px; margin: 8px -20px 0; padding: 0 20px; overflow-x: auto; scrollbar-width: none; }
+.details-sheet .ds-sug::-webkit-scrollbar { display: none; }
+.details-sheet .ds-sug .k { flex: none; font-size: 12px; color: var(--ink-3); margin-right: 2px; }
+.details-sheet .ds-sug .chip { max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-block; line-height: 30px; }
+.details-sheet .ds-error { margin: 14px 0 0; font-size: 13px; color: var(--v-bad); }
+.details-sheet .ds-actions { display: flex; gap: 8px; margin-top: 20px; }
+.details-sheet .ds-actions .btn { margin-top: 0; }
+.details-sheet .ds-actions .btn:not(.primary) { flex: 0 0 96px; }
+.details-sheet .ds-error + .ds-actions { margin-top: 10px; }
+.details-sheet .sheet-body:focus-within { padding-bottom: calc(40vh + env(safe-area-inset-bottom)); } /* room to scroll the last box above the keyboard */
