@@ -78,6 +78,24 @@ export interface ApiSession {
   skipped_at: string | null;
   version: number;
   superseded: boolean;
+  /**
+   * coach-adjust-2 補課. This row is an "已改期" history row (superseded = true, but still sent to the app): the
+   * session of this day was not run and Woo's card moved it to moved_to_date. Drawn "已改期 → 10/28";
+   * it cannot be matched with an activity and cannot be proposed on again.
+   */
+  moved_to_session_id: string | null;
+  moved_to_date: string | null;        // 'YYYY-MM-DD'
+  /** This row is the make-up session: it was moved here from moved_from_date. Drawn "補 10/27 的課". */
+  moved_from_session_id: string | null;
+  moved_from_date: string | null;
+  /**
+   * Which week (plan_weeks.week_no) this row's planned km, session count and matched activity count in.
+   * An ordinary session: the calendar week it is on; a make-up session: decided when the card was applied
+   * (the origin week's review not yet written → the origin week; already written → the week of the new date);
+   * an 已改期 row: its own week when the make-up counts in another week (counted as not run), else null (replaced, not counted).
+   * Display follows scheduled_date, statistics follow this. A null row is in no statistic.
+   */
+  counts_in_week_no: number | null;
 }
 
 export interface ApiSplit {
@@ -152,7 +170,7 @@ export interface PlanResponse {
   coach_ask_kind: "feel" | "mismatch" | null;
   plan: ApiPlan;
   weeks: ApiWeek[];
-  sessions: ApiSession[];    // not superseded, ordered by date
+  sessions: ApiSession[];    // not superseded, plus the 已改期 rows (moved_to_session_id set); ordered by date
   activities: ApiActivity[]; // assigned to one of `sessions`, ordered by start_time
   /**
    * Strava activities (any sport) of the last 45 days that are not assigned to a
@@ -452,6 +470,8 @@ export interface ApiWeeklyMeta {
   updated: { at: string; reason: string } | null;
   /** Pending proposals that the regeneration cancelled, one line each: "11/1 距離 18 → 16 km". */
   cancelled: string[];
+  /** Make-ups that count in this week (the origin week's review was not written when the card was applied): one line "這週有補課：10/27 的 Easy 5 km 補到 10/28（待跑／已完成）". */
+  makeups: { from: string; to: string; label: string; done: boolean }[];
 }
 
 export interface ApiWeeklyAsk {
@@ -568,6 +588,10 @@ export interface ApiProposalChange {
   /** Computed by the api, hung on this row, shown in amber: "落到第 8 週：那週 42 → 58 km，比上週計畫 28 km 多 107%", "比目前最長多 3.7 km（16.2 → 19.9 km）", "減量週加量", "離比賽只剩 10 天，這天有 26 km 的長跑". */
   flags: string[];
   applied_session_id: string | null; // after apply: the new session row (change / add)
+  /** 補課: op = change, field = scheduled_date, and `date` (the original day) had already passed when the card was written. Set by the api, not the model. Drawn "補課" + "日期 → 10/28 週三". */
+  makeup: boolean;
+  /** 補課 after apply: the week the session counts in (same as ApiSession.counts_in_week_no); null before apply or when not a make-up. */
+  counts_in_week_no: number | null;
 }
 
 export interface ApiProposalWeek {
