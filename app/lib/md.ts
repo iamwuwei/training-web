@@ -21,8 +21,12 @@ export type MdBlock =
 // [^*\n]+? cannot overlap with the closing "**", so matching is linear.
 const BOLD = /\*\*([^*\n]+?)\*\*/g;
 const BLANK = /^\s*$/;
-const UL = /^\s{0,3}[-*•]\s+(.*)$/;
-const OL = /^\s{0,3}(\d{1,2})[.)]\s+(.*)$/;
+// The item text is [^]* (any character): with (.*)$ a line holding U+2028 / U+2029 (which "." does not match, but
+// \s does) made the engine give back the whitespace one character at a time, O(n^2) on 10 000 characters.
+const UL = /^\s{0,3}[-*•]\s+([^]*)$/;
+const OL = /^\s{0,3}(\d{1,2})[.)]\s+([^]*)$/;
+// A horizontal-rule look-alike ("* * *", "- - -"): not a list, printed as the characters it is.
+const RULE = /^\s{0,3}([-*])(?:\s*\1){2,}\s*$/;
 
 export function parseInline(s: string): MdInline[] {
   const out: MdInline[] = [];
@@ -69,13 +73,14 @@ export function parseMd(text: string): MdBlock[] {
       closeList();
       continue;
     }
+    // An item needs some text after the marker ("- " alone and "* * *" are plain text lines).
     const ul = UL.exec(line);
-    if (ul) {
+    if (ul && ul[1].trim() && !RULE.test(line)) {
       addItem(false, 1, ul[1]);
       continue;
     }
     const ol = OL.exec(line);
-    if (ol) {
+    if (ol && ol[2].trim()) {
       addItem(true, Number(ol[1]), ol[2]);
       continue;
     }
