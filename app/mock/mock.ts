@@ -485,6 +485,16 @@ const WEEK2_ID = "w-2026-10-12";
 const WEEK3_ID = "w-2026-10-19";
 const WEEK3_TEXT_ASK = "本週 4 堂跑步完成 3 堂：10/20 Easy 6.03 km（7:11、心拍 143）、10/21 坡跑、10/23 Easy 6.14 km（7:08、心拍 142），兩次 Easy 都比 7:15 快 4〜7 秒，心拍在範圍內。10/25 的長跑確定之後我再談 11/1 的 18 km。";
 const WEEK3_TEXT_SKIPPED = "本週 4 堂跑步完成 3 堂：10/20 Easy 6.03 km（7:11、心拍 143）、10/21 坡跑、10/23 Easy 6.14 km（7:08、心拍 142）。10/25 的長跑你說沒跑，這週長跑量是 0，所以 11/1 的 18 km 不直接上：先回到 16 km，最後 4 km @ 6:45 看當天小腿狀況。兩次 Easy 都比 7:15 快 4〜7 秒，下週 Easy 以 7:15 為下限。";
+// coach-format (md.ts) samples. The explanation is the real question from Wei: a conclusion, three reasons as a list, two bold spans, a next step.
+const MD_EXPLAIN = "心拍還看不出進步，主要是時間還不夠，不是你練錯。\n\n- **才練 3 週**：有氧底子通常要 6〜8 週，同配速的心拍才會開始往下掉。\n- 前 2 km 起跑偏快：10/20、10/23 都比後段快 10 秒以上，心拍一開頭就被拉上 150。\n- 疲勞和睡眠：10/24 走了 95 分鐘、這週兩晚睡不到 6 小時，心拍整體會高 3〜5 下。\n\n下週 Easy 配速固定 **7:20**，前 2 km 也一樣，3 週後用同一條路再比一次。";
+// every syntax that is printed as the characters themselves (T7)
+const MD_NOT_RENDERED = "# 標題\n![圖](https://example.com/y.png)\n[連結](https://example.com)\n<b>粗</b>\n| a | b |\n```js\nx\n```\n> 引用\n*斜體* 與 _底線_";
+// 2000 characters, 45 list items, one unpaired ** in the middle (T12)
+const MD_LONG = ["結論先講：這 45 點都是同一件事，慢慢來。", "", ...Array.from({ length: 45 }, (_, i) => `- 第 ${i + 1} 點：前 2 km 配速守在 7:20 以上，心拍別超過 150，${i === 22 ? "**這一點的粗體沒有結尾，" : ""}再放慢。`)].join("\n").slice(0, 2000);
+// replies to what the runner types in the mock
+const MD_REPLY_WHY = MD_EXPLAIN;
+const MD_REPLY_SHORT = "明天 11/1 週日是長跑 18 km：前 14 km 7:20〜7:40，最後 4 km 6:45。";
+const MD_REPLY_SYNTAX = "這裡只能用段落和清單，標題、表格、連結和圖片都排不出來，我直接用文字講。你想看哪一週的課表，告訴我日期，我一堂一堂列給你。";
 function weeklyData(): ApiWeeklyReview[] {
   if (weekly) return weekly;
   const d = data();
@@ -493,7 +503,8 @@ function weeklyData(): ApiWeeklyReview[] {
   weekly = [{
     id: WEEK2_ID,
     week_start: "2026-10-12",
-    summary: "（示範）第 2 週完成 3/4，Easy 心拍守得比第 1 週好（150→140）。10/14 MP 段配速到位但第 5 km 心拍 166 超過上限，體感也說第三公里開始腿重。長跑前一天排 Hyrox，建議把長跑目標心拍再壓低一點。",
+    // markdown (coach-format 3.6, T16 shape: conclusion, a 3-item list, a closing paragraph with one bold); week 3 below stays plain text on purpose
+    summary: "（示範）第 2 週完成 3/4。\n\n- Easy 心拍守得比第 1 週好（150→140）\n- 10/14 MP 段配速到位，但第 5 km 心拍 166 超過上限\n- 體感也說第三公里開始腿重\n\n長跑前一天排 Hyrox，建議把**長跑目標心拍**再壓低一點。",
     model: null,
     adjustments: ([
       long ? { index: 0, session_id: long.id, field: "note" as const, old: long.note, new: "前日 Hyrox。心拍 ≤150 為最高優先，配速掉到 8:00 也可；超過 155 就走 1 分鐘。", reason: "10/14 MP 段心拍已衝到 166，長跑前一天又是 Hyrox，疲勞疊加時心拍容易失控。", status: "pending" as const, decided_at: null, applied_session_id: null } : null,
@@ -879,6 +890,11 @@ function threadData(): ApiCoachMessage[] {
     { id: "c2", role: "coach", kind: "review", text: "心拍整段壓在 140，是四次 Easy 裡最穩的一次。第 1 km 6:35 偏快是錶的心拍延遲，不是真的用力；第 6 km 8:01 是坡後自然放慢，正常。", activity_id: "a-2026-10-13", weekly_review_id: null, status: "sent", review: { label: "Easy 6 km", verdict: "達成", reminder: "第 1 km 前 3 分鐘用呼吸不用錶", date: "2026-10-13" }, quote: null, error: null, created_at: at("2026-10-12T22:52:00Z") },
     { id: "c3", role: "athlete", kind: "chat", text: "第一公里又衝太快了，有什麼辦法壓住？", activity_id: "a-2026-10-13", weekly_review_id: null, status: "sent", review: null, quote: "10/13 Easy 6.01 km · 7:25/km · 心拍 140（最高 148） · 達成", error: null, created_at: at("2026-10-12T23:10:00Z") },
     { id: "c4", role: "coach", kind: "chat", text: "這是連續第二次了。前 3 分鐘不要看錶，用鼻子呼吸能撐住的速度就是對的；第 1 km 跑到 7:30 以上才算成功。明天 MP 課的前 2 km Easy 也照這個來。", activity_id: null, weekly_review_id: null, status: "sent", review: null, quote: null, error: null, created_at: at("2026-10-12T23:10:20Z") },
+    // coach-format samples (md.ts): an explanation with a list and bold (T4+T6), syntax that is not rendered (T7), an old plain text with a single line break (T2), and a long one (T12)
+    { ...BLANK, id: "c-md-1", role: "coach", kind: "chat", text: MD_EXPLAIN, created_at: at("2026-10-12T23:11:00Z") },
+    { ...BLANK, id: "c-md-2", role: "coach", kind: "chat", text: MD_NOT_RENDERED, created_at: at("2026-10-12T23:12:00Z") },
+    { ...BLANK, id: "c-md-3", role: "coach", kind: "chat", text: "這是連續第二次了。\n前 3 分鐘不要看錶，跟著呼吸跑。", created_at: at("2026-10-12T23:13:00Z") },
+    { ...BLANK, id: "c-md-4", role: "coach", kind: "chat", text: MD_LONG, created_at: at("2026-10-12T23:14:00Z") },
     // Yesterday: a multi-week card already applied (and Woo's confirmation), and one that went stale (409).
     { ...BLANK, id: "c-rp-b1", role: "athlete", kind: "chat", text: "小腿還痠，11/8 的長跑想退一點", created_at: yAt("21:00") },
     { ...BLANK, id: "c-rp-b2", role: "coach", kind: "chat", text: "22 km 退到 20 km，最後 5 km 照測關卡 1。11/6 和 11/10 各少 1 km，讓腿先恢復；第 5 週的描述跟著改。整張一起看：", proposal: proposals.find((x) => x.id === "p-applied") ?? null, created_at: yAt("21:01") },
@@ -1246,7 +1262,12 @@ export function mockPostCoachMessage(body: PostCoachMessageRequest): PostCoachMe
   // preparing → thinking → searching → writing, then the reply (10 s: each stage outlasts the 2 s poll, so every one can be seen)
   walkStages(m, [["preparing", 0], ["thinking", 2500], ["searching", 5000], ["writing", 7500]], 10000, () => {
     const offTopic = /吃|電影|天氣|股票|工作/.test(body.text) && !/跑|課表|心拍|配速|腿/.test(body.text);
-    t.push({ ...BLANK, id: `c${t.length + 1}`, role: "coach", kind: "chat", text: offTopic ? "這個不歸我管，我們回到課表。週五恢復跑完記得寫一下腿的感覺。" : "（示範）收到。以你最近 14 天的心拍來看，這個問題先用降速處理，不要先想拿掉課。週五恢復跑完再跟我說腿的狀況。", created_at: new Date().toISOString() });
+    const reply = offTopic ? "這個不歸我管，我們回到課表。週五恢復跑完記得寫一下腿的感覺。"
+      : /為何|為什麼/.test(body.text) ? MD_REPLY_WHY // explanation: paragraphs, a list, bold
+      : /標題|連結|圖片|表格/.test(body.text) ? MD_REPLY_SYNTAX // asked for what the app cannot show: a short answer with none of that syntax
+      : /幾公里/.test(body.text) ? MD_REPLY_SHORT // simple question: one short paragraph
+      : "（示範）收到。以你最近 14 天的心拍來看，這個問題先用降速處理，不要先想拿掉課。週五恢復跑完再跟我說腿的狀況。";
+    t.push({ ...BLANK, id: `c${t.length + 1}`, role: "coach", kind: "chat", text: reply, created_at: new Date().toISOString() });
     m.status = "sent";
   });
   return { message: { ...m } };
