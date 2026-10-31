@@ -6,6 +6,7 @@ import { periodLabel } from "../lib/constraints";
 import { md, mdDow } from "../lib/date";
 import { kmPlan, pace } from "../lib/format";
 import { rowName, shortName, typeName } from "../lib/labels";
+import { MdText } from "./md-text";
 import { Avatar } from "./ui";
 
 const FIELD_NAMES: Record<ProposalField, string> = {
@@ -68,7 +69,7 @@ export function CoachProposals({ review, sessions, onChanged, embedded }: { revi
         </div>
       )}
       {!embedded && review.summary ? (
-        <p className={`summary${open ? "" : " clamp"}`} onClick={() => setOpen((v) => !v)}>{review.summary}</p>
+        <MdText text={review.summary} className={`summary${open ? "" : " clamp"}`} onClick={() => setOpen((v) => !v)} />
       ) : null}
       {shown.map((a) => {
         const status = state[a.index] ?? a.status;
