@@ -241,6 +241,21 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
     return () => ro.disconnect();
   }, []);
 
+  // The composer sits right on top of the tab bar, so it follows the bar's measured height
+  // (--tabbar-h on <html>) rather than a hard-coded 66px. Suspected cause of the gap seen on iOS Safari
+  // (not reproduced on desktop): the bar's height follows env(safe-area-inset-bottom) as the browser
+  // toolbar collapses, and a fixed number can drift from it.
+  useLayoutEffect(() => {
+    const el = document.querySelector<HTMLElement>(".tabbar");
+    if (!el) return;
+    const root = document.documentElement;
+    const measure = () => root.style.setProperty("--tabbar-h", `${el.getBoundingClientRect().height}px`);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => { ro.disconnect(); root.style.removeProperty("--tabbar-h"); };
+  }, []);
+
   // To the bottom when the newest message changes, the wait row comes or goes, or the composer grows.
   // Not when older messages are prepended (the newest id stays) and not when a stage text changes.
   const newestId = messages[messages.length - 1]?.id;
