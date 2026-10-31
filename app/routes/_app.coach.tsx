@@ -242,8 +242,9 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
   }, []);
 
   // The composer sits right on top of the tab bar, so it follows the bar's measured height
-  // (--tabbar-h on <html>) rather than a hard-coded 66px: on iOS Safari the bar's height moves with
-  // env(safe-area-inset-bottom) as the browser toolbar collapses, and a fixed number leaves a gap.
+  // (--tabbar-h on <html>) rather than a hard-coded 66px. Suspected cause of the gap seen on iOS Safari
+  // (not reproduced on desktop): the bar's height follows env(safe-area-inset-bottom) as the browser
+  // toolbar collapses, and a fixed number can drift from it.
   useLayoutEffect(() => {
     const el = document.querySelector<HTMLElement>(".tabbar");
     if (!el) return;
