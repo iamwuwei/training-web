@@ -409,6 +409,18 @@ ul { padding: 0; list-style: none; }
 .msg.coach .head { display: flex; align-items: baseline; gap: 8px; margin-top: 2px; }
 .msg.coach .head b { font-size: 16px; }
 .msg.coach .text { margin: 4px 0 0; font-size: 15px; line-height: 1.6; white-space: pre-wrap; }
+/* Woo's text as markdown (md.ts): paragraphs, - / 1. lists, bold. The global reset (h1, h2, h3, p, ul { margin: 0 } and
+   ul { padding: 0; list-style: none }) is undone here only; ol is not in the reset, so it is set here too. */
+.text.md { white-space: pre-wrap; overflow-wrap: anywhere; }
+.text.md > :is(p, ul, ol) { margin: 0; }
+.text.md > :is(p, ul, ol) + :is(p, ul, ol) { margin-top: 10px; }
+.text.md > :is(ul, ol) { padding-left: 20px; }
+.text.md > ul { list-style: disc; }
+.text.md > ol { list-style: decimal; }
+.text.md li { padding-left: 2px; }
+.text.md li + li { margin-top: 6px; }
+.text.md li::marker { color: var(--ink-3); }
+.text.md b { font-weight: 700; }
 .msg.coach .next { margin: 6px 0 0; font-size: 14px; color: var(--ink-2); }
 /* a weekly review's 補課 line: part of the review's content, after its text */
 .msg.coach .makeups { margin: 8px 0 0; font-size: 13px; line-height: 1.5; color: var(--ink-2); }

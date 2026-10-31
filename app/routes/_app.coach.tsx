@@ -8,6 +8,7 @@ import { ApiError, getActivities, getCoach, getWeekly, postCheckinPick, postChec
 import { hasSession } from "../lib/auth";
 import { md, mdDow, timeJst, toJstDate } from "../lib/date";
 import { km, pace } from "../lib/format";
+import { MdText } from "../components/md-text";
 import { WooStatus } from "../components/woo-status";
 import { useReviewPolling } from "../lib/use-review-polling";
 import { movedCountsIn, type PlanView } from "../lib/plan";
@@ -492,7 +493,7 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
             node = (
               <CoachMessage m={m} badge={wm?.updated ? "check" : null}>
                 {wm?.updated ? <div className="updated"><span aria-hidden="true">⟳</span> 已更新 · {wm.updated.reason}</div> : null}
-                <p className="text">{m.text}</p>
+                <MdText text={m.text} />
                 {wm?.makeups?.length ? <div className="makeups">{wm.makeups.map((x, i) => <div key={i}>這週有補課：{md(x.from)} 的 {x.label} 補到 {md(x.to)}（{x.done ? "已完成" : "待跑"}）</div>)}</div> : null}
                 {wm?.asks.map((ask) => <WeeklyAskBlock key={ask.session_id} ask={ask} busy={busy} madeUp={madeUpText(ask, view)} rerun={rewriting && ask.state === "skipped" ? (timedOut ? "gave-up" : "pending") : null} stage={m.stage} onAnswer={(answer) => void answerWeeklyAsk(m, ask, answer)} />)}
                 {w ? <CoachProposals review={w} sessions={sessions} embedded onChanged={() => void revalidator.revalidate()} /> : null}
@@ -504,7 +505,7 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
           } else if (m.kind === "ask" && m.ask?.kind === "mismatch") {
             node = (
               <CoachMessage m={m}>
-                <p className="text">{m.text}</p>
+                <MdText text={m.text} />
                 {m.ask.state === "open" ? (
                   <div className="chips-row" role="group" aria-label="是不是這趟">
                     <button type="button" className="chip" disabled={busy} onClick={() => void confirmMatch(m, true)}>是，就是這趟</button>
@@ -521,8 +522,8 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
             const stale = members.some((x) => x.proposal && statusOf(x.proposal) === "stale");
             node = (
               <CoachMessage m={m} badge={stale ? "warn" : null}>
-                {m.text ? <p className="text">{m.text}</p> : null}
-                {members.slice(1).filter((x) => x.text && x.text !== m.text).map((x) => <p key={x.id} className="text">{x.text}</p>)}
+                <MdText text={m.text} />
+                {members.slice(1).filter((x) => x.text && x.text !== m.text).map((x) => <MdText key={x.id} text={x.text} />)}
                 {cards(members)}
                 {m.proposal_rejected ? <Rejected /> : null}
               </CoachMessage>
@@ -533,7 +534,7 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
               <CoachMessage m={m} badge={verdictBadge(m.review?.verdict)}>
                 <div className="head"><b>{m.review?.label}</b><VerdictTag verdict={m.review?.verdict} /></div>
                 {first ? <div className="celebrate"><div className="k">第一次</div><div className="v"><span className="num">{first}</span><span>km 長跑</span></div></div> : null}
-                <p className="text">{m.text}</p>
+                <MdText text={m.text} />
                 {m.review?.reminder ? <p className="next">→ {m.review.reminder}</p> : null}
                 {m.activity_id ? <Link to={`/activities/${m.activity_id}`} className="chip" style={{ marginTop: 8 }}>看報告</Link> : null}
               </CoachMessage>
@@ -541,7 +542,7 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
           } else if (m.kind === "checkin") {
             node = (
               <CoachMessage m={m}>
-                <p className="text">{m.text}</p>
+                <MdText text={m.text} />
                 <CheckinChips m={m} busy={busy} onPick={(body) => void pick(m.id, body)} />
                 {i === lastCheckinIdx && m.checkin?.state === "dismissed" ? <button type="button" className="relink" onClick={() => void reset()} disabled={busy}>重新選 ›</button> : null}
               </CoachMessage>
@@ -549,7 +550,7 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
           } else {
             // Woo's line written as a card was applied (within a few seconds of it) is his confirmation: the avatar gets the check.
             const confirms = m.kind === "chat" && appliedAt.some((t) => Math.abs(t - Date.parse(m.created_at)) < 5000);
-            node = <CoachMessage m={m} badge={confirms ? "check" : null}><p className="text">{m.text}</p>{m.proposal_rejected ? <Rejected /> : null}</CoachMessage>;
+            node = <CoachMessage m={m} badge={confirms ? "check" : null}><MdText text={m.text} />{m.proposal_rejected ? <Rejected /> : null}</CoachMessage>;
           }
           return <Fragment key={m.id}>{rule}{node}</Fragment>;
         })}
