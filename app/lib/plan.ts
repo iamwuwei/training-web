@@ -2,6 +2,7 @@
 // "跳過" is not an API state: a past, non-rest session with no matched activity.
 
 import type { ApiActivity, ApiRoutine, ApiSession, ApiWeek, PlanResponse, Verdict } from "../types/api";
+import { combine, groupBySession, type Combined } from "./combine";
 import { dayDiff, md, toJstDate } from "./date";
 import { isStrengthDay, rowName } from "./labels";
 
@@ -9,7 +10,12 @@ export type DayStatus = "done" | "today" | "upcoming" | "skipped" | "rest" | "mo
 
 export interface Day {
   session: ApiSession;
+  /** The session's primary activity (the first of its recordings): the one the report, the review and the memo hang on. */
   activity: ApiActivity | null;
+  /** Every recording bound to the session (not ignored), oldest start first; `activity` is the first. Empty when none. */
+  activities: ApiActivity[];
+  /** The recordings added up (a single recording: its own numbers); null when none. */
+  combined: Combined | null;
   status: DayStatus;
   /** API verdict, or '跳過' derived, or null. */
   verdict: Verdict | "跳過" | null;
@@ -77,11 +83,12 @@ function withCounts(data: PlanResponse): PlanResponse {
 
 export function buildPlanView(raw: PlanResponse, today: string): PlanView {
   const data = withCounts(raw);
-  const bySession = new Map<string, ApiActivity>();
-  for (const a of data.activities) if (a.session_id) bySession.set(a.session_id, a);
+  const bySession = groupBySession(data.activities);
 
   const days: Day[] = data.sessions.map((session) => {
-    const activity = bySession.get(session.id) ?? null;
+    const activities = bySession.get(session.id) ?? [];
+    const combined = activities.length ? combine(activities) : null;
+    const activity = combined?.primary ?? null;
     const isRest = session.type === "rest";
     let status: DayStatus;
     if (session.moved_to_date) status = "moved"; // 補課: the day it was moved away from — not skipped, not rest
@@ -91,7 +98,7 @@ export function buildPlanView(raw: PlanResponse, today: string): PlanView {
     else if (session.scheduled_date < today) status = "skipped";
     else status = "upcoming";
     const verdict: Day["verdict"] = activity ? activity.review?.verdict ?? null : status === "skipped" ? "跳過" : null;
-    return { session, activity, status, verdict };
+    return { session, activity, activities, combined, status, verdict };
   });
 
   // 已改期 rows sort last and a Map keeps the last entry per key, so an 已改期 row would win over a live row on the same date. That does not happen: its date is in the past and nothing new lands on a past date.
@@ -103,7 +110,7 @@ export function buildPlanView(raw: PlanResponse, today: string): PlanView {
     // km, 堂數 and completion follow `counts_in_week_no`; the rows shown follow the calendar
     const counted = days.filter((d) => d.session.counts_in_week_no === w.week_no);
     const plan_m = counted.reduce((s, d) => s + (d.session.target_distance_m ?? 0), 0);
-    const actual_m = counted.reduce((s, d) => s + (d.activity?.distance_m ?? 0), 0);
+    const actual_m = counted.reduce((s, d) => s + (d.combined?.distance_m ?? 0), 0);
     const long_m = Math.max(0, ...counted.map((d) => d.session.target_distance_m ?? 0));
     return {
       ...w,
@@ -162,12 +169,12 @@ export function activityDate(a: ApiActivity): string {
 }
 
 /** Is the heart rate over the session's ceiling? Colours the number red. */
-export function hrOver(a: ApiActivity, s: ApiSession | null): boolean {
+export function hrOver(a: Pick<ApiActivity, "avg_hr">, s: ApiSession | null): boolean {
   return a.avg_hr != null && s?.target_hr_max != null && a.avg_hr > s.target_hr_max;
 }
 
 /** Is the pace faster than the fastest allowed? */
-export function paceFast(a: ApiActivity, s: ApiSession | null): boolean {
+export function paceFast(a: Pick<ApiActivity, "avg_pace_sec_km">, s: ApiSession | null): boolean {
   return a.avg_pace_sec_km != null && s?.target_pace_min_sec_km != null && a.avg_pace_sec_km < s.target_pace_min_sec_km;
 }
 
