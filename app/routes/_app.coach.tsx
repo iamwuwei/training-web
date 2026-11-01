@@ -6,6 +6,7 @@ import { CoachProposals, ConstraintCard, ProposalCard } from "../components/prop
 import { CoachAvatar, VerdictTag, verdictBadge } from "../components/ui";
 import { ApiError, getActivities, getCoach, getWeekly, postCheckinPick, postCheckinReset, postCoachMessage, postWeeklyAsk, putCoachSeen } from "../lib/api";
 import { hasSession } from "../lib/auth";
+import { assignErrorText, groupBySession, inOtherMultiSession } from "../lib/combine";
 import { md, mdDow, timeJst, toJstDate } from "../lib/date";
 import { km, pace } from "../lib/format";
 import { MdText } from "../components/md-text";
@@ -91,7 +92,7 @@ function AthleteMessage({ m, onRetry, onReset, busy }: { m: ApiCoachMessage; onR
     <div className="msg me">
       <div className={`bubble${m.kind === "pick" ? " pick" : ""}`}>
         {m.quote ? <div className="quote">{m.quote}</div> : null}
-        {m.kind === "pick" && m.text !== "都不是" ? <i className="strava-dot" aria-hidden="true" /> : null}
+        {m.kind === "pick" && m.text !== "都不是" && m.text !== "不是，另外算" ? <i className="strava-dot" aria-hidden="true" /> : null}
         {m.text}
         {m.rpe ? <span className="rpe-tag">RPE {m.rpe}</span> : null}
       </div>
@@ -104,9 +105,22 @@ function AthleteMessage({ m, onRetry, onReset, busy }: { m: ApiCoachMessage; onR
 }
 
 /** Woo's "which activity was today's session?" with the candidates as a scrolling chip row. */
-function CheckinChips({ m, busy, onPick }: { m: ApiCoachMessage; busy: boolean; onPick: (body: { activity_id?: string; session_id?: string; none?: boolean }) => void }) {
+function CheckinChips({ m, busy, elsewhere, onPick }: { m: ApiCoachMessage; busy: boolean; /** append: the candidate sits in another session that has several recordings (not offered). */ elsewhere?: (activityId: string) => boolean; onPick: (body: { activity_id?: string; session_id?: string; none?: boolean }) => void }) {
   const c = m.checkin;
   if (!c || c.state !== "open") return null;
+  // append: today's session already has a recording and another arrived. Two answers, stacked and flush with the avatar (a label is wider than the text column); no guess to mark.
+  if (c.mode === "append") {
+    return (
+      <div className="chips-stack" role="group" aria-label="是不是同一堂">
+        {c.candidates.filter((cand) => !(cand.activity_id && elsewhere?.(cand.activity_id))).map((cand, i) => (
+          <button key={cand.activity_id ?? i} type="button" className="chip tall primary" disabled={busy} onClick={() => onPick({ activity_id: cand.activity_id })}>
+            <i className="strava-dot" aria-hidden="true" /><span className="lbl">{cand.label}</span>
+          </button>
+        ))}
+        <button type="button" className="chip tall muted" disabled={busy} onClick={() => onPick({ none: true })}><span className="lbl">不是，另外算</span></button>
+      </div>
+    );
+  }
   return (
     <div className="chips-scroll" role="group" aria-label="選擇">
       {c.candidates.map((cand, i) => (
@@ -377,7 +391,13 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
       await revalidator.revalidate();
       restart();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "送出失敗，再試一次");
+      // a refused append (overlap, a different kind of activity, a full session ...) says why in fixed words, as on the report page
+      if (e instanceof ApiError && e.status === 409) {
+        const picked = body.activity_id && view ? [...view.data.activities, ...view.data.unassigned].find((x) => x.id === body.activity_id) ?? null : null;
+        const sessionId = messages.find((x) => x.id === checkinId)?.checkin?.session_id;
+        setError(assignErrorText(e, picked, (sessionId && view ? groupBySession(view.data.activities).get(sessionId) : null) ?? [], "coach"));
+        void revalidator.revalidate(); // the session changed under us: fetch it again
+      } else setError(e instanceof ApiError ? e.message : "送出失敗，再試一次");
     } finally {
       setBusy(false);
     }
@@ -455,6 +475,7 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
   }
 
   // A long run farther than any run before it is worth a line of its own.
+  const allActs = view ? [...view.data.activities, ...view.data.unassigned] : [];
   const allRuns = (view ? [...view.data.activities, ...view.data.unassigned] : []).filter((a) => !a.sport_type || ["Run", "TrailRun", "VirtualRun"].includes(a.sport_type));
   function firstTime(activityId: string | null): number | null {
     if (!activityId) return null;
@@ -543,7 +564,7 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
             node = (
               <CoachMessage m={m}>
                 <MdText text={m.text} />
-                <CheckinChips m={m} busy={busy} onPick={(body) => void pick(m.id, body)} />
+                <CheckinChips m={m} busy={busy} elsewhere={(id) => { const x = allActs.find((a) => a.id === id); return !!x && inOtherMultiSession(x, m.checkin?.session_id ?? null); }} onPick={(body) => void pick(m.id, body)} />
                 {i === lastCheckinIdx && m.checkin?.state === "dismissed" ? <button type="button" className="relink" onClick={() => void reset()} disabled={busy}>重新選 ›</button> : null}
               </CoachMessage>
             );

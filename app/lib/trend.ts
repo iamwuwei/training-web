@@ -3,19 +3,21 @@
 // Pace is seconds per km: smaller is faster, a negative delta is good news.
 
 import type { ApiActivity, ApiSession } from "../types/api";
+import { combine, groupBySession, type Combined } from "./combine";
 import { dayDiff } from "./date";
 import { labelStyle } from "./labels";
 import { activityDate, isRunSport, type PlanView } from "./plan";
 import { comparablePace, focusStats, fullSplits, planFor, sessionBand, type Band } from "./segments";
 
 export interface TrendPoint {
+  /** The session's primary activity (its date and id); a session with several recordings is one point, its numbers the recordings added up. */
   a: ApiActivity;
   /** Pace (sec/km) or, for the long-run series, distance in metres. */
   v: number;
 }
 
 /** Pace of the km splits run inside the session's HR band (aerobic efficiency); null without enough of them. */
-export function paceInBand(a: ApiActivity, lo: number, hi: number): number | null {
+export function paceInBand(a: Pick<ApiActivity, "splits">, lo: number, hi: number): number | null {
   const inBand = fullSplits(a.splits).filter((sp) => sp.average_heartrate != null && sp.average_heartrate >= lo && sp.average_heartrate <= hi && sp.distance > 500);
   if (inBand.length < 2) return null;
   const dist = inBand.reduce((n, sp) => n + sp.distance, 0);
@@ -24,7 +26,7 @@ export function paceInBand(a: ApiActivity, lo: number, hi: number): number | nul
 }
 
 /** The in-band pace of one run, falling back to the whole-run average only when the average HR itself sat in the band. */
-function aerobicPace(a: ApiActivity, lo: number, hi: number): number | null {
+function aerobicPace(a: Pick<ApiActivity, "splits" | "avg_hr" | "avg_pace_sec_km">, lo: number, hi: number): number | null {
   return paceInBand(a, lo, hi) ?? (a.avg_hr != null && a.avg_hr >= lo && a.avg_hr <= hi ? a.avg_pace_sec_km : null);
 }
 
@@ -39,12 +41,13 @@ export function kindSeries(session: ApiSession, all: ApiActivity[], sessions: Ap
   const kind = labelStyle(session);
   const aerobic = kind.kind === "easy" && session.target_hr_min != null && session.target_hr_max != null;
   const lo = session.target_hr_min ?? 0, hi = session.target_hr_max ?? 0;
-  const points = all
-    .map((a) => {
-      const s = sessions.find((x) => x.id === a.session_id) ?? null;
+  const points = [...groupBySession(all)]
+    .map(([sessionId, group]) => {
+      const s = sessions.find((x) => x.id === sessionId) ?? null;
       if (!s || labelStyle(s).name !== kind.name) return null;
-      const v = aerobic ? aerobicPace(a, lo, hi) : comparablePace(a, s)?.pace ?? null;
-      return v ? { a, v } : null;
+      const c = combine(group);
+      const v = aerobic ? aerobicPace(c, lo, hi) : comparablePace(c, s)?.pace ?? null;
+      return v ? { a: c.primary, v } : null;
     })
     .filter((x): x is TrendPoint => !!x)
     .sort(byTime);
@@ -73,21 +76,24 @@ export interface AerobicTrend {
   latest: TrendPoint | null;
 }
 
-/** Assigned runs up to today, with their session; the dashboard never looks past today. */
-function runsToDate(view: PlanView): { a: ApiActivity; s: ApiSession }[] {
+/** Assigned runs up to today, one per session (its primary activity, `c` the recordings added up) with the session; the dashboard never looks past today. */
+function runsToDate(view: PlanView): { a: ApiActivity; s: ApiSession; c: Combined }[] {
   const byId = new Map(view.data.sessions.map((s) => [s.id, s]));
-  return view.data.activities
-    .filter((a) => isRunSport(a.sport_type) && activityDate(a) <= view.today)
-    .map((a) => ({ a, s: a.session_id ? byId.get(a.session_id) ?? null : null }))
-    .filter((x): x is { a: ApiActivity; s: ApiSession } => !!x.s);
+  const out: { a: ApiActivity; s: ApiSession; c: Combined }[] = [];
+  for (const [sessionId, group] of groupBySession(view.data.activities)) {
+    const s = byId.get(sessionId);
+    const c = combine(group);
+    if (s && isRunSport(c.primary.sport_type) && activityDate(c.primary) <= view.today) out.push({ a: c.primary, s, c });
+  }
+  return out;
 }
 
 /** Easy / Recovery runs: pace while the heart rate sat in the session's band, against ~4 weeks ago (or the first one). */
 export function aerobicTrend(view: PlanView): AerobicTrend {
   const runs = runsToDate(view).filter(({ s }) => isAerobic(s));
   const series = runs
-    .map(({ a, s }) => {
-      const v = aerobicPace(a, s.target_hr_min as number, s.target_hr_max as number);
+    .map(({ a, s, c }) => {
+      const v = aerobicPace(c, s.target_hr_min as number, s.target_hr_max as number);
       return v ? { a, v } : null;
     })
     .filter((x): x is TrendPoint => !!x)
@@ -117,7 +123,7 @@ export interface LongTrend {
 export function longTrend(view: PlanView): LongTrend {
   const series = runsToDate(view)
     .filter(({ s }) => /Long/.test(labelStyle(s).name))
-    .map(({ a }) => ({ a, v: a.distance_m }))
+    .map(({ a, c }) => ({ a, v: c.distance_m }))
     .filter((p) => p.v > 0)
     .sort(byTime);
   if (!series.length) return { points: [], max_m: null, remain_m: null };
@@ -141,17 +147,17 @@ export interface MpTrend {
 export function mpTrend(view: PlanView): MpTrend {
   const runs = runsToDate(view).filter(({ s }) => labelStyle(s).name === "MP");
   const series = runs
-    .map(({ a, s }) => {
-      const v = comparablePace(a, s)?.pace ?? null;
+    .map(({ a, s, c }) => {
+      const v = comparablePace(c, s)?.pace ?? null;
       return v ? { a, v } : null;
     })
     .filter((x): x is TrendPoint => !!x)
     .sort(byTime);
   const latest = series[series.length - 1] ?? null;
   if (!latest) return { points: [], latest: null, hrTop: null, band: null, off: null };
-  const s = runs.find((r) => r.a.id === latest.a.id)!.s;
+  const { s, c } = runs.find((r) => r.a.id === latest.a.id)!;
   const band = sessionBand(s);
-  const hrTop = focusStats(planFor(s), latest.a.splits)?.hrTop ?? latest.a.max_hr ?? null;
+  const hrTop = focusStats(planFor(s), c.splits)?.hrTop ?? c.max_hr ?? null;
   const off = band ? (latest.v > band.hi ? latest.v - band.hi : latest.v < band.lo ? latest.v - band.lo : 0) : null;
   return { points: series.slice(-MAX_POINTS), latest, hrTop, band, off };
 }

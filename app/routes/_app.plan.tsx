@@ -75,12 +75,13 @@ function DayRow({ day, view, weekNo, isToday, onOpen, routine, was, preview }: {
   if (status === "moved") {
     right = <span className="grey">已改期</span>;
     dot = "moved";
-  } else if (a) {
-    const run = isRunSport(a.sport_type);
+  } else if (a && day.combined) {
+    const c = day.combined;
+    const run = isRunSport(c.sport_type);
     right = (
       <>
-        {run || a.distance_m > 0 ? <><b className="num">{km(a.distance_m)}</b> km</> : <b className="num">{duration(a.moving_time_sec)}</b>}
-        {run && a.avg_pace_sec_km ? <> · <b className="num">{pace(a.avg_pace_sec_km)}</b></> : a.avg_hr != null ? <> · <b className="num">{a.avg_hr}</b> bpm</> : null}
+        {run || c.distance_m > 0 ? <><b className="num">{km(c.distance_m)}</b> km</> : <b className="num">{duration(c.moving_time_sec)}</b>}
+        {run && c.avg_pace_sec_km ? <> · <b className="num">{pace(c.avg_pace_sec_km)}</b></> : c.avg_hr != null ? <> · <b className="num">{c.avg_hr}</b> bpm</> : null}
       </>
     );
     dot = verdictKind(a.review?.verdict) ?? "none";
@@ -97,9 +98,11 @@ function DayRow({ day, view, weekNo, isToday, onOpen, routine, was, preview }: {
   // 補課 rows: the second line is the row's identity ('補 10/27 的課'), kept after the run; 算第 N 週 only when it counts in another week than the one it sits in
   const countsIn = status === "moved" ? movedCountsIn(view, s) : s.counts_in_week_no;
   const other = countsIn != null && countsIn !== weekNo ? ` · 算第 ${countsIn} 週` : "";
-  const sub = status === "moved" && s.moved_to_date ? `補到 ${mdDow(s.moved_to_date)}${other}`
+  const own = status === "moved" && s.moved_to_date ? `補到 ${mdDow(s.moved_to_date)}${other}`
     : s.moved_from_date ? `補 ${md(s.moved_from_date)} 的課${other}`
     : !a && !rest && status !== "skipped" ? s.brief ?? firstSentence(s.note) : null;
+  // several recordings: 「2 筆紀錄」 closes the line (after the 補課 identity when the row has one)
+  const sub = day.combined && day.combined.count > 1 ? [own, `${day.combined.count} 筆紀錄`].filter(Boolean).join(" · ") : own;
   const inner = (
     <>
       <div className="d"><span className="dow">{DOW[date.getUTCDay()]}</span><span className="num dom">{date.getUTCDate()}</span></div>

@@ -677,16 +677,6 @@ main > .bar { height: 4px; margin: 6px 0 6px; }
 .extras .r { font-size: 13px; color: var(--ink-2); white-space: nowrap; }
 .extras .r .num { font-size: 17px; color: var(--ink); }
 
-/* ---- 換一個活動 sheet ---- */
-.swap-row { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: 12px; align-items: center; width: 100%; padding: 12px 0; border-bottom: 1px solid var(--line); text-align: left; border-radius: 0; }
-.swap-row .txt { display: flex; flex-direction: column; min-width: 0; }
-.swap-row .l1 { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; }
-.swap-row .l1 .strava-dot { margin-right: 0; }
-.swap-row .l1 .when { font-size: 13px; font-weight: 400; color: var(--ink-3); }
-.swap-row .l2 { display: flex; gap: 14px; margin-top: 4px; font-size: 12px; color: var(--ink-2); }
-.swap-row .l2 .num { font-size: 20px; color: var(--ink); }
-.swap-row:disabled { opacity: 0.6; }
-
 /* ---- today: rows that open the session sheet ---- */
 .today-open .open-plan { display: block; width: 100%; text-align: left; border-radius: 0; }
 button.next-row { width: 100%; text-align: left; border-radius: 0; }
@@ -884,3 +874,50 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 .details-sheet .ds-error + .ds-actions { margin-top: 10px; }
 /* room to scroll the last box above the keyboard while a box has focus (the form renders .ds-room then; see DetailsForm) */
 .details-sheet .sheet-body:has(.ds-room) { padding-bottom: calc(40vh + env(safe-area-inset-bottom)); }
+
+/* ---- 一堂多筆（multi-session-activities）: only drawn when a session has 2+ activities ---- */
+/* 報告頁「紀錄 · N 段」: between 目標 vs 實際 and 我的心得. One row per recording (36px), a 20px 隔 N 分 line between. */
+.segments { padding: 16px 0 10px; border-bottom: 1px solid var(--line); }
+.segments .head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+.segments .head .sub { font-size: 12px; color: var(--ink-3); white-space: nowrap; }
+.segments .row { display: grid; grid-template-columns: 14px 40px repeat(3, minmax(0, 1fr)); gap: 10px; align-items: center; height: 36px; }
+.segments .row .i { font-size: 12px; color: var(--ink-3); }
+.segments .row .t { font-size: 13px; color: var(--ink-2); }
+.segments .row .v { text-align: right; white-space: nowrap; font-size: 12px; color: var(--ink-2); }
+.segments .row .v .num { font-size: 17px; color: var(--ink); }
+.segments .gap { height: 20px; padding-left: 24px; font-size: 12px; line-height: 20px; color: var(--ink-3); }
+.segments .seg-memo { margin: -2px 0 8px 24px; font-size: 13px; line-height: 1.55; color: var(--ink-2); white-space: pre-wrap; overflow-wrap: anywhere; }
+.segments .seg-memo .k { color: var(--ink-3); }
+/* 判定：「達成（2 段）」 */
+.verdict-block h2 .segs { font-size: 13px; font-weight: 400; color: var(--ink-3); }
+/* 每公里：where the next recording starts */
+.dots .seg-break { display: flex; align-items: center; gap: 8px; height: 20px; font-size: 11px; color: var(--ink-3); }
+.dots .seg-break::after { content: ""; flex: 1 1 auto; height: 1px; background: var(--chip-line); }
+
+/* 報告頁「這堂的活動」sheet (replaces .swap-row's sheet): 這堂的紀錄 rows 70px, 前後一天的其他活動 rows 110px (a 409 line makes that one row taller) */
+.acts-sheet .group-h { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin: 12px 0 0; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+.acts-sheet .group-h h3 { margin: 0; font-size: 13px; font-weight: 700; color: var(--ink-2); letter-spacing: 0.04em; }
+.acts-sheet .group-h .sub { font-size: 12px; color: var(--ink-3); white-space: nowrap; }
+.acts-row { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: 8px 12px; align-items: center; min-height: 70px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.acts-row.other { grid-template-columns: 36px minmax(0, 1fr); min-height: 110px; }
+.acts-row .txt { display: flex; flex-direction: column; min-width: 0; }
+.acts-row .l1 { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; white-space: nowrap; }
+.acts-row .l1 .strava-dot { margin-right: 0; }
+.acts-row .l1 .when { font-size: 13px; font-weight: 400; color: var(--ink-3); }
+.acts-row .l1 .tag { padding: 0 5px; border: 1px solid var(--chip-line); border-radius: 4px; font-size: 11px; font-weight: 600; line-height: 16px; color: var(--ink-2); }
+.acts-row .l2 { display: flex; gap: 12px; margin-top: 4px; font-size: 12px; color: var(--ink-2); white-space: nowrap; overflow: hidden; }
+.acts-row .l2 .num { font-size: 17px; color: var(--ink); }
+.acts-row .acts { grid-column: 2 / -1; display: flex; gap: 8px; }
+.acts-sheet .group-err { margin: 8px 0 0; font-size: 12px; line-height: 1.45; color: var(--v-bad); }
+.acts-row .err { grid-column: 2 / -1; margin: 0; font-size: 12px; line-height: 1.45; color: var(--v-bad); }
+
+/* 今天頁：「Easy 8 km · 2 筆紀錄」, and a refused 也算今天的課 */
+.today-post .head .segs { font-size: 13px; color: var(--ink-3); }
+.extra-row .err { grid-column: 1 / -1; margin: -4px 0 0 52px; font-size: 12px; line-height: 1.45; color: var(--v-bad); }
+
+/* 教練頁 append check-in: the two answers stacked under the question, flush with the avatar like .proposal-card.multi
+   (a candidate label is ~310px: too long to share a row, and wider than the 298px text column) */
+.msg.coach .chips-stack { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin: 10px 0 0 -52px; }
+/* a label wider than the column wraps to a second line instead of being cut (390 px: 5 px over, 320 px: 75 px); one line that fits is the 40px chip it always was */
+.msg.coach .chips-stack .chip.tall { max-width: 100%; height: auto; min-height: 40px; padding-top: 6px; padding-bottom: 6px; white-space: normal; text-align: left; border-radius: 20px; }
+.msg.coach .chips-stack .chip.tall .lbl { min-width: 0; overflow-wrap: anywhere; }

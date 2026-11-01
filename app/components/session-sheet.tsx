@@ -1,5 +1,6 @@
 import { Link } from "react-router";
 import type { ApiActivity, ApiSession } from "../types/api";
+import { combine, groupBySession, type Combined } from "../lib/combine";
 import { md, mdDow } from "../lib/date";
 import { duration, int, km, pace } from "../lib/format";
 import { labelStyle, rowName, shortName } from "../lib/labels";
@@ -14,14 +15,14 @@ function easyTarget(view: PlanView): string | null {
   return t ? t.split("/")[0].trim() : null;
 }
 
-/** The newest reviewed run of the same type before this session. */
-export function lastOfKind(view: PlanView, session: ApiSession): { a: ApiActivity; s: ApiSession } | null {
+/** The newest run of the same type before this session: its primary activity, `c` the session's recordings added up. */
+export function lastOfKind(view: PlanView, session: ApiSession): { a: ApiActivity; s: ApiSession; c: Combined } | null {
   const name = labelStyle(session).name;
   const byId = new Map(view.data.sessions.map((s) => [s.id, s]));
-  const runs = view.data.activities
-    .filter((a) => a.session_id && a.session_id !== session.id && activityDate(a) < session.scheduled_date)
-    .map((a) => ({ a, s: byId.get(a.session_id!)! }))
-    .filter((x) => x.s && labelStyle(x.s).name === name)
+  const runs = [...groupBySession(view.data.activities)]
+    .map(([sessionId, group]) => ({ c: combine(group), s: byId.get(sessionId) }))
+    .filter((x) => x.s && x.s.id !== session.id && activityDate(x.c.primary) < session.scheduled_date && labelStyle(x.s).name === name)
+    .map((x) => ({ a: x.c.primary, s: x.s as ApiSession, c: x.c }))
     .sort((x, y) => y.a.start_time.localeCompare(x.a.start_time));
   return runs[0] ?? null;
 }
@@ -85,8 +86,8 @@ export function SessionSheet({ session, view, onClose, onOpen }: { session: ApiS
                 <span className="txt">
                   <span className="l1"><b>{mdDow(activityDate(last.a))}</b> <span>{shortName(last.s)}</span></span>
                   <span className="l2">
-                    {isRunSport(last.a.sport_type) ? <><b className="num">{km(last.a.distance_m)}</b> km <b className="num">{pace(last.a.avg_pace_sec_km)}</b> /km</> : <b className="num">{duration(last.a.moving_time_sec)}</b>}
-                    {last.a.avg_hr != null ? <> <b className="num">{int(last.a.avg_hr)}</b> bpm</> : null}
+                    {isRunSport(last.a.sport_type) ? <><b className="num">{km(last.c.distance_m)}</b> km <b className="num">{pace(last.c.avg_pace_sec_km)}</b> /km</> : <b className="num">{duration(last.c.moving_time_sec)}</b>}
+                    {last.c.avg_hr != null ? <> <b className="num">{int(last.c.avg_hr)}</b> bpm</> : null}
                   </span>
                 </span>
                 <VerdictTag verdict={last.a.review?.verdict} />
