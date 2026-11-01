@@ -17,7 +17,8 @@ import type { ActivitiesResponse, ApiActivity, ApiCoachMessage, ApiConstraint, A
   PutRoutineResponse,
   PutCoachSeenResponse, MatchStatus, MeResponse, PlanResponse, PostAdjustmentRequest, PostAdjustmentResponse, PutMemoRequest, PutMemoResponse, PutSessionRequest, PutSessionResponse, RereviewResponse, Verdict, WeeklyResponse } from "../types/api";
 import { ApiError } from "../lib/api";
-import { addDays, md, mdDow, todayJst } from "../lib/date";
+import { combine, groupBySession, MAX_PER_SESSION, overlaps } from "../lib/combine";
+import { addDays, md, mdDow, timeJst, todayJst, toJstDate } from "../lib/date";
 import { kmPlan, pace } from "../lib/format";
 import { shortName, typeLabel, typeName } from "../lib/labels";
 const MOCK_USER_ID = "7d1c3a0e-4f7b-4d2e-9c1a-5b8e2f6a1c01"; // ww in training-api seed
@@ -87,6 +88,17 @@ function seedDetails(a: ApiActivity, own: Partial<Detail3> = {}) {
 /** Mock-only switches for QA (set on window before the page needs them). */
 interface MockKnobs { __mockStage?: string | null; __mockNoReply?: boolean; __mockFailDetails?: boolean; __mockDetailsDelay?: number; __mockCoachPageSize?: number; __mockCoachDelay?: number; __mockOlderFail?: boolean; __mockNoCounts?: boolean }
 const knobs = () => globalThis as unknown as MockKnobs;
+
+/**
+ * multi-session-activities switches (`window.__mock = { … }`, set before the page loads, e.g. with addInitScript):
+ *   three         10/23 Easy is three recordings (off: no activity on that day, as before)
+ *   five          10/20 Easy is five recordings: the sheet's 加進這堂 is disabled
+ *   ignoreSegment an activity id (`a-2026-10-20-2`): that recording is ignored, the session shows one again
+ *   tooMany       every append answers 409 "too many …"
+ *   conflict      every append answers a 409 the page has no sentence for ("這堂的紀錄剛被改過")
+ */
+interface MultiSwitches { three?: boolean; five?: boolean; ignoreSegment?: string; tooMany?: boolean; conflict?: boolean }
+const multi = (): MultiSwitches => (globalThis as unknown as { __mock?: MultiSwitches }).__mock ?? {};
 
 const weekNoOn = (weeks: ApiWeek[], date: string) => weeks.find((w) => date >= w.week_start && date <= w.week_end)?.week_no ?? null;
 
@@ -195,19 +207,67 @@ function build(): PlanResponse {
         error: null,
         created_at: new Date(`${r.date}T12:00:00+09:00`).toISOString(),
       },
+      elapsed_time_sec: r.moving_time_sec + 60, // a minute of stops at the lights
+      segment: null,
     };
   });
 
   // Demo inbox: three things Strava "just synced" today, waiting for the athlete to pick a
   // session. The walk is there so the mismatch question can be tried (pick it as the run).
   const today = todayJst();
-  const base = { user_id: MOCK_USER_ID, description: null, memo: null, rpe: null, memo_updated_at: null, gear_name: null, weather: null, details: NO_DETAILS, details_updated_at: null, splits: null, session_id: null, match_status: "unplanned" as const, review: null };
+  const base = { user_id: MOCK_USER_ID, description: null, memo: null, rpe: null, memo_updated_at: null, gear_name: null, weather: null, details: NO_DETAILS, details_updated_at: null, splits: null, session_id: null, match_status: "unplanned" as const, review: null, elapsed_time_sec: null, segment: null };
   const unassigned: ApiActivity[] = [
-    { ...base, id: "u-run", strava_activity_id: "900001", sport_type: "Run", start_time: new Date(`${today}T06:40:00+09:00`).toISOString(), distance_m: 7000, moving_time_sec: 2998, avg_pace_sec_km: 428, avg_hr: 152, max_hr: 171, avg_watts: 168, kcal: 512, device_name: "Apple Watch Series 11", gear_name: "Adidas Adizero EVO SL",
+    { ...base, id: "u-run", strava_activity_id: "900001", sport_type: "Run", start_time: new Date(`${today}T06:40:00+09:00`).toISOString(), distance_m: 7000, moving_time_sec: 2998, elapsed_time_sec: 3100, avg_pace_sec_km: 428, avg_hr: 152, max_hr: 171, avg_watts: 168, kcal: 512, device_name: "Apple Watch Series 11", gear_name: "Adidas Adizero EVO SL",
       splits: demoSplits([[442, 138], [435, 142], [401, 158], [404, 161], [413, 166], [448, 152], [455, 148]]) },
-    { ...base, id: "u-walk", strava_activity_id: "900003", sport_type: "Walk", start_time: new Date(`${today}T17:30:00+09:00`).toISOString(), distance_m: 4900, moving_time_sec: 3840, avg_pace_sec_km: 784, avg_hr: 99, max_hr: 118, avg_watts: null, kcal: 290, device_name: "Apple Watch Series 11" },
-    { ...base, id: "u-hyrox", strava_activity_id: "900002", sport_type: "WeightTraining", start_time: new Date(`${today}T18:30:00+09:00`).toISOString(), distance_m: 0, moving_time_sec: 3480, avg_pace_sec_km: null, avg_hr: 152, max_hr: 171, avg_watts: null, kcal: 620, device_name: "Apple Watch Series 11" },
+    { ...base, id: "u-walk", strava_activity_id: "900003", sport_type: "Walk", start_time: new Date(`${today}T17:30:00+09:00`).toISOString(), distance_m: 4900, moving_time_sec: 3840, elapsed_time_sec: 3960, avg_pace_sec_km: 784, avg_hr: 99, max_hr: 118, avg_watts: null, kcal: 290, device_name: "Apple Watch Series 11" },
+    { ...base, id: "u-hyrox", strava_activity_id: "900002", sport_type: "WeightTraining", start_time: new Date(`${today}T18:30:00+09:00`).toISOString(), distance_m: 0, moving_time_sec: 3480, elapsed_time_sec: 3600, avg_pace_sec_km: null, avg_hr: 152, max_hr: 171, avg_watts: null, kcal: 620, device_name: "Apple Watch Series 11" },
+    // multi-session-activities: a second run the same morning (7:40, after u-run ended at 7:31: 也算今天的課), and one recorded twice
+    // (6:41, a phone running next to the watch: it overlaps u-run, so it is never offered as another recording of that session)
+    { ...base, id: "u-run2", strava_activity_id: "900004", sport_type: "Run", start_time: new Date(`${today}T07:40:00+09:00`).toISOString(), distance_m: 2100, moving_time_sec: 940, elapsed_time_sec: 960, avg_pace_sec_km: 448, avg_hr: 146, max_hr: 158, avg_watts: 160, kcal: 160, device_name: "Apple Watch Series 11", gear_name: "Adidas Adizero EVO SL",
+      splits: demoSplits([[452, 144], [444, 148]]) },
+    { ...base, id: "u-run-dup", strava_activity_id: "900005", sport_type: "Run", start_time: new Date(`${today}T06:41:00+09:00`).toISOString(), distance_m: 6900, moving_time_sec: 2985, elapsed_time_sec: 3080, avg_pace_sec_km: 433, avg_hr: null, max_hr: null, avg_watts: null, kcal: null, device_name: "iPhone 17" },
   ];
+
+  // multi-session-activities: 10/20 Easy 6 km was run as two recordings (the watch was stopped by mistake at 2.5 km and started again: 隔 12 分,
+  // counted from the first one's elapsed time; the moving time alone would say 14), and a few activities around that day to add, swap and be refused.
+  // The first recording carries the review and the memo; the second has its own note. `three` also makes 10/23 three recordings; `five` makes 10/20 five.
+  const at20 = (hm: string) => new Date(`2026-10-20T${hm}:00+09:00`).toISOString();
+  const at23 = (hm: string) => new Date(`2026-10-23T${hm}:00+09:00`).toISOString();
+  const runBase = { ...base, user_id: MOCK_USER_ID, sport_type: "Run", match_status: "confirmed" as const, device_name: "Apple Watch Series 11", gear_name: "Adidas Adizero EVO SL", avg_watts: null };
+  const multiRuns: ApiActivity[] = [
+    { ...runBase, id: "a-2026-10-20", strava_activity_id: "20261020", session_id: "s-2026-10-20", start_time: at20("07:00"), distance_m: 2500, moving_time_sec: 1075, elapsed_time_sec: 1200, avg_pace_sec_km: 430, avg_hr: 141, max_hr: 152, kcal: 190, weather: "晴 14℃",
+      memo: "前 2.5 km 手錶被誤觸關掉，停下來重新開了一筆。前半輕鬆，呼吸很穩。", rpe: 3, memo_updated_at: at20("12:00"),
+      splits: [...demoSplits([[432, 139], [428, 142]]), { split: 3, distance: 500, moving_time: 215, elapsed_time: 215, elevation_difference: 0, average_speed: 500 / 215, average_heartrate: 143 }],
+      review: { verdict: "達成", comment: "（示範）整堂 6.03 km、7:11，心拍 143 都在範圍內。中間手錶關掉重開不影響整體節奏，後半沒有掉速。", reminders: ["第 1 km 前 3 分鐘用呼吸不用錶"], source: "claude", model: null, adjust_hint: null, failed: false, error: null, created_at: at20("12:30") } },
+    { ...runBase, id: "a-2026-10-20-2", strava_activity_id: "20261020002", session_id: "s-2026-10-20", start_time: at20("07:32"), distance_m: 3530, moving_time_sec: 1524, elapsed_time_sec: 1580, avg_pace_sec_km: 432, avg_hr: 145, max_hr: 155, kcal: 270, weather: null,
+      memo: "後半腿比較沉，最後 1 km 有點喘。", rpe: 6, memo_updated_at: at20("12:05"),
+      splits: [...demoSplits([[434, 143], [431, 145], [430, 146]]), { split: 4, distance: 530, moving_time: 229, elapsed_time: 229, elevation_difference: 0, average_speed: 530 / 229, average_heartrate: 148 }] },
+  ];
+  if (multi().five) {
+    for (const [n, hm] of [[3, "08:10"], [4, "08:30"], [5, "08:50"]] as const) {
+      multiRuns.push({ ...runBase, id: `a-2026-10-20-${n}`, strava_activity_id: `20261020${String(n).padStart(3, "0")}`, session_id: "s-2026-10-20", start_time: at20(hm), distance_m: 1000, moving_time_sec: 430, elapsed_time_sec: 470, avg_pace_sec_km: 430, avg_hr: 144, max_hr: 150, kcal: 80, splits: demoSplits([[430, 144]]) });
+    }
+  }
+  if (multi().three) {
+    multiRuns.push(
+      { ...runBase, id: "a-2026-10-23", strava_activity_id: "20261023", session_id: "s-2026-10-23", start_time: at23("07:00"), distance_m: 2000, moving_time_sec: 860, elapsed_time_sec: 920, avg_pace_sec_km: 430, avg_hr: 140, max_hr: 149, kcal: 150, weather: "くもり 12℃",
+        memo: "前 2 km 熱身，手錶一直沒鎖定，乾脆停掉重開。", rpe: 3, memo_updated_at: at23("12:00"), splits: demoSplits([[432, 138], [428, 141]]),
+        review: { verdict: "達成", comment: "（示範）整堂 6.14 km、7:08，三段接起來節奏很一致。", reminders: ["前 2 km 的心拍留在 140 以下"], source: "claude", model: null, adjust_hint: null, failed: false, error: null, created_at: at23("12:30") } },
+      { ...runBase, id: "a-2026-10-23-2", strava_activity_id: "20261023002", session_id: "s-2026-10-23", start_time: at23("07:25"), distance_m: 2200, moving_time_sec: 940, elapsed_time_sec: 1000, avg_pace_sec_km: 427, avg_hr: 143, max_hr: 151, kcal: 165, splits: demoSplits([[429, 142], [425, 144]]) },
+      { ...runBase, id: "a-2026-10-23-3", strava_activity_id: "20261023003", session_id: "s-2026-10-23", start_time: at23("07:50"), distance_m: 1940, moving_time_sec: 828, elapsed_time_sec: 828, avg_pace_sec_km: 427, avg_hr: 144, max_hr: 152, kcal: 140, splits: demoSplits([[426, 144]]) },
+    );
+  }
+  for (const a of multiRuns) {
+    if (a.id === multi().ignoreSegment) { a.session_id = null; a.match_status = "ignored"; a.review = null; unassigned.push(a); } else activities.push(a);
+  }
+  activities.sort((x, y) => x.start_time.localeCompare(y.start_time));
+  // ... and the activities around 10/20 that nothing is assigned to
+  unassigned.push(
+    { ...base, id: "u-early", strava_activity_id: "900011", sport_type: "Run", start_time: at20("06:10"), distance_m: 1200, moving_time_sec: 560, elapsed_time_sec: 600, avg_pace_sec_km: 467, avg_hr: 128, max_hr: 139, avg_watts: null, kcal: 80, device_name: "Apple Watch Series 11" },
+    { ...base, id: "u-dup-1020", strava_activity_id: "900012", sport_type: "Run", start_time: at20("07:05"), distance_m: 2400, moving_time_sec: 1040, elapsed_time_sec: 1150, avg_pace_sec_km: 433, avg_hr: null, max_hr: null, avg_watts: null, kcal: null, device_name: "iPhone 17" },
+    { ...base, id: "u-walk-1020", strava_activity_id: "900013", sport_type: "Walk", start_time: at20("18:20"), distance_m: 3100, moving_time_sec: 2465, elapsed_time_sec: 2520, avg_pace_sec_km: 795, avg_hr: 98, max_hr: 116, avg_watts: null, kcal: 190, device_name: "Apple Watch Series 11" },
+    { ...base, id: "u-run-1019", strava_activity_id: "900014", sport_type: "Run", start_time: new Date("2026-10-19T19:05:00+09:00").toISOString(), distance_m: 4050, moving_time_sec: 1830, elapsed_time_sec: 1890, avg_pace_sec_km: 452, avg_hr: 139, max_hr: 150, avg_watts: null, kcal: 280, device_name: "Apple Watch Series 11" },
+  );
 
   // Test-only activities a few days back, `ignored` so no list shows them (open them by URL): a yoga
   // session with nothing but a time (every detail empty), and a run whose Strava names are very long.
@@ -303,6 +363,7 @@ const withoutMakeupFields = (sessions: ApiSession[]): ApiSession[] =>
   });
 
 export function mockPlan(): PlanResponse {
+  refreshSegments();
   const d = data();
   const t = threadData();
   const openAsk = [...t].reverse().find((m) => m.kind === "ask" && m.ask?.state === "open")?.ask ?? null;
@@ -334,6 +395,7 @@ export function mockPutMemo(activityId: string, body: PutMemoRequest): PutMemoRe
   a.memo = body.memo && body.memo.trim() ? body.memo.trim() : null;
   a.rpe = body.rpe ?? null;
   a.memo_updated_at = new Date().toISOString();
+  refreshSegments();
   return { activity: { ...a } };
 }
 
@@ -391,10 +453,92 @@ function relist(a: ApiActivity) {
   d.activities.sort((x, y) => x.start_time.localeCompare(y.start_time));
 }
 function unassign(a: ApiActivity, status: MatchStatus = "unplanned") {
+  const was = a.session_id;
   a.session_id = null;
   a.match_status = status;
   a.review = null;
   relist(a);
+  if (was) regroupMock(was);
+}
+
+// ---- several recordings in one session (multi-session-activities) ----
+// The api's rules, in memory: a session holds up to 5 activities (ignored ones left out), the earliest start is the primary one and
+// carries the review, adding / removing / swapping one drops the Claude review of the whole group and Woo judges it again.
+
+const km2 = (m: number) => (m / 1000).toFixed(2);
+const byStart = (x: ApiActivity, y: ApiActivity) => x.start_time.localeCompare(y.start_time) || x.id.localeCompare(y.id);
+const everyActivity = (): ApiActivity[] => [...new Map([...data().activities, ...data().unassigned].map((a) => [a.id, a])).values()];
+/** The session's activities that are not ignored, oldest start first; `exceptId` leaves one out. */
+const groupOfSession = (sessionId: string, exceptId?: string) => everyActivity().filter((a) => a.session_id === sessionId && a.match_status !== "ignored" && a.id !== exceptId).sort(byStart);
+
+/** The `segment` field of every activity, as the api computes it in ACTIVITY_SELECT. */
+function refreshSegments() {
+  const all = everyActivity();
+  const groups = groupBySession(all);
+  for (const a of all) {
+    const g = a.session_id && a.match_status !== "ignored" ? groups.get(a.session_id) : undefined;
+    a.segment = g ? { primary_activity_id: g[0].id, index: g.findIndex((x) => x.id === a.id) + 1, count: g.length } : null;
+  }
+}
+
+/** Drop the group's Claude review and have Woo judge it again in ~4 s (a manual review on the primary stays). The last change wins. */
+const regroupToken = new Map<string, number>();
+function regroupMock(sessionId: string) {
+  const group = groupOfSession(sessionId);
+  for (const g of group) if (g.review?.source === "claude") g.review = null;
+  const token = (regroupToken.get(sessionId) ?? 0) + 1;
+  regroupToken.set(sessionId, token);
+  if (!group.length || group[0].review) return;
+  setTimeout(() => {
+    if (regroupToken.get(sessionId) !== token) return;
+    const now = groupOfSession(sessionId);
+    if (!now.length || now[0].review) return;
+    judge(now[0], data().sessions.find((x) => x.id === sessionId) ?? null, now.length);
+    afterJudged();
+  }, 4000);
+}
+
+/** The three append paths (check-in chip, 也算今天的課, 這堂的活動 → 加進這堂) end the same way: Woo's fixed line, then the whole session is judged again. */
+function appendDone(sessionId: string) {
+  const group = groupOfSession(sessionId);
+  const t = threadData();
+  t.push({ ...BLANK, id: `c${t.length + 1}`, role: "coach", kind: "chat", text: `好，${group.length} 段一起算 ${km2(combine(group).distance_m)} km，我重新看一次。`, activity_id: group[0]?.id ?? null, created_at: new Date().toISOString() });
+  regroupMock(sessionId);
+}
+
+/** The api's refusals for adding `a` to a session that already has activities, in its order, with its English wording. */
+function checkAppend(a: ApiActivity, sessionId: string) {
+  const holders = groupOfSession(sessionId, a.id);
+  if (multi().conflict) throw new ApiError(409, "session changed, try again");
+  if (multi().tooMany || holders.length + 1 > MAX_PER_SESSION) throw new ApiError(409, `too many activities for one session (${MAX_PER_SESSION})`);
+  if (isRun(a) !== isRun(holders[0])) throw new ApiError(409, "segments must be the same kind of activity");
+  if (holders.some((h) => overlaps(h, a))) throw new ApiError(409, "activities overlap in time");
+}
+
+/** Today's session already has a run and another one of the same kind came in: Woo asks whether it is the same session (once per activity). */
+const appendAsked = new Set<string>();
+function maybeAppendCheckin() {
+  const d = data();
+  const t = threadData();
+  const today = todayJst();
+  const s = d.sessions.find((x) => x.scheduled_date === today && !x.moved_to_date);
+  if (!s) return;
+  const group = groupOfSession(s.id);
+  if (!group.length || group.length >= MAX_PER_SESSION) return;
+  const tail = t[t.length - 1];
+  if (tail?.kind === "ask" && tail.ask?.state === "open") return; // his other question first
+  if (t.some((m) => m.kind === "checkin" && m.checkin?.mode === "append" && m.checkin.state === "open")) return;
+  const cands = everyActivity().filter((x) => !x.session_id && x.match_status !== "ignored" && toJstDate(x.start_time) === today && isRun(x) === isRun(group[0]) && !appendAsked.has(x.id) && !group.some((g) => overlaps(g, x))).sort(byStart);
+  if (!cands.length) return;
+  for (const x of cands) appendAsked.add(x.id);
+  const label = (x: ApiActivity) => `加進同一堂：${isRun(x) ? "跑步" : "運動"} ${timeJst(x.start_time)} · ${km2(x.distance_m)} km${isRun(x) ? ` · ${pace(x.avg_pace_sec_km)}/km` : ""}`;
+  t.push({ ...BLANK, id: `c${t.length + 1}`, role: "coach", kind: "checkin", activity_id: cands[0].id, created_at: new Date().toISOString(),
+    text: `今天的 ${shortName(s)} 已經配了 ${group.map((g) => `${timeJst(g.start_time)} 那趟 ${km2(g.distance_m)} km`).join("、")}。Strava 又進來 ${cands.length} 個活動，是同一堂的另一段嗎？`,
+    checkin: { state: "open", mode: "append", date: today, session_id: s.id, session_label: shortName(s), candidates: cands.map((x) => ({ activity_id: x.id, label: label(x) })) } });
+}
+/** After anything that binds today's run, or finishes a question about it. */
+function afterJudged() {
+  setTimeout(maybeAppendCheckin, 600);
 }
 
 /**
@@ -415,8 +559,8 @@ function postMismatchAsk(a: ApiActivity, s: ApiSession, reason: string, from: "c
 }
 
 /** The demo verdict (the worker's review of the activity + Woo's line in the thread). */
-function judge(a: ApiActivity, s: ApiSession | null) {
-  const comment = "（示範）數據落在課表目標內，感受也一致。";
+function judge(a: ApiActivity, s: ApiSession | null, segments = 1) {
+  const comment = segments > 1 ? `（示範）${segments} 段一起 ${km2(combine(groupOfSession(a.session_id ?? "")).distance_m)} km，數據落在課表目標內，整堂當一趟來看。` : "（示範）數據落在課表目標內，感受也一致。";
   const reminder = "第 1 km 先走 2 分鐘再起跑";
   a.review = { verdict: "達成", comment, reminders: [reminder], source: "claude", model: null, adjust_hint: null, failed: false, error: null, created_at: new Date().toISOString() };
   const t = threadData();
@@ -427,20 +571,34 @@ function judge(a: ApiActivity, s: ApiSession | null) {
  * Demo mode: assign an unassigned activity to a session; the "coach" answers after ~4 s —
  * unless the pick looks wrong (a walk, or under half the distance): then Woo asks first,
  * like the api does, and the verdict comes after 是 in the thread.
+ *   append: one more recording of the session (the holders stay; the api's 409s: too many, another kind, overlap);
+ *   without it a confirmed holder is a 409 unless `replace`, which bumps every holder back to unassigned.
+ *   { session_id: null } on a recording of a group: the rest of the group is judged again.
  */
 export function mockPutSession(activityId: string, body: PutSessionRequest): PutSessionResponse {
   const d = data();
   const a = findActivity(activityId);
   if (!a) throw new Error("not found");
+  if (body.append && body.replace) throw new ApiError(400, "append and replace are exclusive");
   if (body.session_id) {
+    const sessionId = body.session_id;
+    const s = d.sessions.find((x) => x.id === sessionId) ?? null;
     // (an activity picked through the check-in still sits in `unassigned`, so look in both lists)
-    const holder = [...d.activities, ...d.unassigned].find((x) => x.session_id === body.session_id && x.id !== a.id);
-    if (holder) {
-      holder.session_id = null; holder.match_status = "unplanned"; holder.review = null;
-      // Woo's open question about the replaced activity is moot now.
-      for (const m of threadData()) if (m.kind === "ask" && m.ask?.state === "open" && m.ask.activity_id === holder.id) m.ask = { ...m.ask, state: "answered" };
+    const holders = groupOfSession(sessionId, a.id);
+    const append = body.append === true && holders.length > 0;
+    if (holders.length && append) checkAppend(a, sessionId);
+    else if (holders.length) {
+      if (holders.some((h) => h.match_status === "confirmed") && !body.replace) throw new ApiError(409, "session already confirmed for another activity");
+      for (const holder of holders) {
+        holder.session_id = null; holder.match_status = "unplanned"; holder.review = null;
+        // Woo's open question about the replaced activity is moot now.
+        for (const m of threadData()) if (m.kind === "ask" && m.ask?.state === "open" && m.ask.activity_id === holder.id) m.ask = { ...m.ask, state: "answered" };
+        relist(holder);
+      }
+      regroupToken.set(sessionId, (regroupToken.get(sessionId) ?? 0) + 1); // a judgement still on its way for the old group is void
     }
-    a.session_id = body.session_id;
+    const wasSession = a.session_id && a.session_id !== sessionId ? a.session_id : null;
+    a.session_id = sessionId;
     a.match_status = "confirmed";
     a.review = null;
     if (body.memo !== undefined || body.rpe !== undefined) {
@@ -448,28 +606,40 @@ export function mockPutSession(activityId: string, body: PutSessionRequest): Put
       a.rpe = body.rpe ?? null;
       a.memo_updated_at = new Date().toISOString();
     }
-    const s = d.sessions.find((x) => x.id === body.session_id) ?? null;
-    const reason = s ? mismatchReason(a, s) : null;
-    if (s && reason) postMismatchAsk(a, s, reason, "report");
-    else setTimeout(() => { a.review = { verdict: "達成", comment: "（示範）數據落在課表目標內，感受也一致。", reminders: ["第 1 km 先走 2 分鐘再起跑"], source: "claude", model: null, adjust_hint: null, failed: false, error: null, created_at: new Date().toISOString() }; }, 4000);
+    relist(a);
+    if (wasSession) regroupMock(wasSession);
+    if (append) {
+      // an open "same session?" check-in of that day is answered by this
+      for (const m of threadData()) if (m.kind === "checkin" && m.checkin?.mode === "append" && m.checkin.state === "open" && m.checkin.session_id === sessionId) m.checkin = { ...m.checkin, state: "picked" };
+      appendDone(sessionId);
+    } else {
+      const reason = s ? mismatchReason(a, s) : null;
+      if (s && reason) postMismatchAsk(a, s, reason, "report");
+      else setTimeout(() => { a.review = { verdict: "達成", comment: "（示範）數據落在課表目標內，感受也一致。", reminders: ["第 1 km 先走 2 分鐘再起跑"], source: "claude", model: null, adjust_hint: null, failed: false, error: null, created_at: new Date().toISOString() }; afterJudged(); }, 4000);
+    }
   } else {
+    const was = a.session_id;
     a.session_id = null;
     a.match_status = body.status ?? "unplanned";
     a.review = null;
+    relist(a);
+    if (was) regroupMock(was);
   }
-  relist(a);
+  refreshSegments();
   return { activity: { ...a } };
 }
 
 export function mockActivities(status?: MatchStatus): ActivitiesResponse {
+  refreshSegments();
   const all = [...data().activities, ...data().unassigned].sort((a, b) => b.start_time.localeCompare(a.start_time));
   return { activities: status ? all.filter((a) => a.match_status === status) : all };
 }
 
 /** Demo mode: the coach answers again after ~4 s. */
 export function mockRereview(activityId: string): RereviewResponse {
-  const a = findActivity(activityId);
-  if (!a) throw new Error("not found");
+  const asked = findActivity(activityId);
+  if (!asked) throw new Error("not found");
+  const a = (asked.session_id ? groupOfSession(asked.session_id)[0] : null) ?? asked; // on a recording of a group it acts on the primary one: the review is the session's
   a.review = null;
   setTimeout(() => {
     a.review = { verdict: "達成但有提醒", comment: "（示範）重新分析：配速在區間內，但第 3 km 心拍衝到 166。", reminders: ["MP 第 3 公里開始看心拍"], source: "claude", model: null, adjust_hint: null, failed: false, error: null, created_at: new Date().toISOString() };
@@ -1064,6 +1234,31 @@ export function mockPostCheckinPick(checkinId: string, body: PostCheckinPickRequ
   const t = threadData();
   const c = t.find((m) => m.id === checkinId && m.kind === "checkin");
   if (!c?.checkin || c.checkin.state !== "open") throw new Error("check-in is no longer open");
+  // append: today's session already has a run and another came in. 不是，另外算 leaves it unassigned; a chip makes it one more recording
+  // (no feel question: Woo posts one fixed line and judges the whole session again).
+  if (c.checkin.mode === "append") {
+    if (body.none) {
+      c.checkin = { ...c.checkin, state: "dismissed" };
+      const pick: ApiCoachMessage = { ...BLANK, id: `c${t.length + 1}`, role: "athlete", kind: "pick", text: "不是，另外算", created_at: new Date().toISOString() };
+      t.push(pick, { ...BLANK, id: `c${t.length + 2}`, role: "coach", kind: "chat", text: "好，這趟另外算，留在「其他活動」。要併進去的話到報告頁按「這堂的活動」。", created_at: new Date().toISOString() });
+      return { checkin: { ...c }, pick };
+    }
+    const cand = c.checkin.candidates.find((x) => x.activity_id === body.activity_id);
+    const sessionId = c.checkin.session_id;
+    const a = cand?.activity_id ? findActivity(cand.activity_id) : undefined;
+    if (!cand || !a || !sessionId) throw new ApiError(400, "not one of the candidates");
+    checkAppend(a, sessionId);
+    a.session_id = sessionId;
+    a.match_status = "confirmed";
+    a.review = null;
+    relist(a);
+    c.checkin = { ...c.checkin, state: "picked" };
+    const pick: ApiCoachMessage = { ...BLANK, id: `c${t.length + 1}`, role: "athlete", kind: "pick", text: cand.label, activity_id: a.id, created_at: new Date().toISOString() };
+    t.push(pick);
+    appendDone(sessionId);
+    refreshSegments();
+    return { checkin: { ...c }, pick: { ...pick } };
+  }
   if (body.none) {
     c.checkin = { ...c.checkin, state: "dismissed" };
     const pick: ApiCoachMessage = { ...BLANK, id: `c${t.length + 1}`, role: "athlete", kind: "pick", text: "都不是", created_at: new Date().toISOString() };
@@ -1092,6 +1287,7 @@ export function mockPostCheckinPick(checkinId: string, body: PostCheckinPickRequ
     pick.status = "sent";
     // The run's record is in: the review of its week is regenerated (the "已取消" line demo).
     if (a && s && isRun(a)) rerunWeek2(s);
+    afterJudged();
   }, 2000);
   return { checkin: { ...c }, pick: { ...pick } };
 }
@@ -1103,13 +1299,18 @@ function resetCheckin(c: ApiCoachMessage): ApiCoachMessage {
     const from = t.indexOf(c);
     for (const m of t.slice(from + 1)) if (m.kind === "pick" && m.activity_id) {
       const a = findActivity(m.activity_id); // picked activities stay in `unassigned` until the plan is rebuilt, so look in both lists
-      if (a) { a.session_id = null; a.match_status = "unplanned"; a.review = null; a.memo = null; a.rpe = null; }
+      if (a) {
+        const was = a.session_id;
+        a.session_id = null; a.match_status = "unplanned"; a.review = null; a.memo = null; a.rpe = null;
+        relist(a);
+        if (was) regroupMock(was); // an appended recording taken back: the rest of the session is judged again
+      }
     }
     for (const m of t) if (m.kind === "ask" && m.ask?.state === "open") m.ask = { ...m.ask, state: "answered" };
     for (const m of t) if (m.role === "athlete" && m.status === "pending") m.status = "sent";
   }
   c.checkin = { ...c.checkin, state: "reset" };
-  const fresh: ApiCoachMessage = { ...BLANK, id: `c${t.length + 1}`, role: "coach", kind: "checkin", text: `好，那是哪一個？今天的課是 ${c.checkin.session_label ?? ""}。`, activity_id: c.activity_id, checkin: { ...c.checkin, state: "open" }, created_at: new Date().toISOString() };
+  const fresh: ApiCoachMessage = { ...BLANK, id: `c${t.length + 1}`, role: "coach", kind: "checkin", text: c.checkin.mode === "append" ? c.text : `好，那是哪一個？今天的課是 ${c.checkin.session_label ?? ""}。`, activity_id: c.activity_id, checkin: { ...c.checkin, state: "open" }, created_at: new Date().toISOString() };
   t.push(fresh);
   return fresh;
 }
@@ -1187,7 +1388,7 @@ export function mockPostCoachMessage(body: PostCoachMessageRequest): PostCoachMe
       return { message: { ...m } };
     }
     if (from === "report") {
-      setTimeout(() => { if (a) judge(a, s); }, 3000);
+      setTimeout(() => { if (a) { judge(a, s); afterJudged(); } }, 3000);
       return { message: { ...m } };
     }
     const pick = [...t].reverse().find((x) => x.kind === "pick" && x.activity_id === activity_id);
@@ -1211,6 +1412,7 @@ export function mockPostCoachMessage(body: PostCoachMessageRequest): PostCoachMe
       if (a) a.review = { verdict: "達成但有提醒", comment: "MP 段 6:46 守住了，第 5 km 心拍 166 超過上限。第三公里開始腿重跟數字對得上。", reminders: ["MP 第 3 公里開始看心拍，過 160 就稍微放慢"], source: "claude", model: null, adjust_hint: null, failed: false, error: null, created_at: new Date().toISOString() };
       t.push({ ...BLANK, id: `c${t.length + 1}`, role: "coach", kind: "review", text: "MP 段 6:46 守住了，第 5 km 心拍 166 超過上限。第三公里開始腿重跟數字對得上。", activity_id: ask.ask!.activity_id, review: { label: "MP 7 km", verdict: "達成但有提醒", reminder: "MP 第 3 公里開始看心拍，過 160 就稍微放慢", date: todayJst() }, created_at: new Date().toISOString() });
       m.status = "sent";
+      afterJudged();
     });
     return { message: { ...m } };
   }

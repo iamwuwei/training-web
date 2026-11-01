@@ -95,6 +95,23 @@ export function fullSplits(splits: ApiSplit[] | null): ApiSplit[] {
 
 export const splitPace = (sp: ApiSplit) => Math.round(1000 / sp.average_speed);
 
+/**
+ * A session made of several recordings (multi-session-activities): each recording's whole kilometres in time order, renumbered
+ * 1..n. `boundaries` = the new number of the first km of every recording after the first, where the report draws a 第 N 段 line.
+ * Approximate (each recording's own partial last km is dropped). Same algorithm as training-api src/lib/splits.ts mergeSplits.
+ */
+export function mergeSplits(parts: (ApiSplit[] | null)[]): { splits: ApiSplit[]; boundaries: number[] } {
+  const splits: ApiSplit[] = [];
+  const boundaries: number[] = [];
+  parts.forEach((part, i) => {
+    const full = fullSplits(part);
+    if (!full.length) return;
+    if (i > 0) boundaries.push(splits.length + 1);
+    for (const sp of full) splits.push({ ...sp, split: splits.length + 1 });
+  });
+  return { splits, boundaries };
+}
+
 export interface FocusStats {
   from: number; // 1-based km
   to: number;
@@ -120,7 +137,7 @@ export function focusStats(plan: SessionPlan, splits: ApiSplit[] | null): FocusS
 }
 
 /** The pace to compare across sessions of the same kind: whole run, or the focus block for a composite. */
-export function comparablePace(a: ApiActivity, s: ApiSession): { pace: number; hr: number | null } | null {
+export function comparablePace(a: Pick<ApiActivity, "avg_pace_sec_km" | "avg_hr" | "splits">, s: ApiSession): { pace: number; hr: number | null } | null {
   const plan = planFor(s);
   if (plan.single) return a.avg_pace_sec_km ? { pace: a.avg_pace_sec_km, hr: a.avg_hr } : null;
   const f = focusStats(plan, a.splits);

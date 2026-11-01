@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { Link, redirect, useLocation, useNavigate, useRevalidator } from "react-router";
 import { useReviewPolling } from "../lib/use-review-polling";
 import type { Route } from "./+types/_app.activities.$id";
@@ -11,6 +11,7 @@ import { BottomSheet } from "../components/sheet";
 import { Avatar, CoachAvatar, Reminders, TopBar, verdictBadge } from "../components/ui";
 import { ApiError, getActivities, putSession, rereview } from "../lib/api";
 import { hasSession } from "../lib/auth";
+import { assignErrorText, combine, groupOf, MAX_PER_SESSION, primaryOf, type Combined } from "../lib/combine";
 import { dayDiff, md, mdDow, timeJst } from "../lib/date";
 import { duration, int, km, kmPlan, pace } from "../lib/format";
 import { labelStyle, shortName, sportName, verdictKind } from "../lib/labels";
@@ -82,7 +83,7 @@ function DistRow({ actual, plan, approx }: { actual: number; plan: number; appro
 const approxDistance = (s: ApiSession) => s.type === "interval" || /×|秒/.test(s.content ?? "");
 
 /** "Target vs actual": pace and HR against the session's ranges, plus distance. */
-function TargetVsActual({ a, s, plan }: { a: ApiActivity; s: ApiSession; plan: SessionPlan }) {
+function TargetVsActual({ a, s, plan }: { a: Pick<Combined, "avg_pace_sec_km" | "avg_hr" | "splits" | "sport_type" | "distance_m">; s: ApiSession; plan: SessionPlan }) {
   const rows = [];
   const hrBand = s.target_hr_min != null || s.target_hr_max != null
     ? { lo: s.target_hr_min ?? (s.target_hr_max as number) - 20, hi: s.target_hr_max ?? (s.target_hr_min as number) + 10 }
@@ -109,7 +110,7 @@ function TargetVsActual({ a, s, plan }: { a: ApiActivity; s: ApiSession; plan: S
 }
 
 /** One dot per km on a pace axis; the target band is drawn on the km it applies to. */
-function SplitDots({ a, s, plan }: { a: ApiActivity; s: ApiSession | null; plan: SessionPlan | null }) {
+function SplitDots({ a, s, plan }: { a: Pick<Combined, "splits" | "breaks">; s: ApiSession | null; plan: SessionPlan | null }) {
   const sps = fullSplits(a.splits);
   if (!sps.length) return null;
   const paces = sps.map(splitPace);
@@ -127,17 +128,21 @@ function SplitDots({ a, s, plan }: { a: ApiActivity; s: ApiSession | null; plan:
         const band = t?.band ?? null;
         const out = band ? p < band.lo || p > band.hi : false;
         const hr = sp.average_heartrate != null ? Math.round(sp.average_heartrate) : null;
+        const brk = a.breaks.find((b) => b.split === sp.split);
         return (
-          <div key={sp.split} className="row">
-            <span className="d">{sp.split}</span>
-            <div className="lane">
-              <i className="rail" />
-              {band ? <i className="band" style={{ left: `${pos(band.lo, lo, hi)}%`, width: `${pos(band.hi, lo, hi) - pos(band.lo, lo, hi)}%` }} /> : null}
-              <i className={`dot${out ? " out" : ""}`} style={{ left: `${pos(p, lo, hi)}%` }} />
+          <Fragment key={sp.split}>
+            {brk ? <div className="seg-break">第 {brk.segment} 段</div> : null}
+            <div className="row">
+              <span className="d">{sp.split}</span>
+              <div className="lane">
+                <i className="rail" />
+                {band ? <i className="band" style={{ left: `${pos(band.lo, lo, hi)}%`, width: `${pos(band.hi, lo, hi) - pos(band.lo, lo, hi)}%` }} /> : null}
+                <i className={`dot${out ? " out" : ""}`} style={{ left: `${pos(p, lo, hi)}%` }} />
+              </div>
+              <span className={`num${out ? " over" : ""}`}>{pace(p)}</span>
+              <span className={`num${hr != null && hrCap != null && t?.focus && hr > hrCap ? " over" : ""}`}>{hr ?? "–"}</span>
             </div>
-            <span className={`num${out ? " over" : ""}`}>{pace(p)}</span>
-            <span className={`num${hr != null && hrCap != null && t?.focus && hr > hrCap ? " over" : ""}`}>{hr ?? "–"}</span>
-          </div>
+          </Fragment>
         );
       })}
       <div className="legend">
@@ -196,52 +201,126 @@ function Trend({ current, session, all, sessions }: { current: ApiActivity; sess
   );
 }
 
-/** 換一個活動: the other Strava activities within a day of the session; picking one takes the session over. */
-function SwapSheet({ open, onClose, a, s, all, view }: { open: boolean; onClose: () => void; a: ApiActivity; s: ApiSession; all: ApiActivity[]; view: PlanView | null }) {
+/** 紀錄 · N 段: one row per recording of a session that has several, with the pause between them; a later recording's own note, read-only. */
+function SegmentsList({ c }: { c: Combined }) {
+  return (
+    <section className="segments" aria-label="這堂的紀錄">
+      <div className="head"><h2 className="section-h" style={{ margin: 0 }}>紀錄 · {c.count} 段</h2><span className="sub">移動時間 {duration(c.moving_time_sec)} · 空檔不算</span></div>
+      {c.group.map((x, i) => {
+        const run = isRunSport(x.sport_type);
+        const gap = c.gaps[i];
+        const own = i > 0 && (x.memo || x.rpe != null);
+        return (
+          <Fragment key={x.id}>
+            {gap != null ? <div className="gap">隔 {gap} 分</div> : null}
+            <div className="row">
+              <span className="i">{i + 1}</span>
+              <span className="t">{timeJst(x.start_time)}</span>
+              {run || x.distance_m > 0 ? <span className="v"><b className="num">{km(x.distance_m)}</b> km</span> : <span className="v"><b className="num">{duration(x.moving_time_sec)}</b></span>}
+              {run ? <span className="v"><b className="num">{pace(x.avg_pace_sec_km)}</b> /km</span> : x.distance_m > 0 ? <span className="v"><b className="num">{duration(x.moving_time_sec)}</b></span> : <span className="v" />}
+              <span className="v">{x.avg_hr != null ? <><b className="num">{int(x.avg_hr)}</b> bpm</> : <b className="num">–</b>}</span>
+            </div>
+            {own ? <p className="seg-memo"><span className="k">第 {i + 1} 段的心得：</span>{x.rpe != null ? `RPE ${x.rpe}${x.memo ? " · " : ""}` : ""}{x.memo}</p> : null}
+          </Fragment>
+        );
+      })}
+    </section>
+  );
+}
+
+/** One recording's two numbers in the sheet: runs km + pace; the rest km + time (just the time without a distance). */
+function ActNums({ x }: { x: ApiActivity }) {
+  const run = isRunSport(x.sport_type);
+  return (
+    <span className="l2">
+      {run || x.distance_m > 0 ? <span><b className="num">{km(x.distance_m)}</b> km</span> : <span><b className="num">{duration(x.moving_time_sec)}</b></span>}
+      {run ? (x.avg_pace_sec_km ? <span><b className="num">{pace(x.avg_pace_sec_km)}</b> /km</span> : null) : x.distance_m > 0 ? <span><b className="num">{duration(x.moving_time_sec)}</b></span> : null}
+    </span>
+  );
+}
+
+type ActBusy = { id: string; what: "remove" | "add" | "swap" };
+
+function ActivitiesBody({ onClose, c, s, all, view }: { onClose: () => void; c: Combined; s: ApiSession; all: ApiActivity[]; view: PlanView | null }) {
   const navigate = useNavigate();
   const revalidator = useRevalidator();
-  const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState<ActBusy | null>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const full = c.count >= MAX_PER_SESSION;
+  const inGroup = new Set(c.group.map((x) => x.id));
   const seen = new Set<string>();
   const others = [...all, ...(view?.unassigned ?? [])]
-    .filter((x) => x.id !== a.id && x.match_status !== "ignored" && !seen.has(x.id) && seen.add(x.id) && Math.abs(dayDiff(s.scheduled_date, activityDate(x))) <= 1)
+    .filter((x) => !inGroup.has(x.id) && x.match_status !== "ignored" && !seen.has(x.id) && seen.add(x.id) && Math.abs(dayDiff(s.scheduled_date, activityDate(x))) <= 1)
     .sort((x, y) => y.start_time.localeCompare(x.start_time));
-  async function swap(x: ApiActivity) {
-    setBusy(x.id);
-    setError(null);
+  const when = (x: ApiActivity) => (activityDate(x) === s.scheduled_date ? timeJst(x.start_time) : `${md(activityDate(x))} ${timeJst(x.start_time)}`);
+
+  /** Send one change; on success close and reload, and follow the report if its primary recording moved. */
+  async function send(x: ApiActivity, what: ActBusy["what"], body: Parameters<typeof putSession>[1], goTo: () => string | null) {
+    setBusy({ id: x.id, what });
+    setErrors((e) => { const { [x.id]: _gone, ...rest } = e; return rest; });
     try {
-      await putSession(x.id, { session_id: s.id, replace: true });
+      await putSession(x.id, body);
       await revalidator.revalidate();
       onClose();
-      void navigate(`/activities/${x.id}`, { replace: true });
+      const to = goTo();
+      if (to) void navigate(`/activities/${to}`, { replace: true });
     } catch (e) {
-      setError(e instanceof ApiError ? (e.status === 503 ? "資料庫還在啟動，幾秒後再按一次" : e.message) : "送出失敗，再試一次");
+      setErrors((prev) => ({ ...prev, [x.id]: assignErrorText(e, x, c.group) }));
     } finally {
       setBusy(null);
     }
   }
+  const earliest = (xs: ApiActivity[]) => [...xs].sort((p, q) => p.start_time.localeCompare(q.start_time) || p.id.localeCompare(q.id))[0];
+
   return (
-    <BottomSheet open={open} onClose={onClose} label="換一個活動">
-      <h2 className="sheet-title">{md(s.scheduled_date)} 的 {shortName(s)} 是哪一個活動？</h2>
-      {others.length ? others.map((x) => {
-        const run = isRunSport(x.sport_type);
-        return (
-          <button key={x.id} type="button" className="swap-row" onClick={() => void swap(x)} disabled={busy != null}>
-            <Avatar session={null} sport={x.sport_type} />
-            <span className="txt">
-              <span className="l1"><i className="strava-dot" />{sportName(x.sport_type)}<span className="when">{activityDate(x) === s.scheduled_date ? timeJst(x.start_time) : `${md(activityDate(x))} ${timeJst(x.start_time)}`}</span></span>
-              <span className="l2">
-                {run || x.distance_m > 0 ? <span><b className="num">{km(x.distance_m)}</b> km</span> : <span><b className="num">{duration(x.moving_time_sec)}</b></span>}
-                {run && x.avg_pace_sec_km ? <span><b className="num">{pace(x.avg_pace_sec_km)}</b> /km</span> : null}
-                {x.avg_hr != null ? <span><b className="num">{int(x.avg_hr)}</b> bpm</span> : null}
-              </span>
-            </span>
-            <span className="chip">{busy === x.id ? "換成這趟…" : "換成這趟"}</span>
+    <>
+      <h2 className="sheet-title">{md(s.scheduled_date)} 的 {shortName(s)}</h2>
+      <div className="group-h"><h3>這堂的紀錄 · {c.count} 筆</h3>{c.count > 1 ? <span className="sub">合計 {km(c.distance_m)} km</span> : null}</div>
+      {c.group.map((x, i) => (
+        <div key={x.id} className="acts-row">
+          <Avatar session={null} sport={x.sport_type} />
+          <span className="txt">
+            <span className="l1"><i className="strava-dot" />{sportName(x.sport_type)}<span className="when">{when(x)}</span>{c.count > 1 && i === 0 ? <span className="tag">主要</span> : null}</span>
+            <ActNums x={x} />
+          </span>
+          <button type="button" className="chip" disabled={busy != null}
+            onClick={() => void send(x, "remove", { session_id: null }, () => (x.id === c.primary.id && c.count > 1 ? earliest(c.group.filter((g) => g.id !== x.id)).id : null))}>
+            {busy?.id === x.id && busy.what === "remove" ? "移除中…" : c.count > 1 ? "移除" : "解除配對"}
           </button>
-        );
-      }) : <p className="empty">前後一天沒有別的活動。Strava 可能還沒同步。</p>}
-      {error ? <p className="hint" style={{ color: "var(--v-bad)" }}>{error}</p> : null}
-      <p className="sheet-foot">換了之後 Woo 會重新看這堂課。</p>
+          {errors[x.id] ? <p className="err" role="alert">{errors[x.id]}</p> : null}
+        </div>
+      ))}
+      <div className="group-h"><h3>前後一天的其他活動</h3>{full ? <span className="sub">一堂最多 {MAX_PER_SESSION} 筆</span> : null}</div>
+      {others.length ? others.map((x) => (
+        <div key={x.id} className="acts-row other">
+          <Avatar session={null} sport={x.sport_type} />
+          <span className="txt">
+            <span className="l1"><i className="strava-dot" />{sportName(x.sport_type)}<span className="when">{when(x)}</span></span>
+            <ActNums x={x} />
+          </span>
+          <div className="acts">
+            <button type="button" className="chip" disabled={busy != null || full}
+              onClick={() => void send(x, "add", { session_id: s.id, append: true }, () => { const first = earliest([...c.group, x]); return first.id !== c.primary.id ? first.id : null; })}>
+              {busy?.id === x.id && busy.what === "add" ? "加進中…" : "加進這堂"}
+            </button>
+            <button type="button" className="chip" disabled={busy != null}
+              onClick={() => void send(x, "swap", { session_id: s.id, replace: true }, () => x.id)}>
+              {busy?.id === x.id && busy.what === "swap" ? "換成這趟…" : "換成這趟"}
+            </button>
+          </div>
+          {errors[x.id] ? <p className="err" role="alert">{errors[x.id]}</p> : null}
+        </div>
+      )) : <p className="empty">前後一天沒有別的活動。Strava 可能還沒同步。</p>}
+      <p className="sheet-foot">最早的那筆是主要紀錄，判定和心得都掛在它上面。加進、移除或換了之後，Woo 會重新看整堂。</p>
+    </>
+  );
+}
+
+/** 這堂的活動: the recordings of this session (移除 one) and the other Strava activities within a day (加進這堂 as one more recording, or 換成這趟 to keep only that one). */
+function ActivitiesSheet({ open, onClose, c, s, all, view }: { open: boolean; onClose: () => void; c: Combined; s: ApiSession; all: ApiActivity[]; view: PlanView | null }) {
+  return (
+    <BottomSheet open={open} onClose={onClose} label="這堂的活動" className="acts-sheet">
+      <ActivitiesBody onClose={onClose} c={c} s={s} all={all} view={view} />
     </BottomSheet>
   );
 }
@@ -260,7 +339,15 @@ export default function Report({ loaderData }: Route.ComponentProps) {
   // same memo_updated_at / details_updated_at back from the server, the loader's copy (with the new review) wins.
   const [override, setOverride] = useState<ApiActivity | null>(null);
   const L = loaderData.activity;
-  const a = override && override.id === L.id && (override.memo_updated_at !== L.memo_updated_at || override.details_updated_at !== L.details_updated_at) ? override : L;
+  // A session can hold several recordings. The report is the session's: it shows the primary one (the earliest, which
+  // carries the review and the memo) with the recordings added up. The address of any other recording goes there.
+  const primaryBase = primaryOf(groupOf(all, L));
+  const a = override && override.id === primaryBase.id && (override.memo_updated_at !== primaryBase.memo_updated_at || override.details_updated_at !== primaryBase.details_updated_at) ? override : primaryBase;
+  const c = combine(groupOf(all, L).map((x) => (x.id === a.id ? a : x)));
+  const primaryId = L.segment?.primary_activity_id ?? null;
+  useEffect(() => {
+    if (primaryId && primaryId !== L.id) void navigate(`/activities/${primaryId}`, { replace: true });
+  }, [primaryId, L.id, navigate]);
 
   const sessions = view?.data.sessions ?? [];
   const s = sessions.find((x) => x.id === a.session_id) ?? null;
@@ -294,7 +381,7 @@ export default function Report({ loaderData }: Route.ComponentProps) {
     }
   }
   const [showPlan, setShowPlan] = useState(false);
-  const [showSwap, setShowSwap] = useState(false);
+  const [showActs, setShowActs] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const retryChip = (
     <button type="button" className="chip" onClick={() => void askAgain()} disabled={rereviewBusy}>
@@ -325,14 +412,14 @@ export default function Report({ loaderData }: Route.ComponentProps) {
         ) : null}
 
         <div className="report-top">
-          {run || a.distance_m > 0 ? <span><b className="num">{km(a.distance_m)}</b> km</span> : <span><b className="num">{duration(a.moving_time_sec)}</b></span>}
-          {run && a.avg_pace_sec_km ? <span><b className={`num${paceFast(a, s) ? " over" : ""}`}>{pace(a.avg_pace_sec_km)}</b> /km</span> : null}
-          {a.avg_hr != null ? <span><b className={`num${hrOver(a, s) ? " over" : ""}`}>{int(a.avg_hr)}</b> bpm</span> : null}
+          {run || c.distance_m > 0 ? <span><b className="num">{km(c.distance_m)}</b> km</span> : <span><b className="num">{duration(c.moving_time_sec)}</b></span>}
+          {run && c.avg_pace_sec_km ? <span><b className={`num${paceFast(c, s) ? " over" : ""}`}>{pace(c.avg_pace_sec_km)}</b> /km</span> : null}
+          {c.avg_hr != null ? <span><b className={`num${hrOver(c, s) ? " over" : ""}`}>{int(c.avg_hr)}</b> bpm</span> : null}
         </div>
 
         {r?.verdict ? (
           <section className={`verdict-block ${vk ?? ""}`}>
-            <h2>{r.verdict}</h2>
+            <h2>{r.verdict}{c.count > 1 ? <span className="segs">（{c.count} 段）</span> : null}</h2>
             {r.comment ? <p className="comment">{r.comment}</p> : null}
             {r.reminders[0] ? <div className="next-band"><b>下次：</b>{r.reminders[0]}</div> : null}
             {r.reminders.length > 1 ? <Reminders items={r.reminders.slice(1)} /> : null}
@@ -368,7 +455,7 @@ export default function Report({ loaderData }: Route.ComponentProps) {
           </section>
         ) : null}
 
-        {s && plan ? <TargetVsActual a={a} s={s} plan={plan} /> : (
+        {s && plan ? <TargetVsActual a={c} s={s} plan={plan} /> : (
           <section className="targets">
             <div className="stats">
               {run || a.distance_m > 0 ? <span><b className="num">{km(a.distance_m)}</b> km</span> : null}
@@ -378,24 +465,26 @@ export default function Report({ loaderData }: Route.ComponentProps) {
           </section>
         )}
 
+        {c.count > 1 ? <SegmentsList c={c} /> : null}
+
         <MemoEditor key={a.id} activity={a} onSaved={setOverride} />
         {!a.memo && a.description ? <p className="text" style={{ margin: "10px 0 0", color: "var(--ink-2)" }}>Strava 描述：{a.description}</p> : null}
 
-        <SplitDots a={a} s={s} plan={plan} />
+        <SplitDots a={c} s={s} plan={plan} />
         {s ? <Trend current={a} session={s} all={all} sessions={sessions} /> : null}
 
-        <GearInfo activity={a} onEdit={() => setShowDetails(true)} />
+        <GearInfo activity={c.count > 1 ? { ...a, moving_time_sec: c.moving_time_sec, max_hr: c.max_hr, avg_watts: c.avg_watts, kcal: c.kcal } : a} onEdit={() => setShowDetails(true)} />
 
         {s ? (
           <p className="swap-line">
-            <span className="act"><i className="strava-dot" />活動：{sportName(a.sport_type)} {timeJst(a.start_time)}{a.distance_m > 0 ? ` · ${km(a.distance_m)} km` : ""}</span>
-            <button type="button" className="link" onClick={() => setShowSwap(true)}>換一個活動 ›</button>
+            <span className="act"><i className="strava-dot" />活動：{sportName(a.sport_type)} {timeJst(a.start_time)}{c.distance_m > 0 ? ` · ${km(c.distance_m)} km` : ""}{c.count > 1 ? `（${c.count} 筆）` : ""}</span>
+            <button type="button" className="link" onClick={() => setShowActs(true)}>這堂的活動 ›</button>
           </p>
         ) : null}
       </main>
       <DetailsSheet open={showDetails} onClose={() => setShowDetails(false)} activity={a} onSaved={setOverride} />
       {view && s ? <SessionSheet session={showPlan ? s : null} view={view} onClose={() => setShowPlan(false)} /> : null}
-      {s ? <SwapSheet open={showSwap} onClose={() => setShowSwap(false)} a={a} s={s} all={all} view={view} /> : null}
+      {s ? <ActivitiesSheet open={showActs} onClose={() => setShowActs(false)} c={c} s={s} all={all} view={view} /> : null}
     </>
   );
 }

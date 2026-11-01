@@ -10,7 +10,8 @@ import { Avatar, Bar, CoachAvatar, SectionH, TopBar, VerdictTag } from "../compo
 import { md, mdDow, relativeDay, timeJst } from "../lib/date";
 import { duration, int, km, kmPlan, pace } from "../lib/format";
 import { isStrengthDay, shortName, sportName } from "../lib/labels";
-import { ApiError, putSession } from "../lib/api";
+import { putSession } from "../lib/api";
+import { appendTargetFor, assignErrorText, type Combined } from "../lib/combine";
 import { activityDate, hrOver, isLoggable, isRunSport, lastReminderFor, paceFast, sessionForExtra, type Day, type PlanView } from "../lib/plan";
 import { NoPlan, usePlan } from "../lib/use-plan";
 import { useReviewPolling } from "../lib/use-review-polling";
@@ -72,7 +73,7 @@ function RestDay({ session }: { session: ApiSession }) {
   );
 }
 
-function Stats({ a, day, big }: { a: ApiActivity; day: Day; big?: boolean }) {
+function Stats({ a, day, big }: { a: Pick<Combined, "sport_type" | "distance_m" | "moving_time_sec" | "avg_pace_sec_km" | "avg_hr">; day: Day; big?: boolean }) {
   const run = isRunSport(a.sport_type);
   return (
     <div className={`stats${big ? " big" : ""}`}>
@@ -83,19 +84,23 @@ function Stats({ a, day, big }: { a: ApiActivity; day: Day; big?: boolean }) {
   );
 }
 
-/** One tap: this Strava activity is that session. Woo reviews it afterwards. */
-function useAssign() {
+/**
+ * One tap: this Strava activity is that session. Woo reviews it afterwards. `append`: it becomes one more recording of a
+ * session that already has one (the api refuses a sixth, a different kind of activity, or one that overlaps); `holders`
+ * are the recordings already there, for the refusal's wording.
+ */
+function useAssign(holders: ApiActivity[] = []) {
   const revalidator = useRevalidator();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  async function assign(activityId: string, sessionId: string) {
+  async function assign(activity: ApiActivity, sessionId: string, append = false) {
     setBusy(true);
     setError(null);
     try {
-      await putSession(activityId, { session_id: sessionId, replace: true });
+      await putSession(activity.id, append ? { session_id: sessionId, append: true } : { session_id: sessionId, replace: true });
       await revalidator.revalidate();
     } catch (e) {
-      setError(e instanceof ApiError ? (e.status === 503 ? "資料庫還在啟動，幾秒後再按一次" : e.message) : "送出失敗，再試一次");
+      setError(assignErrorText(e, activity, holders));
     } finally {
       setBusy(false);
     }
@@ -104,10 +109,10 @@ function useAssign() {
 }
 
 function TodayPost({ day, view, slow, onOpen }: { day: Day; view: PlanView; slow?: boolean; onOpen: (s: ApiSession) => void }) {
-  const { session, activity } = day;
+  const { session, activity, combined } = day;
   const { assign, busy, error } = useAssign();
 
-  if (activity) {
+  if (activity && combined) {
     const r = activity.review;
     const line = r?.reminders[0] ? `→ ${r.reminders[0]}` : firstSentence(r?.comment);
     return (
@@ -116,9 +121,10 @@ function TodayPost({ day, view, slow, onOpen }: { day: Day; view: PlanView; slow
         <div className="body">
           <div className="head">
             <b>{shortName(session)}</b>
+            {combined.count > 1 ? <span className="segs">{combined.count} 筆紀錄</span> : null}
             {r?.verdict ? <VerdictTag verdict={r.verdict} /> : r?.failed ? <span className="pending failed">分析失敗，點進去重試</span> : view.data.coach_checkin_open ? <span className="pending">{view.data.coach_ask_kind === "mismatch" ? "Woo 在問這趟是不是" : view.data.coach_ask_kind === "feel" ? "Woo 在等你回感受" : "Woo 在等你回"}</span> : <span className="pending">{slow ? "分析比較久，點進去看" : "教練分析中…"}</span>}
           </div>
-          <Stats a={activity} day={day} big />
+          <Stats a={combined} day={day} big />
           {line ? <div className="wooline"><CoachAvatar size={20} /><span>{line}</span></div> : null}
         </div>
       </Link>
@@ -153,7 +159,7 @@ function TodayPost({ day, view, slow, onOpen }: { day: Day; view: PlanView; slow
           {view.data.coach_checkin_open ? (
             <Link to="/coach" className="btn primary woo"><span className="w" aria-hidden="true">W</span>Woo 在問這趟練得怎麼樣</Link>
           ) : (
-            <button type="button" className="btn primary" onClick={() => void assign(first.id, session.id)} disabled={busy}>{busy ? "送出中…" : "這趟就是今天的課"}</button>
+            <button type="button" className="btn primary" onClick={() => void assign(first, session.id)} disabled={busy}>{busy ? "送出中…" : "這趟就是今天的課"}</button>
           )}
           {error ? <p className="hint" style={{ color: "var(--v-bad)" }}>{error}</p> : null}
         </>
@@ -166,8 +172,9 @@ function TodayPost({ day, view, slow, onOpen }: { day: Day; view: PlanView; slow
 
 function ExtraRow({ a, view }: { a: ApiActivity; view: PlanView }) {
   const target = sessionForExtra(view, a);
+  const appendTo = appendTargetFor(view, a);
   const run = isRunSport(a.sport_type);
-  const { assign, busy } = useAssign();
+  const { assign, busy, error } = useAssign(view.todayDay?.activities ?? []);
   return (
     <div className="extra-row">
       <Link to={`/activities/${a.id}`} className="who">
@@ -177,7 +184,9 @@ function ExtraRow({ a, view }: { a: ApiActivity; view: PlanView }) {
           <span className="s">{[timeJst(a.start_time), run ? `${pace(a.avg_pace_sec_km)} /km` : null, a.avg_hr != null ? `${a.avg_hr} bpm` : null].filter(Boolean).join(" · ")}</span>
         </span>
       </Link>
-      {target ? <button type="button" className="chip" onClick={() => void assign(a.id, target.id)} disabled={busy}>{busy ? "…" : `算成 ${target.scheduled_date === activityDate(a) ? "今天" : md(target.scheduled_date)} 的課`}</button> : null}
+      {appendTo ? <button type="button" className="chip" onClick={() => void assign(a, appendTo.id, true)} disabled={busy}>{busy ? "…" : "也算今天的課"}</button>
+        : target ? <button type="button" className="chip" onClick={() => void assign(a, target.id)} disabled={busy}>{busy ? "…" : `算成 ${target.scheduled_date === activityDate(a) ? "今天" : md(target.scheduled_date)} 的課`}</button> : null}
+      {error ? <p className="err" role="alert">{error}</p> : null}
     </div>
   );
 }
