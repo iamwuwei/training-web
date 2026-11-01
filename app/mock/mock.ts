@@ -1233,7 +1233,7 @@ function rerunWeek2(s: ApiSession) {
 export function mockPostCheckinPick(checkinId: string, body: PostCheckinPickRequest): PostCheckinPickResponse {
   const t = threadData();
   const c = t.find((m) => m.id === checkinId && m.kind === "checkin");
-  if (!c?.checkin || c.checkin.state !== "open") throw new Error("check-in is no longer open");
+  if (!c?.checkin || c.checkin.state !== "open") throw new ApiError(409, "check-in is no longer open"); // the api's answer
   // append: today's session already has a run and another came in. 不是，另外算 leaves it unassigned; a chip makes it one more recording
   // (no feel question: Woo posts one fixed line and judges the whole session again).
   if (c.checkin.mode === "append") {
@@ -1310,7 +1310,7 @@ function resetCheckin(c: ApiCoachMessage): ApiCoachMessage {
     for (const m of t) if (m.role === "athlete" && m.status === "pending") m.status = "sent";
   }
   c.checkin = { ...c.checkin, state: "reset" };
-  const fresh: ApiCoachMessage = { ...BLANK, id: `c${t.length + 1}`, role: "coach", kind: "checkin", text: c.checkin.mode === "append" ? c.text : `好，那是哪一個？今天的課是 ${c.checkin.session_label ?? ""}。`, activity_id: c.activity_id, checkin: { ...c.checkin, state: "open" }, created_at: new Date().toISOString() };
+  const fresh: ApiCoachMessage = { ...BLANK, id: `c${t.length + 1}`, role: "coach", kind: "checkin", text: c.checkin.mode === "append" ? "好，那這趟是同一堂的另一段嗎？" : `好，那是哪一個？今天的課是 ${c.checkin.session_label ?? ""}。`, activity_id: c.activity_id, checkin: { ...c.checkin, state: "open" }, created_at: new Date().toISOString() };
   t.push(fresh);
   return fresh;
 }

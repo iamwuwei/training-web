@@ -266,6 +266,8 @@ function ActivitiesBody({ onClose, c, s, all, view }: { onClose: () => void; c: 
       if (to) void navigate(`/activities/${to}`, { replace: true });
     } catch (e) {
       setErrors((prev) => ({ ...prev, [x.id]: assignErrorText(e, x, c.group) }));
+      // 409: the session changed under us; fetch it again so reopening the sheet shows what is there now
+      if (e instanceof ApiError && e.status === 409) void revalidator.revalidate();
     } finally {
       setBusy(null);
     }

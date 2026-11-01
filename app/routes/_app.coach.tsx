@@ -395,7 +395,8 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
       if (e instanceof ApiError && e.status === 409) {
         const picked = body.activity_id && view ? [...view.data.activities, ...view.data.unassigned].find((x) => x.id === body.activity_id) ?? null : null;
         const sessionId = messages.find((x) => x.id === checkinId)?.checkin?.session_id;
-        setError(assignErrorText(e, picked, (sessionId && view ? groupBySession(view.data.activities).get(sessionId) : null) ?? []));
+        setError(assignErrorText(e, picked, (sessionId && view ? groupBySession(view.data.activities).get(sessionId) : null) ?? [], "coach"));
+        void revalidator.revalidate(); // the session changed under us: fetch it again
       } else setError(e instanceof ApiError ? e.message : "送出失敗，再試一次");
     } finally {
       setBusy(false);

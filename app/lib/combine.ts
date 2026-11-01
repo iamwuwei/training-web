@@ -24,7 +24,7 @@ export const MAX_PER_SESSION = 5;
 
 const RUN_SPORTS = new Set(["Run", "TrailRun", "VirtualRun"]);
 /** Same kind = both runs or both not runs; a missing sport counts as a run (the api's rule). */
-const isRunKind = (sport: string | null | undefined) => sport == null || RUN_SPORTS.has(sport);
+const isRunKind = (sport: string | null | undefined) => !sport || RUN_SPORTS.has(sport);
 
 const byStart = (x: ApiActivity, y: ApiActivity) => x.start_time.localeCompare(y.start_time) || x.id.localeCompare(y.id);
 
@@ -172,7 +172,7 @@ export function appendTargetFor(view: PlanView, a: ApiActivity): ApiSession | nu
  * the four it sends for a session with several recordings (overlap, kind, too many, already confirmed) have a fixed
  * Chinese sentence, any other 409 means the session changed under us. 503 and every other error read as before.
  */
-export function assignErrorText(e: unknown, a: Pick<ApiActivity, "sport_type"> | null, holders: readonly Pick<ApiActivity, "sport_type">[]): string {
+export function assignErrorText(e: unknown, a: Pick<ApiActivity, "sport_type"> | null, holders: readonly Pick<ApiActivity, "sport_type">[], where: "report" | "coach" = "report"): string {
   if (!(e instanceof ApiError)) return "送出失敗，再試一次";
   if (e.status === 503) return "資料庫還在啟動，幾秒後再按一次";
   if (e.status !== 409) return e.message;
@@ -182,6 +182,7 @@ export function assignErrorText(e: unknown, a: Pick<ApiActivity, "sport_type"> |
     return `這筆是${sportName(a?.sport_type)}，不能跟${names}併成同一堂`;
   }
   if (/too many/i.test(e.message)) return "一堂最多 5 筆";
-  if (/already confirmed/i.test(e.message)) return "這堂已經有紀錄了，要併進去按「加進這堂」";
+  // 加進這堂 only exists on the report page: the coach page says something that works where the athlete is
+  if (/already confirmed/i.test(e.message)) return where === "coach" ? "這堂已經有紀錄了，重新整理後再選一次" : "這堂已經有紀錄了，要併進去按「加進這堂」";
   return "這堂的紀錄剛被改過，關掉再打開一次";
 }

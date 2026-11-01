@@ -677,8 +677,6 @@ main > .bar { height: 4px; margin: 6px 0 6px; }
 .extras .r { font-size: 13px; color: var(--ink-2); white-space: nowrap; }
 .extras .r .num { font-size: 17px; color: var(--ink); }
 
-/* ---- 換一個活動 sheet ---- */
-
 /* ---- today: rows that open the session sheet ---- */
 .today-open .open-plan { display: block; width: 100%; text-align: left; border-radius: 0; }
 button.next-row { width: 100%; text-align: left; border-radius: 0; }

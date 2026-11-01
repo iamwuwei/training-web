@@ -10,7 +10,7 @@ import { Avatar, Bar, CoachAvatar, SectionH, TopBar, VerdictTag } from "../compo
 import { md, mdDow, relativeDay, timeJst } from "../lib/date";
 import { duration, int, km, kmPlan, pace } from "../lib/format";
 import { isStrengthDay, shortName, sportName } from "../lib/labels";
-import { putSession } from "../lib/api";
+import { ApiError, putSession } from "../lib/api";
 import { appendTargetFor, assignErrorText, type Combined } from "../lib/combine";
 import { activityDate, hrOver, isLoggable, isRunSport, lastReminderFor, paceFast, sessionForExtra, type Day, type PlanView } from "../lib/plan";
 import { NoPlan, usePlan } from "../lib/use-plan";
@@ -101,6 +101,7 @@ function useAssign(holders: ApiActivity[] = []) {
       await revalidator.revalidate();
     } catch (e) {
       setError(assignErrorText(e, activity, holders));
+      if (e instanceof ApiError && e.status === 409) void revalidator.revalidate(); // the session changed under us: fetch it again
     } finally {
       setBusy(false);
     }
