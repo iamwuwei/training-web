@@ -908,6 +908,7 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 .acts-row .l2 { display: flex; gap: 12px; margin-top: 4px; font-size: 12px; color: var(--ink-2); white-space: nowrap; overflow: hidden; }
 .acts-row .l2 .num { font-size: 17px; color: var(--ink); }
 .acts-row .acts { grid-column: 2 / -1; display: flex; gap: 8px; }
+.acts-sheet .group-err { margin: 8px 0 0; font-size: 12px; line-height: 1.45; color: var(--v-bad); }
 .acts-row .err { grid-column: 2 / -1; margin: 0; font-size: 12px; line-height: 1.45; color: var(--v-bad); }
 
 /* 今天頁：「Easy 8 km · 2 筆紀錄」, and a refused 也算今天的課 */
@@ -917,5 +918,6 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 /* 教練頁 append check-in: the two answers stacked under the question, flush with the avatar like .proposal-card.multi
    (a candidate label is ~310px: too long to share a row, and wider than the 298px text column) */
 .msg.coach .chips-stack { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin: 10px 0 0 -52px; }
-.msg.coach .chips-stack .chip.tall { max-width: 100%; }
-.msg.coach .chips-stack .chip.tall .lbl { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* a label wider than the column wraps to a second line instead of being cut (390 px: 5 px over, 320 px: 75 px); one line that fits is the 40px chip it always was */
+.msg.coach .chips-stack .chip.tall { max-width: 100%; height: auto; min-height: 40px; padding-top: 6px; padding-bottom: 6px; white-space: normal; text-align: left; border-radius: 20px; }
+.msg.coach .chips-stack .chip.tall .lbl { min-width: 0; overflow-wrap: anywhere; }

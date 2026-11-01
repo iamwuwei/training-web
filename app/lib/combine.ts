@@ -152,6 +152,14 @@ export function combine(group: readonly ApiActivity[]): Combined {
 }
 
 /**
+ * An activity that sits in another session which has other recordings too. Moving it here would leave that session
+ * without one of its segments (and its review stale), so the api refuses (409) and no entry offers it: take it out of
+ * that session first, on its own report. An activity in a session of its own, or with no session, can still be moved.
+ */
+export const inOtherMultiSession = (x: Pick<ApiActivity, "session_id" | "segment">, sessionId: string | null): boolean =>
+  !!x.session_id && x.session_id !== sessionId && (x.segment?.count ?? 1) > 1;
+
+/**
  * The session today's 「也算今天的課」 would add `a` to: today's session when it already has a recording, the
  * group has room, `a` is the same kind of activity, on the same day, and overlaps none of them. Otherwise null
  * (the plain 「算成 … 的課」 chip, or nothing).
@@ -161,6 +169,7 @@ export function appendTargetFor(view: PlanView, a: ApiActivity): ApiSession | nu
   const c = day?.combined;
   if (!day || !c) return null;
   if (c.count >= MAX_PER_SESSION) return null;
+  if (inOtherMultiSession(a, day.session.id)) return null;
   if (toJstDate(a.start_time) !== day.session.scheduled_date) return null;
   if (isRunKind(a.sport_type) !== isRunKind(c.sport_type)) return null;
   if (c.group.some((g) => overlaps(g, a))) return null;
@@ -176,6 +185,7 @@ export function assignErrorText(e: unknown, a: Pick<ApiActivity, "sport_type"> |
   if (!(e instanceof ApiError)) return "送出失敗，再試一次";
   if (e.status === 503) return "資料庫還在啟動，幾秒後再按一次";
   if (e.status !== 409) return e.message;
+  if (/source session has other segments/i.test(e.message)) return "這筆活動在別堂有多段，請先到那堂移除";
   if (/overlap/i.test(e.message)) return "這兩筆時間重疊，應該是同一趟被記了兩次；用「換成這趟」留一筆就好";
   if (/same kind/i.test(e.message)) {
     const names = [...new Set(holders.map((h) => sportName(h.sport_type)))].join("、") || "運動";

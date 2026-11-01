@@ -96,8 +96,10 @@ const knobs = () => globalThis as unknown as MockKnobs;
  *   ignoreSegment an activity id (`a-2026-10-20-2`): that recording is ignored, the session shows one again
  *   tooMany       every append answers 409 "too many …"
  *   conflict      every append answers a 409 the page has no sentence for ("這堂的紀錄剛被改過")
+ *   elsewhere     `u-early` and `u-run-1019` are two recordings of 10/21's session: no entry offers them to 10/20 (the web hides them)
+ *   elsewhere409  every move of an activity that sits in a session with other recordings answers the api's 409 (the rule below is always on; this forces it for any activity)
  */
-interface MultiSwitches { three?: boolean; five?: boolean; ignoreSegment?: string; tooMany?: boolean; conflict?: boolean }
+interface MultiSwitches { three?: boolean; five?: boolean; ignoreSegment?: string; tooMany?: boolean; conflict?: boolean; elsewhere?: boolean; elsewhere409?: boolean }
 const multi = (): MultiSwitches => (globalThis as unknown as { __mock?: MultiSwitches }).__mock ?? {};
 
 const weekNoOn = (weeks: ApiWeek[], date: string) => weeks.find((w) => date >= w.week_start && date <= w.week_end)?.week_no ?? null;
@@ -261,13 +263,22 @@ function build(): PlanResponse {
     if (a.id === multi().ignoreSegment) { a.session_id = null; a.match_status = "ignored"; a.review = null; unassigned.push(a); } else activities.push(a);
   }
   activities.sort((x, y) => x.start_time.localeCompare(y.start_time));
-  // ... and the activities around 10/20 that nothing is assigned to
+  // ... and the activities around 10/20 that nothing is assigned to (with `elsewhere`, two of them are the recordings of another session)
   unassigned.push(
     { ...base, id: "u-early", strava_activity_id: "900011", sport_type: "Run", start_time: at20("06:10"), distance_m: 1200, moving_time_sec: 560, elapsed_time_sec: 600, avg_pace_sec_km: 467, avg_hr: 128, max_hr: 139, avg_watts: null, kcal: 80, device_name: "Apple Watch Series 11" },
     { ...base, id: "u-dup-1020", strava_activity_id: "900012", sport_type: "Run", start_time: at20("07:05"), distance_m: 2400, moving_time_sec: 1040, elapsed_time_sec: 1150, avg_pace_sec_km: 433, avg_hr: null, max_hr: null, avg_watts: null, kcal: null, device_name: "iPhone 17" },
     { ...base, id: "u-walk-1020", strava_activity_id: "900013", sport_type: "Walk", start_time: at20("18:20"), distance_m: 3100, moving_time_sec: 2465, elapsed_time_sec: 2520, avg_pace_sec_km: 795, avg_hr: 98, max_hr: 116, avg_watts: null, kcal: 190, device_name: "Apple Watch Series 11" },
     { ...base, id: "u-run-1019", strava_activity_id: "900014", sport_type: "Run", start_time: new Date("2026-10-19T19:05:00+09:00").toISOString(), distance_m: 4050, moving_time_sec: 1830, elapsed_time_sec: 1890, avg_pace_sec_km: 452, avg_hr: 139, max_hr: 150, avg_watts: null, kcal: 280, device_name: "Apple Watch Series 11" },
   );
+  if (multi().elsewhere) {
+    for (const id of ["u-early", "u-run-1019"]) {
+      const i = unassigned.findIndex((x) => x.id === id);
+      const [x] = unassigned.splice(i, 1);
+      x.session_id = "s-2026-10-21"; x.match_status = "confirmed";
+      activities.push(x);
+    }
+    activities.sort((x, y) => x.start_time.localeCompare(y.start_time));
+  }
 
   // Test-only activities a few days back, `ignored` so no list shows them (open them by URL): a yoga
   // session with nothing but a time (every detail empty), and a run whose Strava names are very long.
@@ -506,8 +517,16 @@ function appendDone(sessionId: string) {
   regroupMock(sessionId);
 }
 
+/** The api's refusal for moving an activity out of a session that has other recordings (its review would be left over a group that lost a segment): take it out there first. */
+function checkElsewhere(a: ApiActivity, sessionId: string) {
+  if (multi().elsewhere409 || (a.session_id && a.session_id !== sessionId && a.match_status !== "ignored" && groupOfSession(a.session_id, a.id).length > 0)) {
+    throw new ApiError(409, "source session has other segments, remove it there first"); // the api's string
+  }
+}
+
 /** The api's refusals for adding `a` to a session that already has activities, in its order, with its English wording. */
 function checkAppend(a: ApiActivity, sessionId: string) {
+  checkElsewhere(a, sessionId);
   const holders = groupOfSession(sessionId, a.id);
   if (multi().conflict) throw new ApiError(409, "session changed, try again");
   if (multi().tooMany || holders.length + 1 > MAX_PER_SESSION) throw new ApiError(409, `too many activities for one session (${MAX_PER_SESSION})`);
@@ -583,6 +602,7 @@ export function mockPutSession(activityId: string, body: PutSessionRequest): Put
   if (body.session_id) {
     const sessionId = body.session_id;
     const s = d.sessions.find((x) => x.id === sessionId) ?? null;
+    checkElsewhere(a, sessionId);
     // (an activity picked through the check-in still sits in `unassigned`, so look in both lists)
     const holders = groupOfSession(sessionId, a.id);
     const append = body.append === true && holders.length > 0;

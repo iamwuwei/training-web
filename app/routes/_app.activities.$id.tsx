@@ -11,7 +11,7 @@ import { BottomSheet } from "../components/sheet";
 import { Avatar, CoachAvatar, Reminders, TopBar, verdictBadge } from "../components/ui";
 import { ApiError, getActivities, putSession, rereview } from "../lib/api";
 import { hasSession } from "../lib/auth";
-import { assignErrorText, combine, groupOf, MAX_PER_SESSION, primaryOf, type Combined } from "../lib/combine";
+import { assignErrorText, combine, groupOf, inOtherMultiSession, MAX_PER_SESSION, primaryOf, type Combined } from "../lib/combine";
 import { dayDiff, md, mdDow, timeJst } from "../lib/date";
 import { duration, int, km, kmPlan, pace } from "../lib/format";
 import { labelStyle, shortName, sportName, verdictKind } from "../lib/labels";
@@ -250,7 +250,7 @@ function ActivitiesBody({ onClose, c, s, all, view }: { onClose: () => void; c: 
   const inGroup = new Set(c.group.map((x) => x.id));
   const seen = new Set<string>();
   const others = [...all, ...(view?.unassigned ?? [])]
-    .filter((x) => !inGroup.has(x.id) && x.match_status !== "ignored" && !seen.has(x.id) && seen.add(x.id) && Math.abs(dayDiff(s.scheduled_date, activityDate(x))) <= 1)
+    .filter((x) => !inGroup.has(x.id) && x.match_status !== "ignored" && !inOtherMultiSession(x, s.id) && !seen.has(x.id) && seen.add(x.id) && Math.abs(dayDiff(s.scheduled_date, activityDate(x))) <= 1)
     .sort((x, y) => y.start_time.localeCompare(x.start_time));
   const when = (x: ApiActivity) => (activityDate(x) === s.scheduled_date ? timeJst(x.start_time) : `${md(activityDate(x))} ${timeJst(x.start_time)}`);
 
@@ -313,6 +313,8 @@ function ActivitiesBody({ onClose, c, s, all, view }: { onClose: () => void; c: 
           {errors[x.id] ? <p className="err" role="alert">{errors[x.id]}</p> : null}
         </div>
       )) : <p className="empty">前後一天沒有別的活動。Strava 可能還沒同步。</p>}
+      {/* a refusal whose row is gone after the page fetched again (the activity is no longer offered): the sentence stays */}
+      {Object.entries(errors).filter(([id]) => !inGroup.has(id) && !others.some((x) => x.id === id)).map(([id, msg]) => <p key={id} className="group-err" role="alert">{msg}</p>)}
       <p className="sheet-foot">最早的那筆是主要紀錄，判定和心得都掛在它上面。加進、移除或換了之後，Woo 會重新看整堂。</p>
     </>
   );
