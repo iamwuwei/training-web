@@ -379,7 +379,8 @@ export default function Report({ loaderData }: Route.ComponentProps) {
       await revalidator.revalidate();
       restart();
     } catch (e) {
-      setRereviewError(e instanceof ApiError ? e.message : "送出失敗，再試一次");
+      // 429: the day's re-judge quota is used up, nothing was touched (the api's wording is English; this sentence is fixed)
+      setRereviewError(e instanceof ApiError ? (e.status === 429 ? "今天重新分析的次數用完了（每天 20 次），明天再試" : e.message) : "送出失敗，再試一次");
     } finally {
       setRereviewBusy(false);
     }
@@ -428,9 +429,17 @@ export default function Report({ loaderData }: Route.ComponentProps) {
             {r.reminders[0] ? <div className="next-band"><b>下次：</b>{r.reminders[0]}</div> : null}
             {r.reminders.length > 1 ? <Reminders items={r.reminders.slice(1)} /> : null}
             <div className="src">
-              <span className="who">{r.source === "claude" ? <><CoachAvatar size={20} badge={verdictBadge(r.verdict)} />Woo · {mdDow(r.created_at.slice(0, 10)).split(" ")[0]} {timeJst(r.created_at)}</> : "教練判定 · 手動"}{waitingReview ? " · 正在依你的心得重新評…" : ""}</span>
+              <span className="who">{r.source === "claude" ? <><CoachAvatar size={20} badge={verdictBadge(r.verdict)} />{r.corrected_at ? <span>Woo · {mdDow(r.created_at.slice(0, 10)).split(" ")[0]} {timeJst(r.created_at)}{" "}<span className="corrected">· 已更正</span></span> : <>Woo · {mdDow(r.created_at.slice(0, 10)).split(" ")[0]} {timeJst(r.created_at)}</>}</> : "教練判定 · 手動"}{waitingReview ? " · 正在依你的心得重新評…" : ""}</span>
               {!waitingReview ? <span className="acts"><Link to={`/coach?quote=${a.id}`} className="chip">問教練</Link>{r.source === "claude" ? retryChip : null}</span> : null}
             </div>
+            {rereviewError ? <p className="hint" style={{ color: "var(--v-bad)" }}>{rereviewError}</p> : null}
+          </section>
+        ) : r?.failed && r.error?.includes("次數用完") ? (
+          // The day's re-judge quota ran out: nothing is broken, the data and the memo are saved. Not red; the api's sentence as it is.
+          <section className="verdict-block">
+            <h2 className="pending-h">今天沒辦法重判</h2>
+            <p className="comment" style={{ color: "var(--ink-2)" }}>{r.error}</p>
+            <div className="src"><span className="who"><CoachAvatar size={20} />Woo</span><span className="acts"><Link to={`/coach?quote=${a.id}`} className="chip">問教練</Link>{retryChip}</span></div>
             {rereviewError ? <p className="hint" style={{ color: "var(--v-bad)" }}>{rereviewError}</p> : null}
           </section>
         ) : r?.failed ? (
