@@ -102,6 +102,26 @@ const knobs = () => globalThis as unknown as MockKnobs;
 interface MultiSwitches { three?: boolean; five?: boolean; ignoreSegment?: string; tooMany?: boolean; conflict?: boolean; elsewhere?: boolean; elsewhere409?: boolean }
 const multi = (): MultiSwitches => (globalThis as unknown as { __mock?: MultiSwitches }).__mock ?? {};
 
+/**
+ * coach-correct-review switches (same `window.__mock`, set before the page loads). Sending a line like 「課表是 7:10 啊」 (課表是／報告…更新／重判／判錯／更正)
+ * in the coach thread makes Woo agree (about the newest verdict message) and redo that verdict, unless:
+ *   correction: "disagree"        only a reply, no re-judge (the correction is null)
+ *               "failed"          the re-judge fails: the wait line becomes 重判沒成功, the report page 分析失敗
+ *               "slow"            the new verdict never arrives (use a fake clock for the 3 minutes)
+ *               "rejected"        Woo agreed but the api refused: why = limit (corrected twice today)
+ *               "rejected-daily" | "rejected-manual" | "rejected-queued" | "rejected-unknown"   the other four whys
+ *   reviewLimit                   the day's re-judge quota is used up: 重新分析 answers 429; a memo / a changed session leaves the fixed "今天沒辦法重判" failed row and Woo says so once;
+ *                                 a correction is refused with why = daily
+ * (without a switch: Woo agrees, the wait line walks reading → judging, the new verdict follows ~6 s after his reply; the third correction of one session in a day is refused with why = limit, and one while another is running with queued.)
+ */
+type CorrectionMode = "ok" | "disagree" | "failed" | "slow" | "rejected" | "rejected-daily" | "rejected-manual" | "rejected-queued" | "rejected-unknown";
+interface CorrectionSwitches { correction?: CorrectionMode; reviewLimit?: boolean }
+const ccr = (): CorrectionSwitches => (globalThis as unknown as { __mock?: CorrectionSwitches }).__mock ?? {};
+const reviewLimited = () => ccr().reviewLimit === true;
+
+const REVIEW_LIMIT_TEXT = "今天重新分析的次數用完了（每天 20 次）。數據和心得都存好了，明天按「重新分析」就會重判。"; // the api's REVIEW_LIMIT_TEXT
+const REVIEW_LIMIT_THREAD = "今天重新分析的次數用完了（每天 20 次），這些我明天再看；數據和心得都存好了。"; // the api's REVIEW_LIMIT_THREAD
+
 const weekNoOn = (weeks: ApiWeek[], date: string) => weeks.find((w) => date >= w.week_start && date <= w.week_end)?.week_no ?? null;
 
 /**
@@ -208,6 +228,7 @@ function build(): PlanResponse {
         failed: false,
         error: null,
         created_at: new Date(`${r.date}T12:00:00+09:00`).toISOString(),
+        corrected_at: null,
       },
       elapsed_time_sec: r.moving_time_sec + 60, // a minute of stops at the lights
       segment: null,
@@ -240,7 +261,7 @@ function build(): PlanResponse {
     { ...runBase, id: "a-2026-10-20", strava_activity_id: "20261020", session_id: "s-2026-10-20", start_time: at20("07:00"), distance_m: 2500, moving_time_sec: 1075, elapsed_time_sec: 1200, avg_pace_sec_km: 430, avg_hr: 141, max_hr: 152, kcal: 190, weather: "晴 14℃",
       memo: "前 2.5 km 手錶被誤觸關掉，停下來重新開了一筆。前半輕鬆，呼吸很穩。", rpe: 3, memo_updated_at: at20("12:00"),
       splits: [...demoSplits([[432, 139], [428, 142]]), { split: 3, distance: 500, moving_time: 215, elapsed_time: 215, elevation_difference: 0, average_speed: 500 / 215, average_heartrate: 143 }],
-      review: { verdict: "達成", comment: "（示範）整堂 6.03 km、7:11，心拍 143 都在範圍內。中間手錶關掉重開不影響整體節奏，後半沒有掉速。", reminders: ["第 1 km 前 3 分鐘用呼吸不用錶"], source: "claude", model: null, adjust_hint: null, failed: false, error: null, created_at: at20("12:30") } },
+      review: { verdict: "達成", comment: "（示範）整堂 6.03 km、7:11，心拍 143 都在範圍內。中間手錶關掉重開不影響整體節奏，後半沒有掉速。", reminders: ["第 1 km 前 3 分鐘用呼吸不用錶"], source: "claude", model: null, adjust_hint: null, failed: false, error: null, created_at: at20("12:30"), corrected_at: null } },
     { ...runBase, id: "a-2026-10-20-2", strava_activity_id: "20261020002", session_id: "s-2026-10-20", start_time: at20("07:32"), distance_m: 3530, moving_time_sec: 1524, elapsed_time_sec: 1580, avg_pace_sec_km: 432, avg_hr: 145, max_hr: 155, kcal: 270, weather: null,
       memo: "後半腿比較沉，最後 1 km 有點喘。", rpe: 6, memo_updated_at: at20("12:05"),
       splits: [...demoSplits([[434, 143], [431, 145], [430, 146]]), { split: 4, distance: 530, moving_time: 229, elapsed_time: 229, elevation_difference: 0, average_speed: 530 / 229, average_heartrate: 148 }] },
@@ -254,7 +275,7 @@ function build(): PlanResponse {
     multiRuns.push(
       { ...runBase, id: "a-2026-10-23", strava_activity_id: "20261023", session_id: "s-2026-10-23", start_time: at23("07:00"), distance_m: 2000, moving_time_sec: 860, elapsed_time_sec: 920, avg_pace_sec_km: 430, avg_hr: 140, max_hr: 149, kcal: 150, weather: "くもり 12℃",
         memo: "前 2 km 熱身，手錶一直沒鎖定，乾脆停掉重開。", rpe: 3, memo_updated_at: at23("12:00"), splits: demoSplits([[432, 138], [428, 141]]),
-        review: { verdict: "達成", comment: "（示範）整堂 6.14 km、7:08，三段接起來節奏很一致。", reminders: ["前 2 km 的心拍留在 140 以下"], source: "claude", model: null, adjust_hint: null, failed: false, error: null, created_at: at23("12:30") } },
+        review: { verdict: "達成", comment: "（示範）整堂 6.14 km、7:08，三段接起來節奏很一致。", reminders: ["前 2 km 的心拍留在 140 以下"], source: "claude", model: null, adjust_hint: null, failed: false, error: null, created_at: at23("12:30"), corrected_at: null } },
       { ...runBase, id: "a-2026-10-23-2", strava_activity_id: "20261023002", session_id: "s-2026-10-23", start_time: at23("07:25"), distance_m: 2200, moving_time_sec: 940, elapsed_time_sec: 1000, avg_pace_sec_km: 427, avg_hr: 143, max_hr: 151, kcal: 165, splits: demoSplits([[429, 142], [425, 144]]) },
       { ...runBase, id: "a-2026-10-23-3", strava_activity_id: "20261023003", session_id: "s-2026-10-23", start_time: at23("07:50"), distance_m: 1940, moving_time_sec: 828, elapsed_time_sec: 828, avg_pace_sec_km: 427, avg_hr: 144, max_hr: 152, kcal: 140, splits: demoSplits([[426, 144]]) },
     );
@@ -407,6 +428,8 @@ export function mockPutMemo(activityId: string, body: PutMemoRequest): PutMemoRe
   a.rpe = body.rpe ?? null;
   a.memo_updated_at = new Date().toISOString();
   refreshSegments();
+  // reviewLimit: the memo is saved, the re-judge is not queued (the api writes a failed row with the fixed sentence)
+  if (reviewLimited() && a.session_id && a.review?.source === "claude") limitReview(groupOfSession(a.session_id)[0] ?? a);
   return { activity: { ...a } };
 }
 
@@ -500,6 +523,7 @@ function regroupMock(sessionId: string) {
   const token = (regroupToken.get(sessionId) ?? 0) + 1;
   regroupToken.set(sessionId, token);
   if (!group.length || group[0].review) return;
+  if (reviewLimited()) { limitReview(group[0]); return; }
   setTimeout(() => {
     if (regroupToken.get(sessionId) !== token) return;
     const now = groupOfSession(sessionId);
@@ -579,11 +603,26 @@ function postMismatchAsk(a: ApiActivity, s: ApiSession, reason: string, from: "c
 
 /** The demo verdict (the worker's review of the activity + Woo's line in the thread). */
 function judge(a: ApiActivity, s: ApiSession | null, segments = 1) {
+  if (reviewLimited()) { limitReview(a); return; }
   const comment = segments > 1 ? `（示範）${segments} 段一起 ${km2(combine(groupOfSession(a.session_id ?? "")).distance_m)} km，數據落在課表目標內，整堂當一趟來看。` : "（示範）數據落在課表目標內，感受也一致。";
   const reminder = "第 1 km 先走 2 分鐘再起跑";
-  a.review = { verdict: "達成", comment, reminders: [reminder], source: "claude", model: null, adjust_hint: null, failed: false, error: null, created_at: new Date().toISOString() };
+  a.review = { verdict: "達成", comment, reminders: [reminder], source: "claude", model: null, adjust_hint: null, failed: false, error: null, created_at: new Date().toISOString(), corrected_at: null };
   const t = threadData();
-  t.push({ ...BLANK, id: `c${t.length + 1}`, role: "coach", kind: "review", text: comment, activity_id: a.id, review: { label: s ? shortName(s) : "未排課", verdict: "達成", reminder, date: s?.scheduled_date ?? todayJst() }, created_at: new Date().toISOString() });
+  supersedeEarlier(a);
+  t.push({ ...BLANK, id: `c${t.length + 1}`, role: "coach", kind: "review", text: comment, activity_id: a.id, review: { label: s ? shortName(s) : "未排課", verdict: "達成", reminder, date: s?.scheduled_date ?? todayJst(), updated: null, superseded: false }, created_at: new Date().toISOString() });
+}
+
+/** Every redo marks the session's earlier verdict messages in the thread as replaced (the api's supersedeReviewMessages): they stay, dimmed. Call before pushing the new one. */
+function supersedeEarlier(a: ApiActivity) {
+  const ids = new Set([a.id, ...(a.session_id ? groupOfSession(a.session_id).map((g) => g.id) : [])]);
+  for (const m of threadData()) if (m.kind === "review" && m.review && m.activity_id && ids.has(m.activity_id)) m.review = { ...m.review, superseded: true };
+}
+
+/** reviewLimit: the day's re-judge quota is used up. The review becomes the api's failed row with the fixed sentence, and Woo says it in the thread once a day. */
+function limitReview(a: ApiActivity) {
+  a.review = { verdict: null, comment: null, reminders: [], source: "claude", model: null, adjust_hint: null, failed: true, error: REVIEW_LIMIT_TEXT, created_at: new Date().toISOString(), corrected_at: null };
+  const t = threadData();
+  if (!t.some((m) => m.role === "coach" && m.kind === "chat" && m.text === REVIEW_LIMIT_THREAD)) t.push({ ...BLANK, id: `c${t.length + 1}`, role: "coach", kind: "chat", text: REVIEW_LIMIT_THREAD, activity_id: a.id, created_at: new Date().toISOString() });
 }
 
 /**
@@ -635,7 +674,8 @@ export function mockPutSession(activityId: string, body: PutSessionRequest): Put
     } else {
       const reason = s ? mismatchReason(a, s) : null;
       if (s && reason) postMismatchAsk(a, s, reason, "report");
-      else setTimeout(() => { a.review = { verdict: "達成", comment: "（示範）數據落在課表目標內，感受也一致。", reminders: ["第 1 km 先走 2 分鐘再起跑"], source: "claude", model: null, adjust_hint: null, failed: false, error: null, created_at: new Date().toISOString() }; afterJudged(); }, 4000);
+      else if (reviewLimited()) limitReview(a);
+      else setTimeout(() => { a.review = { verdict: "達成", comment: "（示範）數據落在課表目標內，感受也一致。", reminders: ["第 1 km 先走 2 分鐘再起跑"], source: "claude", model: null, adjust_hint: null, failed: false, error: null, created_at: new Date().toISOString(), corrected_at: null }; afterJudged(); }, 4000);
     }
   } else {
     const was = a.session_id;
@@ -659,10 +699,16 @@ export function mockActivities(status?: MatchStatus): ActivitiesResponse {
 export function mockRereview(activityId: string): RereviewResponse {
   const asked = findActivity(activityId);
   if (!asked) throw new Error("not found");
+  if (reviewLimited()) throw new ApiError(429, "review daily limit reached"); // the review is left as it is
   const a = (asked.session_id ? groupOfSession(asked.session_id)[0] : null) ?? asked; // on a recording of a group it acts on the primary one: the review is the session's
   a.review = null;
   setTimeout(() => {
-    a.review = { verdict: "達成但有提醒", comment: "（示範）重新分析：配速在區間內，但第 3 km 心拍衝到 166。", reminders: ["MP 第 3 公里開始看心拍"], source: "claude", model: null, adjust_hint: null, failed: false, error: null, created_at: new Date().toISOString() };
+    a.review = { verdict: "達成但有提醒", comment: "（示範）重新分析：配速在區間內，但第 3 km 心拍衝到 166。", reminders: ["MP 第 3 公里開始看心拍"], source: "claude", model: null, adjust_hint: null, failed: false, error: null, created_at: new Date().toISOString(), corrected_at: null };
+    // the worker posts the new verdict in the thread too, and the earlier ones of this session are replaced
+    const t = threadData();
+    const s = data().sessions.find((x) => x.id === a.session_id) ?? null;
+    supersedeEarlier(a);
+    t.push({ ...BLANK, id: `c${t.length + 1}`, role: "coach", kind: "review", text: a.review.comment ?? "", activity_id: a.id, review: { label: s ? shortName(s) : "未排課", verdict: "達成但有提醒", reminder: a.review.reminders[0] ?? null, date: s?.scheduled_date ?? todayJst(), updated: null, superseded: false }, created_at: new Date().toISOString() });
   }, 4000);
   return { queued: true };
 }
@@ -1058,7 +1104,7 @@ function applyToPlan(p: ApiProposal): string[] {
 
 // ---- the coach's thread (demo) ------------------------------------------------
 let thread: ApiCoachMessage[] | undefined;
-const BLANK = { activity_id: null, weekly_review_id: null, status: "sent" as const, review: null, quote: null, rpe: null, checkin: null, ask: null, weekly: null, proposal: null, constraint: null, proposal_rejected: false, stage: null, error: null };
+const BLANK = { activity_id: null, weekly_review_id: null, status: "sent" as const, review: null, quote: null, rpe: null, checkin: null, ask: null, weekly: null, proposal: null, constraint: null, proposal_rejected: false, stage: null, correction: null, error: null };
 
 /** Walk a pending message through Woo's stages on timers (in production the worker writes them), then run `done`. `window.__mockNoReply = true` never finishes. */
 function walkStages(m: ApiCoachMessage, steps: [string, number][], doneAt: number, done: () => void) {
@@ -1077,7 +1123,7 @@ function threadData(): ApiCoachMessage[] {
     { id: "c1", role: "coach", kind: "weekly", text: w.summary ?? "", activity_id: null, weekly_review_id: w.id, status: "sent", review: null, quote: null, error: null, created_at: at("2026-10-12T12:00:00Z"),
       // 10/16 Recovery was moved to 10/30 before this review was written: it counts in this week and the review says so
       weekly: { week_start: w.week_start, asks: [], updated: null, cancelled: [], makeups: [{ from: "2026-10-16", to: "2026-10-30", label: "Recovery 4 km", done: false }] } },
-    { id: "c2", role: "coach", kind: "review", text: "心拍整段壓在 140，是四次 Easy 裡最穩的一次。第 1 km 6:35 偏快是錶的心拍延遲，不是真的用力；第 6 km 8:01 是坡後自然放慢，正常。", activity_id: "a-2026-10-13", weekly_review_id: null, status: "sent", review: { label: "Easy 6 km", verdict: "達成", reminder: "第 1 km 前 3 分鐘用呼吸不用錶", date: "2026-10-13" }, quote: null, error: null, created_at: at("2026-10-12T22:52:00Z") },
+    { id: "c2", role: "coach", kind: "review", text: "心拍整段壓在 140，是四次 Easy 裡最穩的一次。第 1 km 6:35 偏快是錶的心拍延遲，不是真的用力；第 6 km 8:01 是坡後自然放慢，正常。", activity_id: "a-2026-10-13", weekly_review_id: null, status: "sent", review: { label: "Easy 6 km", verdict: "達成", reminder: "第 1 km 前 3 分鐘用呼吸不用錶", date: "2026-10-13", updated: null, superseded: false }, quote: null, error: null, created_at: at("2026-10-12T22:52:00Z") },
     { id: "c3", role: "athlete", kind: "chat", text: "第一公里又衝太快了，有什麼辦法壓住？", activity_id: "a-2026-10-13", weekly_review_id: null, status: "sent", review: null, quote: "10/13 Easy 6.01 km · 7:25/km · 心拍 140（最高 148） · 達成", error: null, created_at: at("2026-10-12T23:10:00Z") },
     { id: "c4", role: "coach", kind: "chat", text: "這是連續第二次了。前 3 分鐘不要看錶，用鼻子呼吸能撐住的速度就是對的；第 1 km 跑到 7:30 以上才算成功。明天 MP 課的前 2 km Easy 也照這個來。", activity_id: null, weekly_review_id: null, status: "sent", review: null, quote: null, error: null, created_at: at("2026-10-12T23:10:20Z") },
     // coach-format samples (md.ts): an explanation with a list and bold (T4+T6), syntax that is not rendered (T7), an old plain text with a single line break (T2), and a long one (T12)
@@ -1385,6 +1431,72 @@ function coachPage({ limit = 10, before }: { limit?: number; before?: string }):
   const start = Math.max(0, end - lim);
   return { coach: { name: "Woo" }, messages: all.slice(start, end).map(exposed), has_more: start > 0 };
 }
+// ---- 更正判定 (coach-correct-review) ----
+/** What the athlete says that makes Woo look at a verdict again (the real Woo decides by reading the schedule; the demo by these words). */
+const CORRECTION_WORDS = /課表是|報告.*更新|重判|判錯|更正/;
+const corrections = { today: new Map<string, number>(), running: new Set<string>() }; // per primary activity: corrections done today, re-judges on their way
+
+/** The newest verdict message in the thread that is still the current one, and the session's primary activity; null when this line is not a correction or there is nothing to correct. */
+function correctionTarget(text: string): { msg: ApiCoachMessage; a: ApiActivity; s: ApiSession | null } | null {
+  if (!CORRECTION_WORDS.test(text)) return null;
+  const msg = [...threadData()].reverse().find((x) => x.kind === "review" && x.activity_id && !x.review?.superseded);
+  const asked = msg?.activity_id ? findActivity(msg.activity_id) : undefined;
+  if (!msg || !asked) return null;
+  const a = (asked.session_id ? groupOfSession(asked.session_id)[0] : null) ?? asked;
+  return { msg, a, s: data().sessions.find((x) => x.id === a.session_id) ?? null };
+}
+
+/** Woo's reply to a correction, then (if he agreed and the api took it) the re-judge: the wait line walks reading → judging, then the new verdict is posted. */
+function answerCorrection(athlete: ApiCoachMessage, { msg, a, s }: NonNullable<ReturnType<typeof correctionTarget>>) {
+  const t = threadData();
+  const mode = ccr().correction ?? "ok";
+  const label = msg.review?.label ?? (s ? shortName(s) : "這堂");
+  const date = msg.review?.date ?? s?.scheduled_date ?? todayJst();
+  const tgt = s?.target ?? null;
+  const pace = tgt ? tgt.split(" / ")[0] : null;
+  const base = { ...BLANK, id: `c${t.length + 1}`, role: "coach" as const, kind: "chat" as const, activity_id: null, created_at: new Date().toISOString() };
+  if (mode === "disagree") {
+    t.push({ ...base, text: `${pace ? `課表寫的是 ${pace}` : "我對照了課表"}，你這堂的數字跟它對不上，所以我維持這個判定和提醒。要是有停錶、繞路這類數據看不出來的情況，跟我說，我再看一次。` });
+    return;
+  }
+  const text = `你說得對，${pace ? `課表的配速是 ${pace}` : "課表的區間我讀錯了"}，我把上一次提醒的數字當成課表了。我重判一次，報告頁和這裡都會更新。`;
+  const why = ccr().reviewLimit ? "daily"
+    : mode === "rejected" ? "limit" : mode.startsWith("rejected-") ? mode.slice(9) as "daily" | "manual" | "queued" | "unknown"
+    : (corrections.today.get(a.id) ?? 0) >= 2 ? "limit"
+    : corrections.running.has(a.id) ? "queued"
+    : null;
+  const reply: ApiCoachMessage = { ...base, text, correction: { activity_id: a.id, label, date, state: why ? "rejected" : "queued", why } };
+  t.push(reply);
+  if (why) return;
+  // accepted: the Claude verdict goes, the report page shows 分析中; the athlete's line now counts as a correction
+  corrections.today.set(a.id, (corrections.today.get(a.id) ?? 0) + 1);
+  corrections.running.add(a.id);
+  const token = (regroupToken.get(a.session_id ?? a.id) ?? 0) + 1;
+  regroupToken.set(a.session_id ?? a.id, token);
+  a.review = null;
+  setTimeout(() => { if (reply.correction?.state === "queued") reply.stage = "reading"; }, 1500);
+  setTimeout(() => { if (reply.correction?.state === "queued") reply.stage = "judging"; }, 3500);
+  if (mode === "slow") return; // the verdict never arrives: the wait line, then the 3-minute sentence
+  setTimeout(() => {
+    corrections.running.delete(a.id);
+    reply.stage = null;
+    const now = new Date().toISOString();
+    if (mode === "failed") {
+      a.review = { verdict: null, comment: null, reminders: [], source: "claude", model: null, adjust_hint: null, failed: true, error: "這次分析沒成功，再試一次", created_at: now, corrected_at: null };
+      reply.correction = { ...reply.correction!, state: "failed", why: null };
+      t.push({ ...BLANK, id: `c${t.length + 1}`, role: "coach", kind: "chat", text: "這次分析沒成功，報告頁可以按「重新分析」", activity_id: a.id, created_at: now });
+      return;
+    }
+    const reason = pace ? `課表的配速是 ${pace}` : "課表的區間讀錯了";
+    const comment = `更正後的判定：${reason}，這堂的配速和心拍都落在區間內，整堂達成。上次把提醒的數字當成課表是我讀錯。`;
+    const reminder = "前段照課表的區間跑就好";
+    a.review = { verdict: "達成", comment, reminders: [reminder], source: "claude", model: null, adjust_hint: null, failed: false, error: null, created_at: now, corrected_at: athlete.created_at };
+    supersedeEarlier(a);
+    t.push({ ...BLANK, id: `c${t.length + 1}`, role: "coach", kind: "review", text: comment, activity_id: a.id, review: { label, verdict: "達成", reminder, date, updated: { reason }, superseded: false }, created_at: now });
+    reply.correction = { ...reply.correction!, state: "done", why: null };
+  }, 5500);
+}
+
 /** Demo mode: Woo answers after ~10 s, walking through the stages, off-topic gets the one-liner. */
 export function mockPostCoachMessage(body: PostCoachMessageRequest): PostCoachMessageResponse {
   const t = threadData();
@@ -1427,10 +1539,12 @@ export function mockPostCoachMessage(body: PostCoachMessageRequest): PostCoachMe
     if (a) { a.memo = body.text; a.rpe = body.rpe ?? null; }
     const m: ApiCoachMessage = { ...BLANK, id: `c${t.length + 1}`, role: "athlete", kind: "chat", text: body.text, status: "pending", activity_id: ask.ask.activity_id, rpe: body.rpe ?? null, created_at: new Date().toISOString() };
     t.push(m);
+    if (reviewLimited()) { m.status = "sent"; if (a) limitReview(groupOfSession(a.session_id ?? "")[0] ?? a); return { message: { ...m } }; } // the answer is kept, no re-judge: the line is not left pending
     // the verdict's wait: reading the run, then comparing pace and heart rate
     walkStages(m, [["reading", 0], ["judging", 2500]], 5000, () => {
-      if (a) a.review = { verdict: "達成但有提醒", comment: "MP 段 6:46 守住了，第 5 km 心拍 166 超過上限。第三公里開始腿重跟數字對得上。", reminders: ["MP 第 3 公里開始看心拍，過 160 就稍微放慢"], source: "claude", model: null, adjust_hint: null, failed: false, error: null, created_at: new Date().toISOString() };
-      t.push({ ...BLANK, id: `c${t.length + 1}`, role: "coach", kind: "review", text: "MP 段 6:46 守住了，第 5 km 心拍 166 超過上限。第三公里開始腿重跟數字對得上。", activity_id: ask.ask!.activity_id, review: { label: "MP 7 km", verdict: "達成但有提醒", reminder: "MP 第 3 公里開始看心拍，過 160 就稍微放慢", date: todayJst() }, created_at: new Date().toISOString() });
+      if (a) a.review = { verdict: "達成但有提醒", comment: "MP 段 6:46 守住了，第 5 km 心拍 166 超過上限。第三公里開始腿重跟數字對得上。", reminders: ["MP 第 3 公里開始看心拍，過 160 就稍微放慢"], source: "claude", model: null, adjust_hint: null, failed: false, error: null, created_at: new Date().toISOString(), corrected_at: null };
+      if (a) supersedeEarlier(a);
+      t.push({ ...BLANK, id: `c${t.length + 1}`, role: "coach", kind: "review", text: "MP 段 6:46 守住了，第 5 km 心拍 166 超過上限。第三公里開始腿重跟數字對得上。", activity_id: ask.ask!.activity_id, review: { label: "MP 7 km", verdict: "達成但有提醒", reminder: "MP 第 3 公里開始看心拍，過 160 就稍微放慢", date: todayJst(), updated: null, superseded: false }, created_at: new Date().toISOString() });
       m.status = "sent";
       afterJudged();
     });
@@ -1482,6 +1596,11 @@ export function mockPostCoachMessage(body: PostCoachMessageRequest): PostCoachMe
   const m: ApiCoachMessage = { ...BLANK, id: `c${t.length + 1}`, role: "athlete", kind: "chat", text: body.text, activity_id: body.activity_id ?? null, status: "pending", quote, created_at: new Date().toISOString() };
   t.push(m);
   // preparing → thinking → searching → writing, then the reply (10 s: each stage outlasts the 2 s poll, so every one can be seen)
+  const target = correctionTarget(body.text);
+  if (target) {
+    walkStages(m, [["preparing", 0], ["thinking", 2500], ["searching", 5000], ["writing", 7500]], 10000, () => { answerCorrection(m, target); m.status = "sent"; });
+    return { message: { ...m } };
+  }
   walkStages(m, [["preparing", 0], ["thinking", 2500], ["searching", 5000], ["writing", 7500]], 10000, () => {
     const offTopic = /吃|電影|天氣|股票|工作/.test(body.text) && !/跑|課表|心拍|配速|腿/.test(body.text);
     const reply = offTopic ? "這個不歸我管，我們回到課表。週五恢復跑完記得寫一下腿的感覺。"

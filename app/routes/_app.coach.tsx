@@ -57,6 +57,31 @@ function Rejected() {
   return <p className="cancelled">Woo 的提案沒過格式檢查，再問他一次</p>;
 }
 
+/** Why Woo could not redo a verdict he agreed to redo: fixed words, the api only sends the enum. 做不到的原因不同，後面接的話不同：次數用完、手動判定、正在重判時按「重新分析」不會有用，所以不叫他去按。 */
+function rejectedText(why: NonNullable<ApiCoachMessage["correction"]>["why"] | undefined): string {
+  switch (why) {
+    case "limit": return "這堂現在不能重判：今天已更正 2 次；可以到報告頁按「重新分析」";
+    case "daily": return "這堂現在不能重判：今天重新分析的次數用完了（每天 20 次）；明天再試";
+    case "manual": return "這堂現在不能重判：這堂是手動判定";
+    case "queued": return "這堂現在不能重判：正在重判中，好了這裡和報告頁會一起更新";
+    default: return "這堂現在不能重判：找不到那堂；可以到報告頁按「重新分析」"; // unknown, null, or a value a newer api sends
+  }
+}
+
+/**
+ * Under Woo's reply in which he agreed to redo a verdict (coach-correct-review): the wait (his stage, or "Woo 在重判 10/31 的 Long 18 km"),
+ * the line when it took too long or did not work, or why he could not. `done` draws nothing: the new verdict message follows in the thread.
+ */
+function CorrectionLine({ m, timedOut }: { m: ApiCoachMessage; timedOut: boolean }) {
+  const c = m.correction;
+  if (!c) return null;
+  const what = `${md(c.date)} 的${/^[A-Za-z0-9]/.test(c.label) ? " " : ""}${c.label}`;
+  if (c.state === "queued") return <div className="said">{timedOut ? "重判比較慢，稍後再回來看；報告頁也會更新" : <WooStatus stage={m.stage} fallback={`Woo 在重判 ${what}`} />}</div>;
+  if (c.state === "failed") return <div className="said">重判沒成功，<Link to={`/activities/${c.activity_id}`}>到報告頁按「重新分析」›</Link></div>;
+  if (c.state === "rejected") return <p className="cancelled">{rejectedText(c.why)}</p>;
+  return null;
+}
+
 const byTime = (a: ApiCoachMessage, b: ApiCoachMessage) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id);
 
 /** A copy of the cache with these messages in it (newer copies win). */
@@ -75,9 +100,9 @@ function DayRule({ date }: { date: string }) {
   return <div className="day-rule"><span />{mdDow(date)}<span /></div>;
 }
 
-function CoachMessage({ m, children, badge }: { m: ApiCoachMessage; children: React.ReactNode; badge?: "check" | "warn" | null }) {
+function CoachMessage({ m, children, badge, className }: { m: ApiCoachMessage; children: React.ReactNode; badge?: "check" | "warn" | null; className?: string }) {
   return (
-    <article className="msg coach">
+    <article className={className ? `msg coach ${className}` : "msg coach"}>
       <CoachAvatar badge={badge} />
       <div className="body">
         <div className="meta"><b>Woo</b><span className="grey">· {timeJst(m.created_at)}</span></div>
@@ -228,11 +253,18 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
   const [decisions, setDecisions] = useState<Record<string, ApiProposal["status"]>>({});
   const statusOf = (p: ApiProposal) => (p.status !== "pending" ? p.status : decisions[p.id] ?? "pending");
 
+  // Woo agreed to redo a verdict and the new one is not in yet (his reply says state queued): the same polling, the wait line sits under his reply.
+  const correctionPending = messages.some((m) => m.role === "coach" && m.correction?.state === "queued");
+
   // Something is on its way (a reply, the verdict, a rewritten review): look every 2 s so the stage text keeps up.
-  const polling = waiting || rerunPending || expectPending;
+  const polling = waiting || rerunPending || expectPending || correctionPending;
   const { timedOut, restart } = useReviewPolling(polling, true);
+  // The reply that says "我重判一次" can itself have taken a while: the 3 minutes of "重判比較慢" count from the reply, not from the send.
+  const restartRef = useRef(restart);
+  useEffect(() => { restartRef.current = restart; });
+  useEffect(() => { if (correctionPending) restartRef.current(); }, [correctionPending]);
   // Polls for a reply do not need /weekly again (see clientLoader); a review being rewritten does.
-  useEffect(() => { reuseWeekly = (waiting || expectPending) && !rerunPending; }, [waiting, expectPending, rerunPending]);
+  useEffect(() => { reuseWeekly = (waiting || expectPending || correctionPending) && !rerunPending; }, [waiting, expectPending, correctionPending, rerunPending]);
   useEffect(() => () => { reuseWeekly = false; lastWeekly = null; }, []);
   const typing = waiting || expectPending;
 
@@ -547,12 +579,17 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
                 {members.slice(1).filter((x) => x.text && x.text !== m.text).map((x) => <MdText key={x.id} text={x.text} />)}
                 {cards(members)}
                 {m.proposal_rejected ? <Rejected /> : null}
+                <CorrectionLine m={m} timedOut={timedOut} />
               </CoachMessage>
             );
           } else if (m.kind === "review") {
-            const first = firstTime(m.activity_id);
+            // A newer verdict of this session is below: this one is dimmed, has no badge and is not "the first" anything.
+            const old = m.review?.superseded === true;
+            const first = old ? null : firstTime(m.activity_id);
             node = (
-              <CoachMessage m={m} badge={verdictBadge(m.review?.verdict)}>
+              <CoachMessage m={m} badge={old ? null : verdictBadge(m.review?.verdict)} className={old ? "superseded" : undefined}>
+                {old ? <p className="cancelled">這則判定已更新，以下面新的為準</p> : null}
+                {m.review?.updated ? <div className="updated rejudged"><span aria-hidden="true">⟳</span> 已更新判定 · {m.review.updated.reason}</div> : null}
                 <div className="head"><b>{m.review?.label}</b><VerdictTag verdict={m.review?.verdict} /></div>
                 {first ? <div className="celebrate"><div className="k">第一次</div><div className="v"><span className="num">{first}</span><span>km 長跑</span></div></div> : null}
                 <MdText text={m.text} />
@@ -571,7 +608,7 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
           } else {
             // Woo's line written as a card was applied (within a few seconds of it) is his confirmation: the avatar gets the check.
             const confirms = m.kind === "chat" && appliedAt.some((t) => Math.abs(t - Date.parse(m.created_at)) < 5000);
-            node = <CoachMessage m={m} badge={confirms ? "check" : null}><MdText text={m.text} />{m.proposal_rejected ? <Rejected /> : null}</CoachMessage>;
+            node = <CoachMessage m={m} badge={confirms ? "check" : null}><MdText text={m.text} />{m.proposal_rejected ? <Rejected /> : null}<CorrectionLine m={m} timedOut={timedOut} /></CoachMessage>;
           }
           return <Fragment key={m.id}>{rule}{node}</Fragment>;
         })}

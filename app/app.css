@@ -921,3 +921,14 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 /* a label wider than the column wraps to a second line instead of being cut (390 px: 5 px over, 320 px: 75 px); one line that fits is the 40px chip it always was */
 .msg.coach .chips-stack .chip.tall { max-width: 100%; height: auto; min-height: 40px; padding-top: 6px; padding-bottom: 6px; white-space: normal; text-align: left; border-radius: 20px; }
 .msg.coach .chips-stack .chip.tall .lbl { min-width: 0; overflow-wrap: anywhere; }
+
+/* coach-correct-review */
+.msg.coach.superseded .meta b,
+.msg.coach.superseded .head b,
+.msg.coach.superseded .verdict,
+.msg.coach.superseded .text,
+.msg.coach.superseded .next { color: var(--ink-3); }
+.msg.coach.superseded .cancelled { margin-top: 4px; color: var(--ink-2); }
+.msg.coach .updated.rejudged { align-items: flex-start; border-radius: 11px; }
+.msg.coach .updated + .head { margin-top: 6px; }
+.verdict-block .src .corrected { color: var(--ink-2); white-space: nowrap; }
