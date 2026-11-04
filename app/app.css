@@ -65,7 +65,7 @@ ul { padding: 0; list-style: none; }
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 3;
   background: var(--bg); border-top: 1px solid var(--line);
 }
-.tabbar nav { max-width: 600px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 6px 8px calc(10px + env(safe-area-inset-bottom)); }
+.tabbar nav { max-width: 600px; margin: 0 auto; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 6px 8px calc(10px + env(safe-area-inset-bottom)); }
 .tabbar a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 48px; color: var(--tab-off); font-size: 11px; }
 .tabbar a svg { width: 24px; height: 24px; }
 .tabbar a[aria-current="page"] { color: var(--ink); font-weight: 700; }
@@ -932,3 +932,270 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 .msg.coach .updated.rejudged { align-items: flex-start; border-radius: 11px; }
 .msg.coach .updated + .head { margin-top: 6px; }
 .verdict-block .src .corrected { color: var(--ink-2); white-space: nowrap; }
+
+/* glass tokens (only .member-menu uses them). alpha .88 so text keeps 4.5:1 even over solid black / white content */
+:root { --glass-bg: rgb(255 255 255 / 0.88); --glass-solid: var(--bg); --glass-border: rgb(20 22 27 / 0.10); --glass-highlight: inset 0 1px 0 rgb(255 255 255 / 0.7); --glass-shadow: 0 10px 30px rgb(20 22 27 / 0.16); }
+@media (prefers-color-scheme: dark) { :root { --glass-bg: rgb(26 28 33 / 0.88); --glass-solid: var(--chip); --glass-border: rgb(255 255 255 / 0.12); --glass-highlight: inset 0 1px 0 rgb(255 255 255 / 0.10); --glass-shadow: 0 10px 30px rgb(0 0 0 / 0.55); } }
+
+/* ---- group-race v3: 群組 tab (清單 → 詳細頁 → 消息中心／大家的課表／成員), 分享設定, /join (tokens only) ---- */
+
+/* 群組清單 /groups: one row type, 72px */
+.group-list { margin: 0; }
+.group-row { display: grid; grid-template-columns: minmax(0, 1fr) auto 16px; column-gap: 12px; align-items: center; height: 72px; border-bottom: 1px solid var(--line); color: var(--ink); }
+.group-row .txt { min-width: 0; }
+.group-row .l1 { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.group-row .nm { min-width: 0; font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.group-row .role { flex: none; font-size: 12px; color: var(--ink-3); }
+.group-row .l2 { margin-top: 2px; font-size: 13px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.group-row .cd { display: flex; align-items: baseline; gap: 3px; white-space: nowrap; }
+.group-row .cd .num { font-size: 26px; color: var(--accent); }
+.group-row .cd .unit { font-size: 13px; color: var(--ink-2); }
+.group-row .cd.text { font-size: 13px; font-weight: 600; color: var(--ink); }
+.group-row > svg { width: 16px; height: 16px; color: var(--ink-3); }
+/* unread count: neutral (ink), not coral — new events are not "good news" */
+.ucount { flex: none; display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--ink); color: var(--bg); font-family: var(--font-num); font-size: 13px; font-weight: 700; line-height: 1; }
+.group-done { margin: 12px 0 0; font-size: 13px; color: var(--ink-2); }
+.group-note { margin: 10px 0 0; padding: 10px 12px; border-radius: 12px; background: var(--chip); font-size: 13px; line-height: 1.5; color: var(--ink); }
+
+/* empty state */
+.group-empty { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 24px 0 12px; }
+.group-empty svg { width: 44px; height: 44px; color: var(--ink); }
+.group-empty .t { margin-top: 10px; font-size: 17px; font-weight: 700; }
+.group-empty .sub { margin-top: 6px; max-width: 300px; font-size: 14px; line-height: 1.6; color: var(--ink-2); }
+.group-empty .btn { margin-top: 16px; }
+.group-empty .hint { margin-top: 10px; font-size: 13px; color: var(--ink-2); }
+.group-privacy { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 12px; line-height: 1.6; color: var(--ink-3); text-align: left; }
+.group-privacy a, .group-foot a { color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; }
+
+/* 詳細頁 hero: same grid as the 今天 hero (.hero2); right column is the race */
+.group-hero .v.text { white-space: normal; }
+.group-hero .race { font-size: 17px; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.group-hero .meta { align-self: start; font-size: 13px; color: var(--ink-2); white-space: nowrap; }
+.topbar h1:has(.back) { min-width: 0; }
+.topbar h1 .t { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* dashboard member row: min-height 84 (with the 4th line 102); the whole row is a link to 大家的課表 ?m= */
+.group-members { margin: 0; }
+.group-member { display: grid; grid-template-columns: 36px minmax(0, 1fr); column-gap: 12px; align-items: center; min-height: 84px; padding: 12px 0; border-bottom: 1px solid var(--line); color: var(--ink); }
+.group-member:has(.l4) { min-height: 104px; }
+/* two-class prefix (0,4,0): must beat the dark-mode `.avatar:not(.rest):not(.woo) { color: var(--bg) }` */
+.group-members .group-member .avatar.member, .events .event-row .avatar.member, .member-admin .member-admin-row .avatar.member { background: var(--chip); color: var(--ink); border: 1px solid var(--chip-line); font-family: var(--font); font-size: 14px; font-weight: 700; }
+.group-member .body { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.group-member .l1 { display: flex; align-items: baseline; gap: 6px; min-width: 0; height: 24px; }
+.group-member .name { min-width: 0; font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.group-member .pill { flex: none; align-self: center; }
+.group-member .role { flex: none; font-size: 12px; color: var(--ink-3); }
+.group-member .wk { flex: none; margin-left: auto; display: flex; align-items: baseline; gap: 3px; white-space: nowrap; }
+.group-member .wk .num { font-size: 22px; color: var(--ink); }
+.group-member .wk .of { font-size: 13px; color: var(--ink-2); }
+.group-member .wk.done .num { color: var(--accent); }
+.group-member .wk.none { font-size: 13px; color: var(--ink-3); }
+.group-member .go { flex: none; align-self: center; width: 14px; height: 14px; margin-right: -2px; color: var(--ink-3); }
+.group-member .l1 .go:only-of-type { margin-left: auto; }
+.group-member .bar { height: 3px; }
+.group-member .l3 { font-size: 13px; line-height: 18px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.group-member .l3.none { color: var(--ink-3); }
+.group-member .l4 { margin-top: -2px; font-size: 13px; line-height: 18px; color: var(--ink-3); }
+
+/* 詳細頁: links to the sub pages, 52px */
+.group-link { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; border-bottom: 1px solid var(--line); color: var(--ink); font-size: 15px; font-weight: 600; }
+.group-link .r { flex: none; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 400; color: var(--ink-2); }
+.group-link .r svg { width: 16px; height: 16px; color: var(--ink-3); }
+.section-row .more { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; font-size: 13px; color: var(--ink-2); }
+.group-foot { margin: 12px 0 0; font-size: 12px; line-height: 1.5; color: var(--ink-3); text-align: center; }
+
+/* 消息中心: one row type, 72px */
+.events { margin: 0; }
+.event-row { display: grid; grid-template-columns: 36px minmax(0, 1fr); column-gap: 12px; align-items: center; height: 72px; border-bottom: 1px solid var(--line); color: var(--ink); width: 100%; text-align: left; border-radius: 0; }
+.event-row .body { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.event-row .l1 { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.event-row .l1 .t { min-width: 0; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.event-row .l1 .t b { font-weight: 600; }
+.event-row .l1 .new { flex: none; margin-left: auto; width: 8px; height: 8px; border-radius: 50%; background: var(--ink); }
+.event-row .l2 { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; color: var(--ink-3); white-space: nowrap; }
+.event-row .l2 .open { margin-left: auto; flex: none; color: var(--ink-2); }
+.event-row.fact .l1 .t { color: var(--ink-2); }
+/* verdict tag on the row: colour on the dot, text in ink (coral text would be 3.46:1 at 13px) */
+.ev-verdict { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 600; color: var(--ink); }
+.ev-verdict::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--ink-3); }
+.ev-verdict.good::before { background: var(--v-good); } .ev-verdict.warn::before { background: var(--v-warn); } .ev-verdict.bad::before { background: var(--v-bad); }
+.ev-verdict.judging { font-weight: 400; color: var(--ink-2); }
+.ev-verdict.judging::before { background: transparent; border: 1.5px solid var(--ink-3); box-sizing: border-box; }
+.events-more { display: block; margin: 12px auto 0; }
+.events-end { margin: 14px 0 0; font-size: 12px; color: var(--ink-3); text-align: center; }
+
+/* 事件詳情 sheet */
+.event-sheet .es-head { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 12px; align-items: center; padding: 4px 0 14px; border-bottom: 1px solid var(--line); }
+.event-sheet .es-head .t { font-size: 20px; font-weight: 700; line-height: 1.3; }
+.event-sheet .es-head .s { font-size: 13px; color: var(--ink-3); }
+.event-sheet .es-stats { display: flex; flex-wrap: wrap; gap: 4px 18px; padding: 14px 0 4px; }
+.event-sheet .es-stats span { display: inline-flex; align-items: baseline; gap: 4px; font-size: 13px; color: var(--ink-2); }
+.event-sheet .es-stats .num { font-size: 26px; color: var(--ink); }
+.event-sheet .es-hr { font-size: 13px; color: var(--ink-2); padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.event-sheet .es-hr .num { font-size: 16px; color: var(--ink); }
+.event-sheet .es-segs .row { display: grid; grid-template-columns: 20px 44px repeat(3, minmax(0, 1fr)); gap: 8px; align-items: baseline; height: 36px; border-bottom: 1px solid var(--line); font-size: 13px; color: var(--ink-2); }
+.event-sheet .es-segs .row .num { font-size: 16px; color: var(--ink); }
+.event-sheet .es-splits .row { display: grid; grid-template-columns: 24px repeat(2, minmax(0, 1fr)); gap: 8px; align-items: baseline; height: 32px; border-bottom: 1px solid var(--line); font-size: 13px; color: var(--ink-2); }
+.event-sheet .es-splits .row .num { font-size: 16px; color: var(--ink); }
+.event-sheet .es-splits .row .d { color: var(--ink-3); font-family: var(--font-num); font-weight: 600; }
+.event-sheet .es-splits .head { height: 28px; font-size: 12px; color: var(--ink-3); border-bottom: 1px solid var(--line); }
+/* Woo 的判定: same block as the report, verdict word in ink with the coloured dot */
+.event-sheet .verdict-block { border-bottom: 1px solid var(--line); }
+.event-sheet .verdict-block h2:not(.pending-h) { color: var(--ink); }
+.event-sheet .verdict-block h2::before { background: var(--ink-3); }
+.event-sheet .verdict-block.good h2::before { background: var(--v-good); } .event-sheet .verdict-block.warn h2::before { background: var(--v-warn); } .event-sheet .verdict-block.bad h2::before { background: var(--v-bad); }
+.event-sheet .verdict-block .fixed { font-size: 15px; color: var(--ink-2); }
+.event-sheet .es-off { padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 13px; color: var(--ink-3); }
+.event-sheet .es-none { padding: 20px 0 12px; font-size: 15px; color: var(--ink-2); text-align: center; }
+
+/* 大家的課表 /groups/:id/plans?m= */
+/* 成員選擇器 (v3: dropdown, Liquid Glass popover — glass is used ONLY by .member-menu) */
+.member-pick-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; min-width: 0; }
+.member-pick-wrap { position: relative; min-width: 0; }
+.member-pick { max-width: 100%; display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 12px 0 6px; border-radius: 22px; border: 1px solid var(--chip-line); background: var(--bg); color: var(--ink); font-size: 15px; font-weight: 600; }
+.member-pick .nm { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.member-pick > svg { flex: none; width: 16px; height: 16px; color: var(--ink-2); transition: transform 0.2s; }
+.member-pick[aria-expanded="true"] > svg { transform: rotate(180deg); }
+.member-pick-row .member-pick .avatar.member, .member-menu .mm-row .avatar.member { width: 30px; height: 30px; flex: none; background: var(--chip); color: var(--ink); border: 1px solid var(--chip-line); font-family: var(--font); font-size: 13px; font-weight: 700; }
+.member-pick-row .upto { min-width: 0; font-size: 13px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.member-menu { position: absolute; z-index: 5; top: calc(100% + 6px); left: 0; width: min(280px, calc(100vw - 40px)); margin: 0; padding: 6px; border-radius: 18px;
+  background: var(--glass-solid); border: 1px solid var(--glass-border); box-shadow: var(--glass-highlight), var(--glass-shadow); }
+@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .member-menu { background: var(--glass-bg); -webkit-backdrop-filter: blur(20px) saturate(160%); backdrop-filter: blur(20px) saturate(160%); }
+}
+.member-menu .mm-row { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto 20px; column-gap: 10px; align-items: center; width: 100%; min-height: 48px; padding: 0 10px 0 8px; border-radius: 12px; color: var(--ink); text-align: left; }
+.member-menu .mm-row:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
+.member-menu .mm-row[aria-selected="true"] .nm { font-weight: 600; }
+.member-menu .mm-row .nm { min-width: 0; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.member-menu .mm-row .hint { font-size: 12px; color: var(--ink-2); white-space: nowrap; }
+.member-menu .mm-row .ck { width: 20px; height: 20px; color: var(--ink); }
+@media (prefers-reduced-motion: reduce) { .member-pick > svg { transition: none; } }
+.member-plan-head { margin: 8px 0 0; font-size: 13px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.member-plan-head b { font-weight: 600; color: var(--ink); }
+.member-plan-off { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 40px 0 16px; }
+.member-plan-off .t { font-size: 16px; font-weight: 600; line-height: 1.5; }
+.member-plan-off .sub { margin-top: 6px; max-width: 300px; font-size: 14px; line-height: 1.6; color: var(--ink-2); }
+.member-plan-off a { margin-top: 12px; min-height: 44px; display: inline-flex; align-items: center; font-size: 14px; color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; }
+.member-plan-note { margin: 12px 0 0; font-size: 12px; line-height: 1.5; color: var(--ink-3); }
+.member-plan-note a { color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; }
+
+/* 成員 /groups/:id/members: one row type, 60px */
+.member-admin { margin: 0; }
+.member-admin-row { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; column-gap: 12px; align-items: center; height: 60px; border-bottom: 1px solid var(--line); }
+.member-admin-row .txt { min-width: 0; }
+.member-admin-row .l1 { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.member-admin-row .name { min-width: 0; font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.member-admin-row .role { flex: none; font-size: 12px; color: var(--ink-3); }
+.member-admin-row .l2 { font-size: 13px; color: var(--ink-3); }
+.member-admin-row .rm { flex: none; min-height: 44px; padding: 0 0 0 12px; font-size: 13px; color: var(--ink-2); }
+
+/* invite block (owner only, on 成員) */
+.group-invite { padding: 4px 0 12px; border-bottom: 1px solid var(--line); }
+.group-invite .gi-t { font-size: 15px; font-weight: 600; }
+.group-invite .gi-sub { margin-top: 2px; font-size: 13px; line-height: 1.5; color: var(--ink-2); }
+.group-invite .gi-link { margin-top: 8px; padding: 10px 12px; border-radius: 12px; background: var(--chip); color: var(--ink); font-size: 14px; line-height: 1.45; word-break: break-all; user-select: all; -webkit-user-select: all; }
+.group-invite .gi-link.selected { box-shadow: inset 0 0 0 2px var(--ink-2); }
+.group-invite .gi-meta { margin-top: 8px; font-size: 13px; color: var(--ink-2); }
+.group-invite .gi-once { margin-top: 4px; font-size: 13px; line-height: 1.5; color: var(--v-warn); }
+.group-invite .gi-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 20px; margin-top: 8px; }
+.group-invite .gi-bar { display: flex; align-items: center; gap: 4px; margin-top: 6px; }
+.group-invite .gi-bar .gi-meta { flex: 1 1 auto; min-width: 0; margin: 0; line-height: 1.4; }
+.group-invite .gi-ic { position: relative; flex: none; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 50%; color: var(--ink-2); }
+.group-invite .gi-ic svg { width: 22px; height: 22px; }
+.group-invite .gi-ic.copy { color: var(--ink); }
+.group-invite .gi-ic.danger { color: var(--v-bad); }
+.group-invite .gi-tip { position: absolute; bottom: calc(100% - 2px); left: 50%; transform: translateX(-50%); padding: 3px 8px; border-radius: 8px; background: var(--ink); color: var(--bg); font-size: 12px; font-weight: 600; white-space: nowrap; pointer-events: none; }
+.group-invite .gi-actions button:not(.btn) { min-height: 44px; font-size: 13px; color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; }
+.group-invite .err, .group-confirm .err, .group-create .err, .join-card .err, .share .err { margin: 8px 0 0; font-size: 13px; line-height: 1.5; color: var(--v-bad); }
+
+/* sheets: create, confirm */
+.group-create .gf-field { margin-top: 16px; }
+.group-create .gf-label { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; font-weight: 700; color: var(--ink-2); letter-spacing: 0.04em; }
+.group-create .gf-count { font-family: var(--font-num); font-size: 13px; font-weight: 600; color: var(--ink-3); letter-spacing: 0; }
+.group-create .gf-count.max { color: var(--v-warn); }
+.group-create .oneline { margin-top: 6px; }
+.group-create .oneline::placeholder { color: var(--ink-3); opacity: 1; }
+.group-create .oneline.bad { border-color: var(--v-bad); }
+.group-create .gf-hint { margin-top: 6px; font-size: 12px; line-height: 1.4; color: var(--ink-3); }
+.group-create .gf-field .err { margin-top: 6px; font-size: 12px; }
+.group-confirm .gc-text { font-size: 15px; line-height: 1.6; color: var(--ink-2); }
+
+/* 找不到這個群組／這位成員 */
+.group-404 { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 40px 0 16px; }
+.group-404 .t { font-size: 16px; font-weight: 600; }
+.group-404 .sub { margin-top: 6px; max-width: 300px; font-size: 14px; line-height: 1.6; color: var(--ink-2); }
+.group-404 a { margin-top: 12px; min-height: 44px; display: inline-flex; align-items: center; font-size: 14px; color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; }
+
+/* 設定 · 群組看得到的 */
+.share .share-intro { margin: 4px 0 4px; font-size: 13px; line-height: 1.5; color: var(--ink-2); }
+.share-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; align-items: center; min-height: 56px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.share-row .t { font-size: 15px; font-weight: 600; }
+.share-row .s { margin-top: 1px; font-size: 13px; line-height: 1.45; color: var(--ink-2); }
+.share-row .risk { margin-top: 4px; font-size: 13px; line-height: 1.45; color: var(--v-warn); }
+.switch { position: relative; flex: none; width: 46px; height: 28px; border-radius: 999px; border: 2px solid var(--ink-3); background: var(--bg); transition: background-color 0.2s, border-color 0.2s; }
+.switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--ink-3); transition: transform 0.2s, background-color 0.2s; }
+.switch[aria-checked="true"] { background: var(--ink); border-color: var(--ink); }
+.switch[aria-checked="true"]::after { transform: translateX(18px); background: var(--bg); }
+.switch:disabled { opacity: 0.6; }
+@media (prefers-reduced-motion: reduce) { .switch, .switch::after { transition: none; } }
+.share .share-note { margin: 10px 0 0; font-size: 12px; line-height: 1.6; color: var(--ink-3); }
+.share .share-never { margin: 8px 0 0; padding: 10px 12px; border-radius: 12px; background: var(--chip); font-size: 12px; line-height: 1.6; color: var(--ink-2); }
+.share .share-never b { font-weight: 600; color: var(--ink); }
+
+/* /join/<token> */
+.join-card { padding: 12px 0 4px; }
+.join-card .by { font-size: 13px; color: var(--ink-2); }
+.join-card h2 { margin-top: 4px; font-size: 22px; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
+.join-card .race { margin-top: 4px; font-size: 15px; color: var(--ink); overflow-wrap: anywhere; }
+.join-card .stats { display: flex; gap: 28px; margin-top: 12px; padding: 12px 0 14px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.join-card .stats .k { font-size: 11px; color: var(--ink-3); letter-spacing: 0.04em; }
+.join-card .stats .v { display: flex; align-items: baseline; gap: 3px; margin-top: 2px; }
+.join-card .stats .num { font-size: 26px; }
+.join-card .stats .num.good { color: var(--accent); }
+.join-card .stats .unit { font-size: 13px; color: var(--ink-2); }
+.join-card .privacy { margin-top: 12px; font-size: 13px; line-height: 1.6; color: var(--ink-2); }
+.join-card .noplan { margin-top: 6px; font-size: 12px; line-height: 1.5; color: var(--ink-3); }
+.join-card .skip { display: inline-flex; align-items: center; min-height: 44px; font-size: 13px; color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; }
+.join-msg { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 40px 0 16px; }
+.join-msg .t { font-size: 16px; font-weight: 600; line-height: 1.5; max-width: 300px; overflow-wrap: anywhere; }
+.join-msg a { margin-top: 12px; min-height: 44px; display: inline-flex; align-items: center; font-size: 14px; color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; }
+
+/* ---- v3 精簡（Wei 2026-11-04）: no full-width buttons on 群組 pages ---- */
+/* compact button: content width, 44px tall (touch target), for page and sheet actions */
+.btn.compact { display: inline-flex; width: auto; height: 44px; padding: 0 20px; margin-top: 0; }
+.actions-row { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.actions-row .grow { margin-right: auto; }
+.group-empty .btn.compact { margin-top: 16px; }
+/* TopBar right icon button (same look as the 今天 gear: --ink-2, 22px icon), 44×44 hit area */
+.topbar .aside .icon-btn { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; margin: -6px -12px -6px 0; border-radius: 50%; color: var(--ink-2); }
+.topbar .aside .icon-btn svg { width: 22px; height: 22px; }
+.topbar .aside .icon-btn[aria-disabled="true"] { opacity: 0.4; }
+/* destructive page action as text (the confirm sheet carries the real button) */
+.group-danger { display: flex; align-items: center; justify-content: center; min-height: 44px; margin: 16px auto 0; font-size: 15px; font-weight: 600; color: var(--v-bad); }
+/* ＋ sheet: 建立群組／用邀請連結加入 */
+.group-add .ga-row { display: grid; grid-template-columns: 36px minmax(0, 1fr) 16px; column-gap: 12px; align-items: center; width: 100%; min-height: 60px; border-bottom: 1px solid var(--line); color: var(--ink); text-align: left; border-radius: 0; }
+.group-add .ga-row .ic { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%; background: var(--chip); color: var(--ink); }
+.group-add .ga-row .ic svg { width: 20px; height: 20px; }
+.group-add .ga-row .t { font-size: 15px; font-weight: 600; }
+.group-add .ga-row .s { font-size: 13px; color: var(--ink-2); }
+.group-add .ga-row > svg { width: 16px; height: 16px; color: var(--ink-3); }
+.group-add .ga-join { padding: 12px 0 4px; }
+.group-add .ga-join .oneline { margin-top: 8px; }
+.group-add .ga-join .oneline::placeholder { color: var(--ink-3); opacity: 1; }
+.group-add .ga-join .oneline.bad { border-color: var(--v-bad); }
+.group-add .ga-join .err { margin: 6px 0 0; font-size: 12px; color: var(--v-bad); }
+.group-add .ga-join .actions-row { margin-top: 10px; }
+
+/* ---- v3: 重新整理 as a TopBar icon button (詳細頁、消息中心) ---- */
+.topbar .aside .icon-btn.refresh:disabled { opacity: 0.6; }
+.topbar .aside .icon-btn.refresh[aria-busy="true"] svg { animation: group-spin 0.8s linear infinite; }
+@keyframes group-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .topbar .aside .icon-btn.refresh[aria-busy="true"] svg { animation: none; } }
+
+/* ---- group-race: small additions the design left to the page (tokens only) ---- */
+.actions-row.center { justify-content: center; }
+.group-skeleton { display: flex; flex-direction: column; }
+.group-add .gf-label { display: block; font-size: 13px; font-weight: 700; color: var(--ink-2); letter-spacing: 0.04em; }
+.group-skeleton-row { display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--line); }
+.group-quiet { margin: 8px 0 0; font-size: 13px; line-height: 1.5; color: var(--ink-3); }
+.share { scroll-margin-top: 72px; }

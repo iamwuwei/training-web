@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { NavLink } from "react-router";
 import type { ApiSession, Verdict } from "../types/api";
 import { labelStyle, verdictKind } from "../lib/labels";
-import { CalendarIcon, ChatIcon, HomeIcon } from "./icons";
+import { CalendarIcon, ChatIcon, GroupIcon, HomeIcon } from "./icons";
 
 /** Type avatar: coloured disc with a 1–2 character code; rest/strength is a hollow grey ring. */
 export function Avatar({ session, sport }: { session: Pick<ApiSession, "label" | "type"> | null | undefined; sport?: string | null }) {
@@ -55,13 +55,24 @@ export function Reminders({ items }: { items: string[] }) {
   );
 }
 
-/** `coachUnread`: Woo has posted since the thread was last opened; a dot on the 教練 tab until it is. */
-export function TabBar({ coachUnread = false }: { coachUnread?: boolean }) {
+/**
+ * `coachUnread`: Woo has posted since the thread was last opened; a dot on the 教練 tab until it is.
+ * `groupsUnread`: some group has 消息中心 events I have not seen (`groups_unread` of GET /plan); the same dot on the 群組 tab.
+ */
+export function TabBar({ coachUnread = false, groupsUnread = false }: { coachUnread?: boolean; groupsUnread?: boolean }) {
   return (
     <div className="tabbar">
       <nav aria-label="主選單">
         <NavLink to="/" end><HomeIcon /><span>今天</span></NavLink>
         <NavLink to="/plan"><CalendarIcon /><span>課表</span></NavLink>
+        <NavLink to="/groups">
+          {({ isActive }) => (
+            <>
+              <span className="icon"><GroupIcon />{groupsUnread && !isActive ? <i className="unread" aria-hidden="true" /> : null}</span>
+              <span>{groupsUnread && !isActive ? <span className="sr-only">有新動態 · </span> : null}群組</span>
+            </>
+          )}
+        </NavLink>
         <NavLink to="/coach">
           {({ isActive }) => (
             <>

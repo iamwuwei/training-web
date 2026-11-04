@@ -3,7 +3,7 @@
 // results become an activity + manual review on the same local date.
 
 import plans from "./plans.json";
-import type { ActivitiesResponse, ApiActivity, ApiCoachMessage, ApiConstraint, ApiProposal, ApiProposalChange, ApiRoutine, ApiSession, ApiSplit, ApiWeek, ApiWeeklyReview, CoachResponse, DetailOptionsResponse, PutDetailsRequest, PutDetailsResponse, PostCoachMessageRequest, PostCoachMessageResponse,
+import type { AcceptInviteResponse, ActivitiesResponse, ApiActivity, ApiGroup, ApiGroupEvent, ApiGroupMember, ApiGroupProgress, ApiSharedActivity, ApiSharedReview, GroupEventDetailResponse, GroupEventsResponse, GroupOkResponse, GroupResponse, GroupsResponse, InvitePreviewResponse, InviteState, MemberPlanResponse, PostGroupInviteResponse, PostGroupRequest, PostGroupResponse, PutShareRequest, ShareResponse, ShareSettings, ApiCoachMessage, ApiConstraint, ApiProposal, ApiProposalChange, ApiRoutine, ApiSession, ApiSplit, ApiWeek, ApiWeeklyReview, CoachResponse, DetailOptionsResponse, PutDetailsRequest, PutDetailsResponse, PostCoachMessageRequest, PostCoachMessageResponse,
   PostCheckinPickRequest,
   PostCheckinPickResponse,
   PostCheckinResetResponse,
@@ -18,6 +18,7 @@ import type { ActivitiesResponse, ApiActivity, ApiCoachMessage, ApiConstraint, A
   PutCoachSeenResponse, MatchStatus, MeResponse, PlanResponse, PostAdjustmentRequest, PostAdjustmentResponse, PutMemoRequest, PutMemoResponse, PutSessionRequest, PutSessionResponse, RereviewResponse, Verdict, WeeklyResponse } from "../types/api";
 import { ApiError } from "../lib/api";
 import { combine, groupBySession, MAX_PER_SESSION, overlaps } from "../lib/combine";
+import { buildPlanView } from "../lib/plan";
 import { addDays, md, mdDow, timeJst, todayJst, toJstDate } from "../lib/date";
 import { kmPlan, pace } from "../lib/format";
 import { shortName, typeLabel, typeName } from "../lib/labels";
@@ -334,6 +335,7 @@ function build(): PlanResponse {
     unassigned,
     routines: [],
     constraints: [],
+    groups_unread: 0,
   };
 }
 
@@ -409,6 +411,7 @@ export function mockPlan(): PlanResponse {
     unassigned: d.unassigned.filter((a) => !a.session_id),
     routines: routines.map((r) => ({ ...r, items: r.items.map((i) => ({ ...i })) })),
     constraints: constraints.filter((c) => c.status === "active").map((c) => ({ ...c })),
+    groups_unread: groupsUnreadTotal(),
   };
 }
 
@@ -1612,4 +1615,491 @@ export function mockPostCoachMessage(body: PostCoachMessageRequest): PostCoachMe
     m.status = "sent";
   });
   return { message: { ...m } };
+}
+
+// =====================================================================================================================
+// 群組 / group-race (demo). In memory, like everything above; `page.goto` resets it.
+//
+// Switches (`window.__mock = { … }`, set before the page loads, e.g. with addInitScript). `share`, `invite`, `shareFail` and the
+// variants `judging`, `failed`, `corrected`, `blocked`, `gone` are read on every call; `groups` and the variants that shape the
+// people and groups (`solo`, `five`, `many`, `noplan`, `outofrange`, `finished`, `member`) are read once, when the groups are first needed:
+//   groups     "none" | "one" (default) | "two" | "three"    how many groups I am in: 富士山組; + 東京 2027; + 跑團組 (three = the limit)
+//   share      Partial<ShareSettings>    Sara's switches (default: progress and events on, plan / runs / reviews off); QA: { plan: true, runs: true, reviews: true }
+//   variant    one name or several ("five,many"), or an array:
+//                solo       富士山組 has only me (no unread, one 加入 event)
+//                five       5 members, one of each kind of dashboard row (Sara 範圍內但今天不在課表週, Ken 課表還沒排到, Taro 還沒有課表, Mika 沒有分享進度), the invite icon is dimmed
+//                many       40 events (更早的 ›)
+//                noplan     Sara has no plan and no runs (her row ends in 最長 —)
+//                outofrange Sara's plan ends before the race
+//                finished   the race is over (已完賽), nobody's plan covers it
+//                member     I am a member, Ken owns the group (no unread)
+//                judging    the newest 完成了 event is not judged yet      failed   its judgement failed      corrected   its judgement was corrected
+//                blocked    after the 消息中心 was opened Sara's `events` switch goes off: the list still shows her events, opening one answers 404, reloading drops them
+//                gone       every action on the group (invite, remove, leave, disband) answers 404: I was removed
+//   invite     "ok" (default) | "expired" | "revoked" | "used_up" | "full" | "already_member" | "group_limit" | "not_found"    what /join/<token> says
+//   shareFail  true → PUT /me/share answers 500
+// =====================================================================================================================
+
+interface GroupSwitches { groups?: "none" | "one" | "two" | "three"; share?: Partial<ShareSettings>; variant?: string | string[]; invite?: InviteState | "not_found"; shareFail?: boolean }
+const gsw = (): GroupSwitches => (globalThis as unknown as { __mock?: GroupSwitches }).__mock ?? {};
+const variants = (): Set<string> => {
+  const v = gsw().variant;
+  return new Set((Array.isArray(v) ? v : (v ?? "").split(",")).map((x) => x.trim()).filter(Boolean));
+};
+const has = (name: string) => variants().has(name);
+
+const DEFAULT_SHARE: ShareSettings = { progress: true, events: true, plan: false, runs: false, reviews: false };
+const ALL_SHARED: ShareSettings = { progress: true, events: true, plan: true, runs: true, reviews: true };
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+const notFound = (what = "group not found") => new ApiError(404, what);
+const isRunAct = (a: ApiActivity) => !a.sport_type || ["Run", "TrailRun", "VirtualRun"].includes(a.sport_type);
+
+// ---- the people ---------------------------------------------------------------------------------------------------
+
+/** Someone in a group: a plan (full shape, drawn through the same `buildPlanView` the app uses) or only a list of runs. */
+interface Person { key: string; name: string; plan: PlanResponse | null; runs: { date: string; m: number }[]; share: () => ShareSettings }
+
+const MOCK_COMMENTS: Record<string, string> = {
+  達成: "（示範）整堂數據都落在課表範圍內，後半沒有掉速，心拍也很穩。",
+  達成但有提醒: "（示範）配速和距離都到了，只是前 2 km 比目標快，心拍跟著被拉高。",
+  未達成: "（示範）這次配速比目標快很多，心拍也超過上限，這堂的目的（控制強度）沒有做到。",
+};
+
+/** A plan and its recordings for a mock friend: the same sessions as the demo plan, runs for the past ones except `skip`. */
+function friendPlan(opts: { id: string; userId: string; raceDate: string; raceName: string; lastDate?: string; every?: number; skip?: string[]; withoutWeekOf?: string; verdicts?: Record<string, Verdict> }): PlanResponse {
+  const today = todayJst();
+  const last = opts.lastDate ?? "9999-12-31";
+  let weeks: ApiWeek[] = (seed.weeks ?? []).filter((w) => w.start <= last).map((w) => ({ week_no: w.week_no, week_start: w.start, week_end: opts.lastDate && w.end > opts.lastDate ? opts.lastDate : w.end, phase: w.phase, focus: w.focus }));
+  if (opts.withoutWeekOf) weeks = weeks.filter((w) => !(opts.withoutWeekOf! >= w.week_start && opts.withoutWeekOf! <= w.week_end));
+  const inWeeks = (d: string) => weeks.some((w) => d >= w.week_start && d <= w.week_end);
+  const sessions: ApiSession[] = seed.sessions.filter((x) => x.date <= last && inWeeks(x.date)).map((x) => ({
+    id: `${opts.id}-s-${x.date}`, plan_id: `${opts.id}-plan`, scheduled_date: x.date, week_no: x.week_no, phase: x.phase, label: x.label, type: x.type, content: x.content, note: x.note, target: x.target,
+    target_distance_m: x.distance_m, target_pace_sec_km: x.pace_sec_km, target_pace_min_sec_km: x.pace_min_sec_km, target_pace_max_sec_km: x.pace_max_sec_km, target_hr_min: x.hr_min, target_hr_max: x.hr_max,
+    brief: DEMO_BRIEFS[x.date] ?? null, skipped_at: null, version: 1, superseded: false, moved_to_session_id: null, moved_to_date: null, moved_from_session_id: null, moved_from_date: null, counts_in_week_no: x.week_no,
+  }));
+  const done = sessions.filter((x) => x.type !== "rest" && x.target_distance_m && x.scheduled_date <= today && !(opts.skip ?? []).includes(x.scheduled_date))
+    .filter((_, i) => i % (opts.every ?? 1) === 0);
+  const activities: ApiActivity[] = done.map((x, i) => {
+    const dist = Math.round((x.target_distance_m ?? 6000) * (0.97 + (i % 5) * 0.015));
+    const pace = Math.round((x.target_pace_sec_km ?? 440) + ((i % 3) - 1) * 4);
+    const hr = x.target_hr_min && x.target_hr_max ? Math.round((x.target_hr_min + x.target_hr_max) / 2) : 146;
+    const moving = Math.round((dist / 1000) * pace);
+    const kms = Math.floor(dist / 1000);
+    const verdict: Verdict = opts.verdicts?.[x.scheduled_date] ?? "達成";
+    const at = new Date(`${x.scheduled_date}T07:00:00+09:00`).toISOString();
+    return {
+      id: `${opts.id}-a-${x.scheduled_date}`, user_id: opts.userId, strava_activity_id: `${opts.id}${x.scheduled_date.replace(/-/g, "")}`, session_id: x.id, sport_type: "Run", start_time: at,
+      distance_m: dist, moving_time_sec: moving, avg_pace_sec_km: pace, avg_hr: hr, max_hr: hr + 12, avg_watts: null, kcal: null, description: null, memo: "（不會被分享）", rpe: 4, memo_updated_at: at,
+      device_name: "Apple Watch", gear_name: "Adizero", weather: "晴", details: NO_DETAILS, details_updated_at: null,
+      splits: demoSplits(Array.from({ length: kms }, (_, k) => [pace + ((k * 7) % 11) - 5, hr - 6 + Math.round((k / Math.max(1, kms)) * 12)] as [number, number])),
+      match_status: "confirmed", elapsed_time_sec: moving + 40, segment: { primary_activity_id: `${opts.id}-a-${x.scheduled_date}`, index: 1, count: 1 },
+      review: { verdict, comment: MOCK_COMMENTS[verdict], reminders: verdict === "達成" ? [] : ["前 2 km 用呼吸不用錶", "心拍超過 150 就放慢"], source: "claude", model: null, adjust_hint: null, failed: false, error: null, created_at: new Date(`${x.scheduled_date}T12:30:00+09:00`).toISOString(), corrected_at: null },
+    };
+  });
+  return {
+    coach_unread: 0, coach_checkin_open: false, coach_ask_kind: null,
+    plan: { id: `${opts.id}-plan`, user_id: opts.userId, race_name: opts.raceName, race_date: opts.raceDate, goal_time_sec: 18000, days_per_week: 4, status: "active" },
+    weeks, sessions, activities, unassigned: [], routines: [], constraints: [], groups_unread: 0,
+  };
+}
+
+const planRuns = (p: PlanResponse): Person["runs"] => p.activities.filter((a) => isRunAct(a) && a.match_status !== "ignored").map((a) => ({ date: toJstDate(a.start_time), m: a.distance_m }));
+
+let people: Record<string, Person> | undefined;
+/** Me (the live demo plan), and the friends. Built once; Sara's shape follows the variants at that moment. */
+function cast(): Record<string, Person> {
+  if (people) return people;
+  const v = variants();
+  const today = todayJst();
+  const sara = v.has("noplan") ? null
+    : v.has("outofrange") ? friendPlan({ id: "sara", userId: "u-sara", raceDate: "2026-11-15", raceName: "河口湖ハーフ", lastDate: "2026-11-15" })
+    : friendPlan({ id: "sara", userId: "u-sara", raceDate: "2026-12-14", raceName: "富士山マラソン", skip: ["2026-10-21", "2026-10-25"], verdicts: { "2026-10-30": "達成但有提醒", "2026-10-14": "達成但有提醒", "2026-10-28": "未達成" }, withoutWeekOf: v.has("five") ? today : undefined });
+  const ken = friendPlan({ id: "ken", userId: "u-ken", raceDate: "2026-11-15", raceName: "河口湖ハーフ", lastDate: "2026-11-15", every: 2 });
+  people = {
+    me: { key: "me", name: "Wei Wu", plan: null, runs: [], share: () => ALL_SHARED },
+    sara: { key: "sara", name: "Sara", plan: sara, runs: sara ? planRuns(sara) : [], share: () => ({ ...DEFAULT_SHARE, ...gsw().share }) },
+    ken: { key: "ken", name: "Ken", plan: ken, runs: planRuns(ken), share: () => ({ ...DEFAULT_SHARE, plan: true, runs: true }) },
+    taro: { key: "taro", name: "Taro", plan: null, runs: [{ date: addDays(today, -1), m: 6000 }, { date: addDays(today, -4), m: 10000 }, { date: addDays(today, -30), m: 21000 }], share: () => ({ ...DEFAULT_SHARE, plan: true }) },
+    mika: { key: "mika", name: "Mika", plan: null, runs: [], share: () => ({ ...DEFAULT_SHARE, progress: false }) },
+  };
+  return people;
+}
+/** My own plan is the live one (what I do in the app shows up in the group). */
+function personPlan(p: Person): PlanResponse | null { return p.key === "me" ? mockPlan() : p.plan; }
+function personRuns(p: Person): Person["runs"] {
+  if (p.key !== "me") return p.runs;
+  return everyActivity().filter((a) => isRunAct(a) && a.match_status !== "ignored").map((a) => ({ date: toJstDate(a.start_time), m: a.distance_m }));
+}
+
+// ---- the numbers on the dashboard (01 N; the api's memberProgress) ----------------------------------------------------
+
+const mondayOf = (d: string) => addDays(d, -((new Date(`${d}T00:00:00Z`).getUTCDay() + 6) % 7));
+
+function progressOf(p: Person, groupRaceDate: string, today: string): ApiGroupProgress {
+  const ws = mondayOf(today);
+  const we = addDays(ws, 6);
+  const runs = personRuns(p);
+  const weekRuns = runs.filter((r) => r.date >= ws && r.date <= we);
+  const recent = runs.filter((r) => r.date >= addDays(today, -83) && r.date <= today);
+  const longest = recent.reduce<{ date: string; m: number } | null>((best, r) => (!best || r.m > best.m ? r : best), null);
+  const base = { week_start: ws, week_actual_m: weekRuns.reduce((t, r) => t + r.m, 0), week_runs: weekRuns.length, longest_m: longest?.m ?? null, longest_date: longest?.date ?? null };
+  const plan = personPlan(p);
+  if (!plan) return { runs: base, plan_state: "no_plan", plan: null };
+  const start = plan.weeks.map((w) => w.week_start).sort()[0] ?? plan.sessions.map((s) => s.scheduled_date).sort()[0];
+  if (!(start && groupRaceDate >= start && groupRaceDate <= plan.plan.race_date)) return { runs: base, plan_state: "out_of_range", plan: null };
+  const view = buildPlanView(plan, today);
+  const w = view.currentWeek;
+  const run = (d: { session: ApiSession }) => d.session.type !== "rest";
+  return {
+    runs: base,
+    plan_state: "in_range",
+    plan: {
+      race_date: plan.plan.race_date,
+      week: w ? { week_no: w.week_no, plan_m: w.plan_m, actual_m: w.actual_m, done_count: w.counted.filter((d) => run(d) && d.activity).length, plan_count: w.counted.filter(run).length } : null,
+      total: { actual_m: view.totals.actual_m, plan_to_date_m: view.totals.plan_to_date_m, pct: view.totals.pct, done_count: view.totals.done_count, plan_count_to_date: view.days.filter((d) => run(d) && d.session.counts_in_week_no != null && d.session.scheduled_date <= today).length },
+    },
+  };
+}
+
+// ---- groups ---------------------------------------------------------------------------------------------------------
+
+interface MEvent { id: string; kind: ApiGroupEvent["kind"]; by: string; at: string | (() => string); date?: string; label?: string }
+interface MGroup { id: string; name: string; race_name: string; race_date: string; created: string; owner: string; members: { id: string; key: string; joined: string }[]; events: MEvent[]; unread: number; invite: { expires_at: string; uses_left: number } | null }
+
+const jst = (d: string, hm: string) => new Date(`${d}T${hm}:00+09:00`).toISOString();
+const evToday = (hm: string) => () => jst(todayJst(), hm);
+const daysAgoAt = (n: number, hm: string) => () => jst(addDays(todayJst(), -n), hm);
+const evAt = (x: MEvent) => (typeof x.at === "function" ? x.at() : x.at);
+
+let groupList: MGroup[] | undefined;
+let extraGroups: MGroup[] = []; // created or joined while the page is open
+let gone = new Set<string>();   // left, disbanded
+let blockedApplied = false;      // `blocked`: a 404 on an event was served, so the list drops Sara's events from now on
+let eventSeq = 100;
+let groupSeq = 0;
+
+function makeGroups(): MGroup[] {
+  const v = variants();
+  const member = v.has("member");
+  const solo = v.has("solo");
+  const five = v.has("five");
+  const finished = v.has("finished");
+  const m = (g: string, key: string, joined: string) => ({ id: `m-${g}-${key}`, key, joined });
+  const fuji: MGroup = {
+    id: "g-fuji", name: "富士山組", race_name: "富士山マラソン", race_date: finished ? "2026-10-05" : seed.race_date, created: "2026-10-28T09:00:00+09:00",
+    owner: member ? "ken" : "me",
+    members: [
+      ...(member ? [m("fuji", "ken", "2026-10-27T09:00:00+09:00")] : []),
+      m("fuji", "me", "2026-10-28T09:00:00+09:00"),
+      ...(solo ? [] : [m("fuji", "sara", "2026-10-29T20:10:00+09:00")]),
+      ...(five ? [m("fuji", "ken", "2026-10-30T08:00:00+09:00"), m("fuji", "taro", "2026-10-31T21:30:00+09:00"), m("fuji", "mika", "2026-11-01T12:00:00+09:00")] : []),
+    ].filter((x, i, a) => a.findIndex((y) => y.key === x.key) === i)
+      .sort((a, b) => (a.key === "me" ? -1 : b.key === "me" ? 1 : a.joined.localeCompare(b.joined))),
+    events: solo
+      ? [{ id: "e-1", kind: "joined", by: "me", at: "2026-10-28T09:00:00+09:00" }]
+      : [
+        { id: "e-1", kind: "session_done", by: "sara", at: evToday("07:41"), date: "2026-11-01", label: "Long 18 km" },
+        { id: "e-2", kind: "session_done", by: "me", at: daysAgoAt(1, "19:20"), date: "2026-10-20", label: "Easy 6 km" },
+        { id: "e-3", kind: "session_done", by: "sara", at: "2026-11-01T10:12:00+09:00", date: "2026-10-30", label: "Easy 6 km" },
+        { id: "e-4", kind: "session_done", by: "me", at: "2026-10-30T09:30:00+09:00", date: "2026-10-08", label: "Easy 6 km" },
+        { id: "e-5", kind: "joined", by: "sara", at: "2026-10-29T20:10:00+09:00" },
+        { id: "e-6", kind: "joined", by: "me", at: "2026-10-28T09:00:00+09:00" },
+      ],
+    unread: solo || member ? 0 : 2, invite: null,
+  };
+  if (five) {
+    fuji.events.unshift({ id: "e-7", kind: "session_done", by: "ken", at: daysAgoAt(0, "06:30"), date: "2026-11-02", label: "Easy 7 km" });
+    fuji.events.splice(3, 0, { id: "e-8", kind: "joined", by: "mika", at: "2026-11-01T12:00:00+09:00" }, { id: "e-9", kind: "joined", by: "taro", at: "2026-10-31T21:30:00+09:00" });
+  }
+  if (v.has("many")) {
+    const who = ["sara", "me", "sara", "me"];
+    for (let i = 0; i < 34; i++) fuji.events.push({ id: `e-m${i}`, kind: "session_done", by: who[i % 4], at: `2026-09-${String(28 - (i % 27)).padStart(2, "0")}T0${(i % 8) + 1}:15:00+09:00`, date: "2026-10-08", label: "Easy 6 km" });
+  }
+  const tokyo: MGroup = {
+    id: "g-tokyo", name: "東京 2027", race_name: "東京マラソン 2027", race_date: "2027-03-07", created: "2026-10-20T09:00:00+09:00", owner: "ken",
+    members: [m("tokyo", "me", "2026-10-22T09:00:00+09:00"), m("tokyo", "ken", "2026-10-20T09:00:00+09:00"), m("tokyo", "mika", "2026-10-25T09:00:00+09:00")].sort((a, b) => (a.key === "me" ? -1 : b.key === "me" ? 1 : a.joined.localeCompare(b.joined))),
+    events: [
+      { id: "t-1", kind: "session_done", by: "ken", at: daysAgoAt(1, "07:05"), date: "2026-10-30", label: "Easy 6 km" },
+      { id: "t-2", kind: "joined", by: "mika", at: "2026-10-25T09:00:00+09:00" },
+      { id: "t-3", kind: "session_done", by: "ken", at: "2026-10-28T08:20:00+09:00", date: "2026-10-27", label: "Easy 7 km" },
+      { id: "t-4", kind: "joined", by: "me", at: "2026-10-22T09:00:00+09:00" },
+      { id: "t-5", kind: "joined", by: "ken", at: "2026-10-20T09:00:00+09:00" },
+    ],
+    unread: 2, invite: null,
+  };
+  const club: MGroup = {
+    id: "g-club", name: "跑團組", race_name: "湘南國際マラソン", race_date: "2026-12-06", created: "2026-10-15T09:00:00+09:00", owner: "taro",
+    members: [m("club", "me", "2026-10-16T09:00:00+09:00"), m("club", "taro", "2026-10-15T09:00:00+09:00")],
+    events: [{ id: "c-1", kind: "joined", by: "me", at: "2026-10-16T09:00:00+09:00" }, { id: "c-2", kind: "joined", by: "taro", at: "2026-10-15T09:00:00+09:00" }],
+    unread: 0, invite: null,
+  };
+  const n = gsw().groups ?? "one";
+  return n === "none" ? [] : n === "one" ? [fuji] : n === "two" ? [fuji, tokyo] : [fuji, tokyo, club];
+}
+
+const myGroups = (): MGroup[] => {
+  groupList ??= makeGroups();
+  return [...groupList, ...extraGroups].filter((g) => !gone.has(g.id));
+};
+const groupById = (id: string): MGroup => {
+  const g = myGroups().find((x) => x.id === id);
+  if (!g) throw notFound();
+  return g;
+};
+const person = (key: string) => cast()[key];
+const mine = (g: MGroup) => g.members.find((x) => x.key === "me")!;
+
+function toApiGroup(g: MGroup): ApiGroup {
+  return { id: g.id, name: g.name, race_name: g.race_name, race_date: g.race_date, created_at: g.created, joined_at: mine(g).joined, my_role: g.owner === "me" ? "owner" : "member", member_count: g.members.length, max_members: 5, unread: g.unread };
+}
+
+export function groupsUnreadTotal(): number {
+  return myGroups().reduce((t, g) => t + g.unread, 0);
+}
+
+export function mockGetGroups(): GroupsResponse {
+  return { groups: myGroups().map(toApiGroup), max_groups: 3 };
+}
+
+export function mockPostGroup(body: PostGroupRequest): PostGroupResponse {
+  const name = body.name.replace(/\s+/g, " ").trim();
+  const race = body.race_name.replace(/\s+/g, " ").trim();
+  if (!name || name.length > 30 || !race || race.length > 40 || !/^\d{4}-\d{2}-\d{2}$/.test(body.race_date) || body.race_date < todayJst()) throw new ApiError(400, "bad request");
+  if (myGroups().length >= 3) throw new ApiError(409, "group limit");
+  const id = `g-new-${++groupSeq}`;
+  const now = new Date().toISOString();
+  const g: MGroup = { id, name, race_name: race, race_date: body.race_date, created: now, owner: "me", members: [{ id: `m-${id}-me`, key: "me", joined: now }], events: [{ id: `e-${++eventSeq}`, kind: "joined", by: "me", at: now }], unread: 0, invite: null };
+  extraGroups.push(g);
+  return { group: toApiGroup(g) };
+}
+
+const flagsOf = (key: string): ShareSettings => person(key).share();
+
+export function mockGetGroup(id: string): GroupResponse {
+  const g = groupById(id);
+  const today = todayJst();
+  const members: ApiGroupMember[] = g.members.map((gm) => {
+    const p = person(gm.key);
+    const shared = p.share();
+    return { id: gm.id, display_name: p.name, is_me: gm.key === "me", role: g.owner === gm.key ? "owner" : "member", joined_at: gm.joined, shared, progress: shared.progress ? progressOf(p, g.race_date, today) : null };
+  });
+  return { group: toApiGroup(g), members, recent_events: visibleEvents(g).slice(0, 3).map((e) => toApiEvent(g, e)), invite: g.owner === "me" && g.invite ? { token: null, expires_at: g.invite.expires_at, uses_left: g.invite.uses_left } : null };
+}
+
+// ---- events -------------------------------------------------------------------------------------------------------------
+
+/** The activities of a session of someone's plan, oldest first (a session may hold several recordings). */
+function sessionActivities(p: Person, date: string): ApiActivity[] {
+  const plan = personPlan(p);
+  const s = plan?.sessions.find((x) => x.scheduled_date === date && !x.moved_to_date);
+  if (!plan || !s) return [];
+  if (p.key === "me") refreshSegments();
+  return plan.activities.filter((a) => a.session_id === s.id && a.match_status !== "ignored").sort(byStart);
+}
+
+const sharedReview = (a: ApiActivity): ApiSharedReview | null => (a.review ? { verdict: a.review.verdict, reminders: a.review.reminders, comment: a.review.comment, source: a.review.source, failed: a.review.failed, created_at: a.review.created_at, corrected_at: a.review.corrected_at } : null);
+const sharedActivity = (a: ApiActivity): ApiSharedActivity => ({
+  id: a.id, session_id: a.session_id, sport_type: a.sport_type, start_time: a.start_time, distance_m: a.distance_m, moving_time_sec: a.moving_time_sec, elapsed_time_sec: a.elapsed_time_sec,
+  avg_pace_sec_km: a.avg_pace_sec_km, avg_hr: a.avg_hr, max_hr: a.max_hr, splits: a.splits, segment: a.segment,
+});
+
+/** The newest 完成了 event of Sara's in the first group: the one the judging / failed / corrected variants act on. */
+const flaggedEventId = () => "e-1";
+
+function judgement(e: MEvent): { verdict: Verdict | null; judging: boolean; failed: boolean; corrected: boolean } {
+  const acts = sessionActivities(person(e.by), e.date ?? "");
+  const r = acts[0]?.review ?? null;
+  if (e.id === flaggedEventId()) {
+    if (has("judging")) return { verdict: null, judging: true, failed: false, corrected: false };
+    if (has("failed")) return { verdict: null, judging: false, failed: true, corrected: false };
+    if (has("corrected")) return { verdict: r?.verdict ?? "達成", judging: false, failed: false, corrected: true };
+  }
+  return { verdict: r?.verdict ?? null, judging: !r, failed: false, corrected: false };
+}
+
+function visibleEvents(g: MGroup): MEvent[] {
+  const members = new Set(g.members.map((x) => x.key));
+  return g.events
+    .filter((e) => {
+      if (e.kind !== "session_done") return true;
+      if (e.by !== "me" && !members.has(e.by)) return false; // he left: his 完成了 lines are gone
+      if (e.by === "sara" && blockedApplied) return false;
+      return e.by === "me" || flagsOf(e.by).events;
+    })
+    .sort((a, b) => evAt(b).localeCompare(evAt(a)));
+}
+
+function toApiEvent(g: MGroup, e: MEvent): ApiGroupEvent {
+  const p = person(e.by);
+  const gm = g.members.find((x) => x.key === e.by);
+  const j = e.kind === "session_done" ? judgement(e) : null;
+  return {
+    id: e.id, kind: e.kind, created_at: evAt(e),
+    member: { id: gm?.id ?? `m-${g.id}-${e.by}`, display_name: p.name, is_me: e.by === "me" },
+    session: e.kind === "session_done" && j ? { label: e.label ?? "", date: e.date ?? "", verdict: j.verdict, judging: j.judging } : null,
+  };
+}
+
+export function mockGetGroupEvents(id: string, opts: { before?: string; limit?: number } = {}): GroupEventsResponse {
+  const g = groupById(id);
+  const all = visibleEvents(g);
+  const limit = Math.min(50, Math.max(1, opts.limit ?? 30));
+  const from = opts.before ? all.findIndex((e) => e.id === opts.before) + 1 : 0;
+  const page = all.slice(from, from + limit);
+  return { events: page.map((e) => toApiEvent(g, e)), has_more: from + limit < all.length };
+}
+
+export function mockGetGroupEvent(id: string, eid: string): GroupEventDetailResponse {
+  const g = groupById(id);
+  const e = g.events.find((x) => x.id === eid);
+  if (!e || e.kind !== "session_done") throw notFound("event not found");
+  const members = new Set(g.members.map((x) => x.key));
+  if (e.by !== "me" && !members.has(e.by)) throw notFound("event not found");
+  if (e.by === "sara" && has("blocked")) { blockedApplied = true; throw notFound("event not found"); }
+  const p = person(e.by);
+  const shared = p.share();
+  if (e.by !== "me" && !shared.events) throw notFound("event not found");
+  const flags = e.by === "me" ? ALL_SHARED : shared;
+  const acts = sessionActivities(p, e.date ?? "");
+  const j = judgement(e);
+  const prim = acts[0] ?? null;
+  const rv = prim ? sharedReview(prim) : null;
+  let review: ApiSharedReview | null = null;
+  if (flags.reviews) {
+    if (j.failed) review = { verdict: null, reminders: [], comment: null, source: "claude", failed: true, created_at: evAt(e), corrected_at: null };
+    else if (!j.judging && rv) review = { ...rv, corrected_at: j.corrected ? evAt(e) : rv.corrected_at };
+  }
+  return {
+    event: toApiEvent(g, e), shared: flags,
+    activity: flags.runs && prim ? sharedActivity(prim) : null,
+    segments: flags.runs ? acts.map(sharedActivity) : [],
+    review,
+  };
+}
+
+export function mockPutGroupSeen(id: string): GroupOkResponse {
+  groupById(id).unread = 0;
+  return { ok: true };
+}
+
+// ---- someone's plan (大家的課表) ----------------------------------------------------------------------------------------
+
+export function mockGetMemberPlan(id: string, mid: string): MemberPlanResponse {
+  const g = groupById(id);
+  const gm = g.members.find((x) => x.id === mid);
+  if (!gm) throw notFound("member not found");
+  const p = person(gm.key);
+  const flags = gm.key === "me" ? ALL_SHARED : p.share();
+  const plan = personPlan(p);
+  const base = { member: { id: gm.id, display_name: p.name, is_me: gm.key === "me" }, shared: flags };
+  if (!flags.plan || !plan) return { ...base, plan: null, weeks: [], sessions: [], activities: [] };
+  if (gm.key === "me") refreshSegments();
+  return {
+    ...base,
+    plan: { race_name: plan.plan.race_name, race_date: plan.plan.race_date, goal_time_sec: plan.plan.goal_time_sec },
+    weeks: plan.weeks,
+    sessions: plan.sessions.map((s) => ({
+      id: s.id, scheduled_date: s.scheduled_date, week_no: s.week_no, phase: s.phase, label: s.label, type: s.type, content: s.content, note: s.note, target: s.target, target_distance_m: s.target_distance_m,
+      target_pace_sec_km: s.target_pace_sec_km, target_pace_min_sec_km: s.target_pace_min_sec_km, target_pace_max_sec_km: s.target_pace_max_sec_km, target_hr_min: s.target_hr_min, target_hr_max: s.target_hr_max,
+      brief: s.brief, skipped_at: s.skipped_at, superseded: s.superseded, moved_to_session_id: s.moved_to_session_id, moved_to_date: s.moved_to_date, moved_from_session_id: s.moved_from_session_id, moved_from_date: s.moved_from_date, counts_in_week_no: s.counts_in_week_no,
+    })),
+    activities: flags.runs ? plan.activities.filter((a) => a.match_status !== "ignored").map((a) => ({ ...sharedActivity(a), review: flags.reviews ? sharedReview(a) : null })) : [],
+  };
+}
+
+// ---- membership, invites ----------------------------------------------------------------------------------------------
+
+const goneIf = () => { if (has("gone")) throw notFound(); };
+
+export function mockPostGroupInvite(id: string): PostGroupInviteResponse {
+  goneIf();
+  const g = groupById(id);
+  if (g.members.length >= 5) throw new ApiError(409, "group is full");
+  const expires = new Date(Date.now() + 7 * 86_400_000).toISOString();
+  g.invite = { expires_at: expires, uses_left: 5 - g.members.length };
+  return { invite: { token: MOCK_TOKEN, expires_at: expires, uses_left: g.invite.uses_left } };
+}
+
+export function mockDeleteGroupInvite(id: string): GroupOkResponse {
+  goneIf();
+  groupById(id).invite = null;
+  return { ok: true };
+}
+
+export function mockPostGroupLeave(id: string): GroupOkResponse {
+  goneIf();
+  const g = groupById(id);
+  if (g.owner === "me") throw new ApiError(409, "owner cannot leave");
+  gone.add(g.id);
+  return { ok: true };
+}
+
+export function mockDeleteGroup(id: string): GroupOkResponse {
+  goneIf();
+  const g = groupById(id);
+  if (g.owner !== "me") throw new ApiError(403, "not owner");
+  gone.add(g.id);
+  return { ok: true };
+}
+
+export function mockPostGroupMemberRemove(id: string, mid: string): GroupOkResponse {
+  goneIf();
+  const g = groupById(id);
+  if (g.owner !== "me") throw new ApiError(403, "not owner");
+  const gm = g.members.find((x) => x.id === mid);
+  if (!gm) throw notFound("member not found");
+  if (gm.key === "me") throw new ApiError(400, "bad request");
+  g.members = g.members.filter((x) => x !== gm);
+  g.events.unshift({ id: `e-${++eventSeq}`, kind: "left", by: gm.key, at: new Date().toISOString() });
+  if (g.invite) g.invite.uses_left = 5 - g.members.length;
+  return { ok: true };
+}
+
+const MOCK_TOKEN = "mock-invite-token-AbCdEfGhIjKlMnOpQrStUv012"; // 43 characters, like the api's
+const INVITE_GROUP = { id: "g-spring", name: "春日組", race_name: "富士山マラソン", race_date: "2026-12-13", member_count: 2, invited_by: "Taro" };
+
+function inviteState(): InviteState | "not_found" {
+  return gsw().invite ?? (myGroups().length >= 3 ? "group_limit" : "ok");
+}
+
+export function mockGetInvite(_token: string): InvitePreviewResponse {
+  const state = inviteState();
+  if (state === "not_found") throw notFound("invite not found");
+  if (state === "ok") return { state, group: INVITE_GROUP };
+  if (state === "full") return { state, group: { ...INVITE_GROUP, member_count: 5 } };
+  if (state === "already_member") return { state, group: { ...INVITE_GROUP, id: myGroups()[0]?.id ?? "g-fuji", name: myGroups()[0]?.name ?? "富士山組" } };
+  return { state, group: null };
+}
+
+export function mockPostInviteAccept(_token: string): AcceptInviteResponse {
+  const state = inviteState();
+  if (state !== "ok") throw new ApiError(409, state);
+  const now = new Date().toISOString();
+  const g: MGroup = {
+    id: INVITE_GROUP.id, name: INVITE_GROUP.name, race_name: INVITE_GROUP.race_name, race_date: INVITE_GROUP.race_date, created: "2026-10-30T09:00:00+09:00", owner: "taro",
+    members: [{ id: "m-spring-me", key: "me", joined: now }, { id: "m-spring-taro", key: "taro", joined: "2026-10-30T09:00:00+09:00" }, { id: "m-spring-ken", key: "ken", joined: "2026-10-31T09:00:00+09:00" }],
+    events: [{ id: `e-${++eventSeq}`, kind: "joined", by: "me", at: now }, { id: `e-${++eventSeq}`, kind: "joined", by: "ken", at: "2026-10-31T09:00:00+09:00" }, { id: `e-${++eventSeq}`, kind: "joined", by: "taro", at: "2026-10-30T09:00:00+09:00" }],
+    unread: 0, invite: null,
+  };
+  extraGroups = [...extraGroups.filter((x) => x.id !== g.id), g];
+  gone.delete(g.id);
+  return { group: toApiGroup(g) };
+}
+
+// ---- my own switches ----------------------------------------------------------------------------------------------------
+
+let myShare: ShareSettings = { ...DEFAULT_SHARE };
+
+export function mockGetShare(): ShareResponse {
+  return { share: { ...myShare } };
+}
+
+export async function mockPutShare(body: PutShareRequest): Promise<ShareResponse> {
+  await sleep(250); // long enough to see the switch wait for the answer
+  if (gsw().shareFail) throw new ApiError(500, "伺服器錯誤，稍後再試");
+  for (const [k, v] of Object.entries(body.share)) {
+    if (!(k in DEFAULT_SHARE) || typeof v !== "boolean") throw new ApiError(400, "bad request");
+  }
+  myShare = { ...myShare, ...body.share };
+  return { share: { ...myShare } };
 }

@@ -1,7 +1,20 @@
 import type {
+  AcceptInviteResponse,
   ActivitiesResponse,
   DeleteStravaResponse,
   ErrorResponse,
+  GroupEventDetailResponse,
+  GroupEventsResponse,
+  GroupOkResponse,
+  GroupResponse,
+  GroupsResponse,
+  InvitePreviewResponse,
+  MemberPlanResponse,
+  PostGroupInviteResponse,
+  PostGroupRequest,
+  PostGroupResponse,
+  PutShareRequest,
+  ShareResponse,
   MatchStatus,
   MeResponse,
   PlanResponse,
@@ -222,4 +235,107 @@ export function putCoachSeen(): Promise<PutCoachSeenResponse> {
 export function postCoachMessage(body: PostCoachMessageRequest): Promise<PostCoachMessageResponse> {
   if (useMock) return mock().then((m) => m.mockPostCoachMessage(body));
   return request<PostCoachMessageResponse>("/coach/messages", { method: "POST", body: JSON.stringify(body) });
+}
+
+// ---- 群組 / group-race -------------------------------------------------------------------
+// Every call about one group is answered only for a current member; anyone else (and an unknown id) gets the same 404.
+
+/** My groups (the 群組 tab): oldest membership first, with the unread count of each. */
+export function getGroups(): Promise<GroupsResponse> {
+  if (useMock) return mock().then((m) => m.mockGetGroups());
+  return request<GroupsResponse>("/groups");
+}
+
+/** Create a group (I am its owner). 409 `group limit`: already in max_groups. */
+export function postGroup(body: PostGroupRequest): Promise<PostGroupResponse> {
+  if (useMock) return mock().then((m) => m.mockPostGroup(body));
+  return request<PostGroupResponse>("/groups", { method: "POST", body: JSON.stringify(body) });
+}
+
+/** The group's page: members with their dashboard numbers (as each one shares them), the newest 3 events, the owner's invite. */
+export function getGroup(id: string): Promise<GroupResponse> {
+  if (useMock) return mock().then((m) => m.mockGetGroup(id));
+  return request<GroupResponse>(`/groups/${encodeURIComponent(id)}`);
+}
+
+/** Owner: disband. */
+export function deleteGroup(id: string): Promise<GroupOkResponse> {
+  if (useMock) return mock().then((m) => m.mockDeleteGroup(id));
+  return request<GroupOkResponse>(`/groups/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+/** Owner: a new invite link (the old one stops working). The plain token comes back only in this response. */
+export function postGroupInvite(id: string): Promise<PostGroupInviteResponse> {
+  if (useMock) return mock().then((m) => m.mockPostGroupInvite(id));
+  return request<PostGroupInviteResponse>(`/groups/${encodeURIComponent(id)}/invite`, { method: "POST" });
+}
+
+/** Owner: revoke the live invite. */
+export function deleteGroupInvite(id: string): Promise<GroupOkResponse> {
+  if (useMock) return mock().then((m) => m.mockDeleteGroupInvite(id));
+  return request<GroupOkResponse>(`/groups/${encodeURIComponent(id)}/invite`, { method: "DELETE" });
+}
+
+/** A member (not the owner) leaves. */
+export function postGroupLeave(id: string): Promise<GroupOkResponse> {
+  if (useMock) return mock().then((m) => m.mockPostGroupLeave(id));
+  return request<GroupOkResponse>(`/groups/${encodeURIComponent(id)}/leave`, { method: "POST" });
+}
+
+/** Owner: remove a member (`mid` is the membership id from GroupResponse.members). */
+export function postGroupMemberRemove(id: string, mid: string): Promise<GroupOkResponse> {
+  if (useMock) return mock().then((m) => m.mockPostGroupMemberRemove(id, mid));
+  return request<GroupOkResponse>(`/groups/${encodeURIComponent(id)}/members/${encodeURIComponent(mid)}/remove`, { method: "POST" });
+}
+
+/** One member's plan, read-only, as far as he shares it (my own: everything). 404 `member not found`: not in this group (any more). */
+export function getMemberPlan(id: string, mid: string): Promise<MemberPlanResponse> {
+  if (useMock) return mock().then((m) => m.mockGetMemberPlan(id, mid));
+  return request<MemberPlanResponse>(`/groups/${encodeURIComponent(id)}/members/${encodeURIComponent(mid)}/plan`);
+}
+
+/** 消息中心, newest first; `before` is the id of the last event of the previous page. */
+export function getGroupEvents(id: string, opts: { before?: string; limit?: number } = {}): Promise<GroupEventsResponse> {
+  if (useMock) return mock().then((m) => m.mockGetGroupEvents(id, opts));
+  const q = new URLSearchParams();
+  if (opts.before) q.set("before", opts.before);
+  if (opts.limit != null) q.set("limit", String(opts.limit));
+  const qs = q.toString();
+  return request<GroupEventsResponse>(`/groups/${encodeURIComponent(id)}/events${qs ? `?${qs}` : ""}`);
+}
+
+/** The detail of one session_done event, as far as its actor shares it. 404: gone, or hidden since. */
+export function getGroupEvent(id: string, eid: string): Promise<GroupEventDetailResponse> {
+  if (useMock) return mock().then((m) => m.mockGetGroupEvent(id, eid));
+  return request<GroupEventDetailResponse>(`/groups/${encodeURIComponent(id)}/events/${encodeURIComponent(eid)}`);
+}
+
+/** The 消息中心 was opened: clears this group's unread count. */
+export function putGroupSeen(id: string): Promise<GroupOkResponse> {
+  if (useMock) return mock().then((m) => m.mockPutGroupSeen(id));
+  return request<GroupOkResponse>(`/groups/${encodeURIComponent(id)}/seen`, { method: "PUT" });
+}
+
+/** What an invite link is, before accepting it. 404: no such invite. */
+export function getInvite(token: string): Promise<InvitePreviewResponse> {
+  if (useMock) return mock().then((m) => m.mockGetInvite(token));
+  return request<InvitePreviewResponse>(`/invites/${encodeURIComponent(token)}`);
+}
+
+/** Join through an invite link. 409 with the state (`full`, `group_limit` …) when it can not be used. */
+export function postInviteAccept(token: string): Promise<AcceptInviteResponse> {
+  if (useMock) return mock().then((m) => m.mockPostInviteAccept(token));
+  return request<AcceptInviteResponse>(`/invites/${encodeURIComponent(token)}/accept`, { method: "POST" });
+}
+
+/** What the people of my groups may see of me (defaults when never set). */
+export function getShare(): Promise<ShareResponse> {
+  if (useMock) return mock().then((m) => m.mockGetShare());
+  return request<ShareResponse>("/me/share");
+}
+
+/** Change some of my switches; it takes effect on the next request of anyone. */
+export function putShare(body: PutShareRequest): Promise<ShareResponse> {
+  if (useMock) return mock().then((m) => m.mockPutShare(body));
+  return request<ShareResponse>("/me/share", { method: "PUT", body: JSON.stringify(body) });
 }

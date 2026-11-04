@@ -2,23 +2,26 @@ import { Outlet, redirect } from "react-router";
 import type { Route } from "./+types/_app";
 import { TabBar } from "../components/ui";
 import { ApiError, getPlan } from "../lib/api";
-import { AuthError, completeLogin, getUser, hasSession, logout, type SessionUser } from "../lib/auth";
+import { AuthError, completeLogin, getUser, hasSession, logout, saveReturnTo, takeReturnTo, type SessionUser } from "../lib/auth";
 import type { PlanResponse } from "../types/api";
 
-// Layout for the three tabs. Finishes the Cognito callback (?code=&state= on "/"),
+// Layout for the four tabs. Finishes the Cognito callback (?code=&state= on "/"),
 // then loads the plan once; children read it through usePlan() (app/lib/use-plan.tsx).
 
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   const url = new URL(request.url);
   let loginError: string | null = null;
   try {
-    if (await completeLogin(url)) throw redirect("/");
+    if (await completeLogin(url)) throw redirect(takeReturnTo() ?? "/"); // back to the invite link that sent the person to log in, if any
   } catch (e) {
     if (e instanceof AuthError) loginError = e.message;
     else throw e;
   }
   if (loginError) return { data: null as PlanResponse | null, user: null as SessionUser | null, error: loginError };
-  if (!hasSession()) throw redirect("/login");
+  if (!hasSession()) {
+    saveReturnTo(url.pathname);
+    throw redirect("/login");
+  }
 
   const user = getUser();
   try {
@@ -56,7 +59,7 @@ export default function AppLayout({ loaderData }: Route.ComponentProps) {
   return (
     <div className="shell">
       <Outlet />
-      <TabBar coachUnread={(loaderData.data?.coach_unread ?? 0) > 0} />
+      <TabBar coachUnread={(loaderData.data?.coach_unread ?? 0) > 0} groupsUnread={(loaderData.data?.groups_unread ?? 0) > 0} />
     </div>
   );
 }
