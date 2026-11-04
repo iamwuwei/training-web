@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, redirect, useNavigate } from "react-router";
+import { Link, redirect, useNavigate, useRevalidator } from "react-router";
 import type { Route } from "./+types/_app.join.$token";
 import { TopBar } from "../components/ui";
 import { ApiError, getInvite, postInviteAccept } from "../lib/api";
@@ -10,7 +10,7 @@ import { parseInviteToken } from "../lib/invite";
 import { usePlan } from "../lib/use-plan";
 import type { InvitePreviewResponse, InviteState } from "../types/api";
 
-type Preview = { state: InviteState | "not_found"; group: InvitePreviewResponse["group"] };
+type Preview = { state: InviteState | "not_found" | "error"; group: InvitePreviewResponse["group"] };
 
 export async function clientLoader({ params, request }: Route.ClientLoaderArgs): Promise<{ token: string; preview: Preview }> {
   if (!hasSession()) {
@@ -24,17 +24,22 @@ export async function clientLoader({ params, request }: Route.ClientLoaderArgs):
     const p = await getInvite(token);
     return { token, preview: { state: p.state, group: p.group } };
   } catch (e) {
-    if (e instanceof ApiError && e.status === 401) throw redirect("/login");
+    if (e instanceof ApiError && e.status === 401) {
+      saveReturnTo(new URL(request.url).pathname); // the session ran out on the way: log in again, come back here
+      throw redirect("/login");
+    }
     if (e instanceof ApiError && e.status === 404) return { token, preview: { state: "not_found", group: null } };
-    throw e;
+    // anything else (403, 429, 5xx, no network): a fixed sentence — never the api's own words, never the root error page
+    return { token, preview: { state: "error", group: null } };
   }
 }
 
 export function meta(): Route.MetaDescriptors {
-  return [{ title: "加入群組 · 富士山マラソン 2026" }];
+  // the invite token is in the address: no Referer to anyone (LINE's in-app browser and old WebViews do not all default to a strict policy)
+  return [{ title: "加入群組 · 富士山マラソン 2026" }, { name: "referrer", content: "no-referrer" }];
 }
 
-const MESSAGES: Record<Exclude<InviteState, "ok"> | "not_found", string> = {
+const MESSAGES: Record<Exclude<InviteState, "ok"> | "not_found" | "error", string> = {
   expired: "這條邀請已過期，請擁有者再發一條",
   revoked: "這條邀請已被撤銷",
   used_up: "這條邀請已經用完了",
@@ -42,11 +47,13 @@ const MESSAGES: Record<Exclude<InviteState, "ok"> | "not_found", string> = {
   already_member: "你已經在這個群組裡了",
   group_limit: LIMIT_TEXT,
   not_found: "找不到這條邀請",
+  error: "讀不到這條邀請，再試一次",
 };
 
 /** 加入頁 /join/<token>: who invited you to what, then 加入群組 — or one sentence (and one link) saying why this link can not be used. */
 export default function Join({ loaderData }: Route.ComponentProps) {
   const navigate = useNavigate();
+  const revalidator = useRevalidator();
   const plan = usePlan();
   const { token } = loaderData;
   // the answer of the last 409 replaces what the loader said, for this token only
@@ -85,7 +92,9 @@ export default function Join({ loaderData }: Route.ComponentProps) {
         <main>
           <div className="join-msg">
             <p className="t">{MESSAGES[state]}</p>
-            <Link to={to.href}>{to.text}</Link>
+            {state === "error"
+              ? <button type="button" className="chip" style={{ marginTop: 12 }} onClick={() => void revalidator.revalidate()}>再試一次</button>
+              : <Link to={to.href}>{to.text}</Link>}
           </div>
         </main>
       </>
@@ -109,7 +118,7 @@ export default function Join({ loaderData }: Route.ComponentProps) {
           {!plan ? <p className="noplan">你還沒有課表，加入後大家看到的是「還沒有課表」。</p> : null}
           {error ? <p className="err" role="alert">{error}</p> : null}
           <div className="actions-row">
-            <Link to="/" className="skip grow">不用了</Link>
+            <Link to="/" replace className="skip grow">不用了</Link>
             <button type="button" className="btn compact primary" disabled={busy} onClick={() => void join()}>{busy ? "加入中…" : "加入群組"}</button>
           </div>
         </div>

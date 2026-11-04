@@ -397,6 +397,7 @@ const withoutMakeupFields = (sessions: ApiSession[]): ApiSession[] =>
   });
 
 export function mockPlan(): PlanResponse {
+  if (has("nomyplan")) throw new ApiError(404, "no active plan"); // the api answers 404 to someone without an active plan
   refreshSegments();
   const d = data();
   const t = threadData();
@@ -1635,12 +1636,13 @@ export function mockPostCoachMessage(body: PostCoachMessageRequest): PostCoachMe
 //                member     I am a member, Ken owns the group (no unread)
 //                judging    the newest 完成了 event is not judged yet      failed   its judgement failed      corrected   its judgement was corrected
 //                blocked    after the 消息中心 was opened Sara's `events` switch goes off: the list still shows her events, opening one answers 404, reloading drops them
-//                gone       every action on the group (invite, remove, leave, disband) answers 404: I was removed
+//                nomyplan   I have no active plan: GET /plan answers 404 (the 群組 tab dot then comes from GET /groups)
+//                gone       every action on the group (invite, remove, leave, disband, picking a member) answers 404, and after that so does reading it: I was removed
 //   invite     "ok" (default) | "expired" | "revoked" | "used_up" | "full" | "already_member" | "group_limit" | "not_found"    what /join/<token> says
-//   shareFail  true → PUT /me/share answers 500
+//   shareFail  true → PUT /me/share answers 500          shareGetFail  true → GET /me/share answers 500
 // =====================================================================================================================
 
-interface GroupSwitches { groups?: "none" | "one" | "two" | "three"; share?: Partial<ShareSettings>; variant?: string | string[]; invite?: InviteState | "not_found"; shareFail?: boolean }
+interface GroupSwitches { groups?: "none" | "one" | "two" | "three"; share?: Partial<ShareSettings>; variant?: string | string[]; invite?: InviteState | "not_found"; shareFail?: boolean; shareGetFail?: boolean }
 const gsw = (): GroupSwitches => (globalThis as unknown as { __mock?: GroupSwitches }).__mock ?? {};
 const variants = (): Set<string> => {
   const v = gsw().variant;
@@ -1725,7 +1727,7 @@ function cast(): Record<string, Person> {
   return people;
 }
 /** My own plan is the live one (what I do in the app shows up in the group). */
-function personPlan(p: Person): PlanResponse | null { return p.key === "me" ? mockPlan() : p.plan; }
+function personPlan(p: Person): PlanResponse | null { return p.key === "me" ? (has("nomyplan") ? null : mockPlan()) : p.plan; }
 function personRuns(p: Person): Person["runs"] {
   if (p.key !== "me") return p.runs;
   return everyActivity().filter((a) => isRunAct(a) && a.match_status !== "ignored").map((a) => ({ date: toJstDate(a.start_time), m: a.distance_m }));
@@ -1774,6 +1776,7 @@ const evAt = (x: MEvent) => (typeof x.at === "function" ? x.at() : x.at);
 let groupList: MGroup[] | undefined;
 let extraGroups: MGroup[] = []; // created or joined while the page is open
 let gone = new Set<string>();   // left, disbanded
+let goneNow = false;           // `gone`: once an action was refused, the group is not readable any more either (a removed member gets 404 on everything)
 let blockedApplied = false;      // `blocked`: a 404 on an event was served, so the list drops Sara's events from now on
 let eventSeq = 100;
 let groupSeq = 0;
@@ -1842,6 +1845,7 @@ const myGroups = (): MGroup[] => {
   return [...groupList, ...extraGroups].filter((g) => !gone.has(g.id));
 };
 const groupById = (id: string): MGroup => {
+  if (goneNow) throw notFound();
   const g = myGroups().find((x) => x.id === id);
   if (!g) throw notFound();
   return g;
@@ -1985,6 +1989,7 @@ export function mockPutGroupSeen(id: string): GroupOkResponse {
 // ---- someone's plan (大家的課表) ----------------------------------------------------------------------------------------
 
 export function mockGetMemberPlan(id: string, mid: string): MemberPlanResponse {
+  goneIf(); // `gone` set while the page is open: picking another member then finds the group gone
   const g = groupById(id);
   const gm = g.members.find((x) => x.id === mid);
   if (!gm) throw notFound("member not found");
@@ -2009,7 +2014,7 @@ export function mockGetMemberPlan(id: string, mid: string): MemberPlanResponse {
 
 // ---- membership, invites ----------------------------------------------------------------------------------------------
 
-const goneIf = () => { if (has("gone")) throw notFound(); };
+const goneIf = () => { if (has("gone")) { goneNow = true; throw notFound(); } };
 
 export function mockPostGroupInvite(id: string): PostGroupInviteResponse {
   goneIf();
@@ -2091,6 +2096,7 @@ export function mockPostInviteAccept(_token: string): AcceptInviteResponse {
 let myShare: ShareSettings = { ...DEFAULT_SHARE };
 
 export function mockGetShare(): ShareResponse {
+  if (gsw().shareGetFail) throw new ApiError(500, "伺服器錯誤，稍後再試");
   return { share: { ...myShare } };
 }
 

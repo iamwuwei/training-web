@@ -2,7 +2,7 @@
 // The sentences live here once so every page says them the same way (01b §6 固定句).
 
 import type { ApiGroup, ApiGroupMember } from "../types/api";
-import { ApiError } from "./api";
+import { ApiError, getGroup } from "./api";
 import { dayDiff, dow, timeJst, toJstDate } from "./date";
 
 /** People per group (the api's GROUP_MAX_MEMBERS); the join page has only `member_count` to go with it. */
@@ -12,11 +12,24 @@ export const MAX_MEMBERS = 5;
 export const limitText = (max: number) => `已經有 ${max} 個群組了，先離開一個才能再建立或加入`;
 export const LIMIT_TEXT = limitText(3);
 
-export const NOT_FOUND_GROUP = "找不到這個群組";
 export const SEND_FAILED = "送出失敗，再試一次";
 export const NOTICE_GONE = (name: string) => `你已經不在「${name}」裡了。`;
 
 export const isStatus = (e: unknown, status: number): e is ApiError => e instanceof ApiError && e.status === status;
+
+/**
+ * A 404 on an action inside a group says "group not found" or "member not found" (the api's two sentences, which the page never
+ * shows or parses). Which one it was is read from the status of the group itself: gone → true, still there → false (the member was).
+ * A read that fails some other way counts as "still there": the page then reads again and shows its own failure.
+ */
+export async function groupIsGone(id: string): Promise<boolean> {
+  try {
+    await getGroup(id);
+    return false;
+  } catch (e) {
+    return isStatus(e, 404);
+  }
+}
 
 /** Days to the race as the pages show it: a number, 比賽日, or 已完賽. */
 export function countdown(raceDate: string, today: string): { kind: "days"; n: number } | { kind: "today" } | { kind: "done" } {

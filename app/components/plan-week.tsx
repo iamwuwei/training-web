@@ -11,7 +11,7 @@ import { Avatar } from "./ui";
 /** What of another member's plan the page may draw: his `runs` switch (the actual numbers, the link to the report) and `reviews` (the verdict dot). */
 export interface ReadOnly { runs: boolean; reviews: boolean }
 
-export function WeekBars({ weeks, selected, onSelect, changed }: { weeks: Week[]; selected: number; onSelect: (weekNo: number) => void; changed?: Set<number> }) {
+export function WeekBars({ weeks, selected, onSelect, changed, readonly }: { weeks: Week[]; selected: number; onSelect: (weekNo: number) => void; changed?: Set<number>; readonly?: ReadOnly }) {
   const max = Math.max(1, ...weeks.map((w) => w.plan_m));
   const isRace = (w: Week) => w.days.some((d) => d.session.type === "race");
   return (
@@ -26,7 +26,7 @@ export function WeekBars({ weeks, selected, onSelect, changed }: { weeks: Week[]
               type="button"
               role="tab"
               aria-selected={on}
-              aria-label={`第 ${w.week_no} 週 ${km(w.actual_m)} / ${kmPlan(w.plan_m)} km`}
+              aria-label={readonly && !readonly.runs ? `第 ${w.week_no} 週 ${kmPlan(w.plan_m)} km` : `第 ${w.week_no} 週 ${km(w.actual_m)} / ${kmPlan(w.plan_m)} km`}
               className={`col${w.isComplete ? " done" : ""}${isRace(w) ? " race" : ""}${on ? " on" : ""}`}
               onClick={() => onSelect(w.week_no)}
             >

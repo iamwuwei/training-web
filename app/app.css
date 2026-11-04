@@ -954,7 +954,6 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 .group-row > svg { width: 16px; height: 16px; color: var(--ink-3); }
 /* unread count: neutral (ink), not coral — new events are not "good news" */
 .ucount { flex: none; display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--ink); color: var(--bg); font-family: var(--font-num); font-size: 13px; font-weight: 700; line-height: 1; }
-.group-done { margin: 12px 0 0; font-size: 13px; color: var(--ink-2); }
 .group-note { margin: 10px 0 0; padding: 10px 12px; border-radius: 12px; background: var(--chip); font-size: 13px; line-height: 1.5; color: var(--ink); }
 
 /* empty state */
@@ -1097,7 +1096,6 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 .group-invite .gi-link.selected { box-shadow: inset 0 0 0 2px var(--ink-2); }
 .group-invite .gi-meta { margin-top: 8px; font-size: 13px; color: var(--ink-2); }
 .group-invite .gi-once { margin-top: 4px; font-size: 13px; line-height: 1.5; color: var(--v-warn); }
-.group-invite .gi-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 20px; margin-top: 8px; }
 .group-invite .gi-bar { display: flex; align-items: center; gap: 4px; margin-top: 6px; }
 .group-invite .gi-bar .gi-meta { flex: 1 1 auto; min-width: 0; margin: 0; line-height: 1.4; }
 .group-invite .gi-ic { position: relative; flex: none; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 50%; color: var(--ink-2); }
@@ -1105,7 +1103,6 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 .group-invite .gi-ic.copy { color: var(--ink); }
 .group-invite .gi-ic.danger { color: var(--v-bad); }
 .group-invite .gi-tip { position: absolute; bottom: calc(100% - 2px); left: 50%; transform: translateX(-50%); padding: 3px 8px; border-radius: 8px; background: var(--ink); color: var(--bg); font-size: 12px; font-weight: 600; white-space: nowrap; pointer-events: none; }
-.group-invite .gi-actions button:not(.btn) { min-height: 44px; font-size: 13px; color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; }
 .group-invite .err, .group-confirm .err, .group-create .err, .join-card .err, .share .err { margin: 8px 0 0; font-size: 13px; line-height: 1.5; color: var(--v-bad); }
 
 /* sheets: create, confirm */
@@ -1194,7 +1191,6 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 
 /* ---- group-race: small additions the design left to the page (tokens only) ---- */
 .actions-row.center { justify-content: center; }
-.group-skeleton { display: flex; flex-direction: column; }
 .group-add .gf-label { display: block; font-size: 13px; font-weight: 700; color: var(--ink-2); letter-spacing: 0.04em; }
 .group-skeleton-row { display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--line); }
 .group-quiet { margin: 8px 0 0; font-size: 13px; line-height: 1.5; color: var(--ink-3); }

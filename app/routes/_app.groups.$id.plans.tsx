@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useRevalidator, useSearchParams, type ShouldRevalidateFunctionArgs } from "react-router";
+import { Link, useNavigate, useRevalidator, useSearchParams, type ShouldRevalidateFunctionArgs } from "react-router";
 import type { Route } from "./+types/_app.groups.$id.plans";
 import { GroupBack, GroupNotFound, LoadFailed, RowsSkeleton } from "../components/group-parts";
 import { GroupMemberPicker } from "../components/group-member-picker";
@@ -8,8 +8,8 @@ import { SessionSheet } from "../components/session-sheet";
 import { Bar, TopBar } from "../components/ui";
 import { ApiError, getGroup, getMemberPlan } from "../lib/api";
 import { md, todayJst } from "../lib/date";
-import { mdPlain } from "../lib/groups";
 import { km, kmPlan } from "../lib/format";
+import { groupIsGone, mdPlain, NOTICE_GONE } from "../lib/groups";
 import { loadGroupData } from "../lib/group-load";
 import { memberPlanRange, toPlanResponse } from "../lib/member-plan";
 import { buildPlanView, weekSubline } from "../lib/plan";
@@ -64,7 +64,7 @@ function MemberPlan({ data }: { data: MemberPlanResponse }) {
   return (
     <>
       <p className="member-plan-head"><b>{member.is_me ? "你的課表" : `${member.display_name} 的課表`}</b>{end ? ` · 課表排到 ${mdPlain(end)}` : ""}</p>
-      <WeekBars weeks={weeks} selected={selected} onSelect={setPicked} />
+      <WeekBars weeks={weeks} selected={selected} onSelect={setPicked} readonly={ro} />
       {week ? (
         <>
           <div className="week-head2">
@@ -94,11 +94,13 @@ function MemberPlan({ data }: { data: MemberPlanResponse }) {
 
 export default function GroupPlans({ loaderData, params }: Route.ComponentProps) {
   const revalidator = useRevalidator();
+  const navigate = useNavigate();
   const [search, setSearch] = useSearchParams();
   const [attempt, setAttempt] = useState(0);
   const [pane, setPane] = useState<Pane | null>(null);
   const id = params.id;
   const group = loaderData.status === "ok" ? loaderData.data : null;
+  const groupName = group?.group.name ?? "";
   const selfId = group?.members.find((m) => m.is_me)?.id ?? null;
   const mid = search.get("m") ?? selfId;
   const key = `${id}:${mid}:${attempt}`;
@@ -108,9 +110,14 @@ export default function GroupPlans({ loaderData, params }: Route.ComponentProps)
     let live = true;
     getMemberPlan(id, mid)
       .then((data) => { if (live) setPane({ key, status: "ok", data }); })
-      .catch((e: unknown) => { if (live) setPane(e instanceof ApiError && e.status >= 400 && e.status < 500 ? { key, status: "missing" } : { key, status: "error" }); });
+      .catch(async (e: unknown) => {
+        // 400: not even an id. 404: no such member in this group — or no such group any more (I was removed while the page was open): ask which
+        const status = e instanceof ApiError ? e.status : 0;
+        if (status === 404 && (await groupIsGone(id))) { if (live) void navigate("/groups", { replace: true, state: { notice: NOTICE_GONE(groupName) } }); return; }
+        if (live) setPane(status === 400 || status === 404 ? { key, status: "missing" } : { key, status: "error" });
+      });
     return () => { live = false; };
-  }, [id, mid, key]);
+  }, [id, mid, key, groupName, navigate]);
 
   if (loaderData.status === "notfound") return <GroupNotFound />;
   if (!group) {

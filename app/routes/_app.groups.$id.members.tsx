@@ -6,9 +6,9 @@ import { GroupInviteSheet } from "../components/group-invite";
 import { GroupBack, GroupNotFound, LoadFailed } from "../components/group-parts";
 import { ShareIcon } from "../components/icons";
 import { SectionH, TopBar } from "../components/ui";
-import { ApiError, getGroup, postGroupMemberRemove } from "../lib/api";
+import { getGroup, postGroupMemberRemove } from "../lib/api";
 import { toJstDate } from "../lib/date";
-import { mdPlain, NOTICE_GONE } from "../lib/groups";
+import { groupIsGone, isStatus, mdPlain, NOTICE_GONE } from "../lib/groups";
 import { loadGroupData } from "../lib/group-load";
 import type { ApiGroupMember } from "../types/api";
 
@@ -58,10 +58,11 @@ export default function GroupMembers({ loaderData, params }: Route.ComponentProp
     try {
       await postGroupMemberRemove(id, removing.id);
     } catch (e) {
-      if (e instanceof ApiError && e.status === 404) {
-        // the member is already gone: the list is stale; the group is gone: this page has nothing left to say
-        if (/member/i.test(e.message)) { setRemoving(null); void revalidator.revalidate(); return; }
-        void navigate("/groups", { replace: true, state: { notice: NOTICE_GONE(g.name) } });
+      if (isStatus(e, 404)) {
+        // the member is already gone (the list is stale) or the group is: ask the group which
+        if (await groupIsGone(id)) { void navigate("/groups", { replace: true, state: { notice: NOTICE_GONE(g.name) } }); return; }
+        setRemoving(null);
+        void revalidator.revalidate();
         return;
       }
       throw e;

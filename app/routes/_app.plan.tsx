@@ -21,7 +21,6 @@ export function meta(): Route.MetaDescriptors {
 
 const NO_WEEKS: ApiWeek[] = [];
 
-
 /** 其他活動: the week's Strava activities that are not a session (walks, strength, unmatched runs), under the 7 rows. Each opens its report. */
 function ExtraRows({ week, unassigned }: { week: Week; unassigned: ApiActivity[] }) {
   const rows = unassigned

@@ -190,6 +190,7 @@ export function takeReturnTo(): string | null {
 /** Clear local tokens and end the Cognito session too. */
 export function logout(): void {
   clearSession();
+  safe(() => sessionStorage.removeItem(RETURN_KEY), undefined); // a remembered invite link is not carried to the next person on this tab
   if (useMock || !config.cognitoDomain) { window.location.assign("/login"); return; }
   const p = new URLSearchParams({ client_id: config.cognitoClientId, logout_uri: redirectUri() });
   window.location.assign(`${config.cognitoDomain}/logout?${p}`);
