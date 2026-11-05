@@ -13,6 +13,7 @@ export interface SessionUser {
 const ID_KEY = "training-web.id_token";
 const REFRESH_KEY = "training-web.refresh_token";
 const PKCE_KEY = "training-web.pkce";
+const RETURN_KEY = "training-web.return_to";
 
 const safe = <T>(fn: () => T, fallback: T): T => {
   try { return fn(); } catch { return fallback; }
@@ -169,9 +170,27 @@ async function tokenRequest(params: Record<string, string>): Promise<TokenRespon
   return (await res.json()) as TokenResponse;
 }
 
+/**
+ * An invite link opened while logged out: remember it, log in, and `takeReturnTo()` brings the person back to the same link.
+ * Only `/join/<43-character token>` is ever stored or returned (a path on this site, nothing a link could point elsewhere with).
+ */
+const JOIN_PATH = /^\/join\/[A-Za-z0-9_-]{43}$/;
+
+export function saveReturnTo(path: string): void {
+  if (JOIN_PATH.test(path)) safe(() => sessionStorage.setItem(RETURN_KEY, path), undefined);
+}
+
+/** The remembered link, once (it is removed), or null. */
+export function takeReturnTo(): string | null {
+  const v = safe(() => sessionStorage.getItem(RETURN_KEY), null);
+  safe(() => sessionStorage.removeItem(RETURN_KEY), undefined);
+  return v && JOIN_PATH.test(v) ? v : null;
+}
+
 /** Clear local tokens and end the Cognito session too. */
 export function logout(): void {
   clearSession();
+  safe(() => sessionStorage.removeItem(RETURN_KEY), undefined); // a remembered invite link is not carried to the next person on this tab
   if (useMock || !config.cognitoDomain) { window.location.assign("/login"); return; }
   const p = new URLSearchParams({ client_id: config.cognitoClientId, logout_uri: redirectUri() });
   window.location.assign(`${config.cognitoDomain}/logout?${p}`);

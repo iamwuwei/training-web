@@ -48,3 +48,22 @@ export const WatchIcon = (p: SVGProps<SVGSVGElement>) => (
 export const CloudIcon = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base({ width: 20, height: 20, viewBox: "0 0 24 24", strokeWidth: 2, ...p })}><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" /></svg>
 );
+
+// ---- group-race ----------------------------------------------------------------------------
+/** The 群組 tab: two people (26 viewBox like the other tabs). */
+export const GroupIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><circle cx="10" cy="9" r="4" /><path d="M2.5 21.5c.7-3.8 3.7-6 7.5-6s6.8 2.2 7.5 6" /><path d="M16.5 5.2a4 4 0 0 1 0 7.6" /><path d="M19.6 15.9c2.1.9 3.4 2.8 3.9 5.6" /></svg>
+);
+/** Small 22 px line icons for the group pages (24 viewBox, stroke 2). */
+const small = (p: SVGProps<SVGSVGElement>) => base({ width: 22, height: 22, viewBox: "0 0 24 24", strokeWidth: 2, ...p });
+export const PlusIcon = (p: SVGProps<SVGSVGElement>) => (<svg {...small(p)}><path d="M12 5v14M5 12h14" /></svg>);
+export const RefreshIcon = (p: SVGProps<SVGSVGElement>) => (<svg {...small(p)}><path d="M20 11a8 8 0 0 0-14.3-4.5L4 9" /><path d="M4 4v5h5" /><path d="M4 13a8 8 0 0 0 14.3 4.5L20 15" /><path d="M20 20v-5h-5" /></svg>);
+export const ShareIcon = (p: SVGProps<SVGSVGElement>) => (<svg {...small(p)}><path d="M12 15V3.5" /><path d="M7.5 8 12 3.5 16.5 8" /><path d="M5 11.5V19a1.5 1.5 0 0 0 1.5 1.5h11A1.5 1.5 0 0 0 19 19v-7.5" /></svg>);
+export const CopyIcon = (p: SVGProps<SVGSVGElement>) => (<svg {...small(p)}><rect x="8.5" y="8.5" width="11" height="11" rx="2" /><path d="M15.5 8.5V6A1.5 1.5 0 0 0 14 4.5H6A1.5 1.5 0 0 0 4.5 6v8A1.5 1.5 0 0 0 6 15.5h2.5" /></svg>);
+export const CheckIcon = (p: SVGProps<SVGSVGElement>) => (<svg {...small(p)}><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>);
+export const RotateIcon = (p: SVGProps<SVGSVGElement>) => (<svg {...small(p)}><path d="M20 12a8 8 0 1 1-2.6-5.9" /><path d="M20 4v5h-5" /></svg>);
+export const TrashIcon = (p: SVGProps<SVGSVGElement>) => (<svg {...small(p)}><path d="M4.5 7h15" /><path d="M9.5 7V4.5h5V7" /><path d="M6.5 7l.8 12a1.5 1.5 0 0 0 1.5 1.4h6.4a1.5 1.5 0 0 0 1.5-1.4l.8-12" /><path d="M10 11v6M14 11v6" /></svg>);
+export const LinkIcon = (p: SVGProps<SVGSVGElement>) => (<svg {...small(p)}><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" /><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" /></svg>);
+/** › and ▾ at 16 px (list rows, the member picker). */
+export const ChevronIcon = (p: SVGProps<SVGSVGElement>) => (<svg {...base({ width: 16, height: 16, viewBox: "0 0 16 16", strokeWidth: 2, ...p })}><path d="M6 3l5 5-5 5" /></svg>);
+export const CaretDownIcon = (p: SVGProps<SVGSVGElement>) => (<svg {...base({ width: 16, height: 16, viewBox: "0 0 16 16", strokeWidth: 2, ...p })}><path d="M3.5 6l4.5 4.5L12.5 6" /></svg>);
