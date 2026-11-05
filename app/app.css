@@ -1056,7 +1056,6 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 .member-pick > svg { flex: none; width: 16px; height: 16px; color: var(--ink-2); transition: transform 0.2s; }
 .member-pick[aria-expanded="true"] > svg { transform: rotate(180deg); }
 .member-pick-row .member-pick .avatar.member, .member-menu .mm-row .avatar.member { width: 30px; height: 30px; flex: none; background: var(--chip); color: var(--ink); border: 1px solid var(--chip-line); font-family: var(--font); font-size: 13px; font-weight: 700; }
-.member-pick-row .upto { min-width: 0; font-size: 13px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .member-menu { position: absolute; z-index: 5; top: calc(100% + 6px); left: 0; width: min(280px, calc(100vw - 40px)); margin: 0; padding: 6px; border-radius: 18px;
   background: var(--glass-solid); border: 1px solid var(--glass-border); box-shadow: var(--glass-highlight), var(--glass-shadow); }
 @supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
@@ -1166,7 +1165,7 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 /* TopBar right icon button (same look as the 今天 gear: --ink-2, 22px icon), 44×44 hit area */
 .topbar .aside .icon-btn { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; margin: -6px -12px -6px 0; border-radius: 50%; color: var(--ink-2); }
 .topbar .aside .icon-btn svg { width: 22px; height: 22px; }
-.topbar .aside .icon-btn[aria-disabled="true"] { opacity: 0.4; }
+.topbar .aside .icon-btn[aria-disabled="true"] { opacity: 0.7; }
 /* destructive page action as text (the confirm sheet carries the real button) */
 .group-danger { display: flex; align-items: center; justify-content: center; min-height: 44px; margin: 16px auto 0; font-size: 15px; font-weight: 600; color: var(--v-bad); }
 /* ＋ sheet: 建立群組／用邀請連結加入 */

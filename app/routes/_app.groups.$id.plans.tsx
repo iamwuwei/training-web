@@ -130,7 +130,6 @@ export default function GroupPlans({ loaderData, params }: Route.ComponentProps)
   }
   const cur = pane && pane.key === key ? pane : null;
   const listed = group.members.some((m) => m.id === mid);
-  const end = cur?.status === "ok" ? memberPlanRange(cur.data) : null;
 
   return (
     <>
@@ -138,7 +137,6 @@ export default function GroupPlans({ loaderData, params }: Route.ComponentProps)
       <main>
         <div className="member-pick-row">
           <GroupMemberPicker members={group.members} selectedId={listed ? mid : null} onSelect={(m) => setSearch({ m }, { replace: true })} />
-          {end ? <span className="upto">課表排到 {mdPlain(end)}</span> : null}
         </div>
         {!cur ? (
           <div style={{ marginTop: 16 }}><RowsSkeleton rows={4} height={56} /></div>
