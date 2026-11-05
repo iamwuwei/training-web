@@ -20,8 +20,6 @@ import type {
   PlanResponse,
   PutMemoRequest,
   PutMemoResponse,
-  PutReviewRequest,
-  PutReviewResponse,
   PutSessionRequest,
   PutSessionResponse,
   CoachResponse,
@@ -117,11 +115,6 @@ export function putMemo(activityId: string, body: PutMemoRequest): Promise<PutMe
 export function putSession(activityId: string, body: PutSessionRequest): Promise<PutSessionResponse> {
   if (useMock) return mock().then((m) => m.mockPutSession(activityId, body));
   return request<PutSessionResponse>(`/activities/${activityId}/session`, { method: "PUT", body: JSON.stringify(body) });
-}
-
-export function putReview(activityId: string, body: PutReviewRequest): Promise<PutReviewResponse> {
-  if (useMock) return Promise.reject(new ApiError(501, "mock mode: reviews are read-only"));
-  return request<PutReviewResponse>(`/activities/${activityId}/review`, { method: "PUT", body: JSON.stringify(body) });
 }
 
 /** The athlete's own shoe / device / weather for one activity ("" or null clears it). Does not touch the memo or the review. */

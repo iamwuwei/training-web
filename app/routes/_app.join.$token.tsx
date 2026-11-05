@@ -114,7 +114,7 @@ export default function Join({ loaderData }: Route.ComponentProps) {
             <div><div className="k">倒數</div><div className="v">{cd.kind === "days" ? <><span className="num good">{cd.n}</span><span className="unit">天</span></> : <span className="num">{cd.kind === "today" ? "比賽日" : "已完賽"}</span>}</div></div>
             <div><div className="k">成員</div><div className="v"><span className="num">{g.member_count} / {MAX_MEMBERS}</span><span className="unit">人</span></div></div>
           </div>
-          <p className="privacy">加入後，群組裡的人看得到什麼由你在設定裡決定（預設：進度彙總和完成的課）。對話、心得、傷痛不會給別人看。</p>
+          <p className="privacy">加入後，群組裡的人看得到什麼由你在設定裡決定（預設：進度彙總和完成的課）。跟 Woo 的對話、心得、Woo 記住的限制與傷痛不會給別人看；課表的備註要你打開「我的課表內容」才會分享。</p>
           {!plan ? <p className="noplan">你還沒有課表，加入後大家看到的是「還沒有課表」。</p> : null}
           {error ? <p className="err" role="alert">{error}</p> : null}
           <div className="actions-row">
