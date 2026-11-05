@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { redirect, useRevalidator } from "react-router";
 import type { Route } from "./+types/_app.settings";
+import { ShareSettingsSection } from "../components/share-settings";
 import { SectionH, TopBar } from "../components/ui";
-import { ApiError, disconnectStrava, getMe, postConstraint } from "../lib/api";
+import { ApiError, disconnectStrava, getGroups, getMe, getShare, postConstraint } from "../lib/api";
 import { hasSession, logout } from "../lib/auth";
 import { config, useMock } from "../lib/config";
 import { periodMeta } from "../lib/constraints";
@@ -12,7 +13,15 @@ import { usePlan } from "../lib/use-plan";
 export async function clientLoader() {
   if (!hasSession()) throw redirect("/login");
   try {
-    return await getMe();
+    // The share block is the 群組 feature's: an api from before it answers 404, then the block is left out and the page is as it was.
+    // Any other failure is shown as a failure (it is the only place to see what is shared: it must not vanish quietly).
+    // `inGroups` only picks the block's first sentence; if the groups can not be read the usual one is shown.
+    const [me, share, groups] = await Promise.all([
+      getMe(),
+      getShare().then((r) => ({ state: "ok" as const, share: r.share })).catch((e: unknown) => (e instanceof ApiError && e.status === 404 ? { state: "missing" as const } : { state: "error" as const })),
+      getGroups().catch(() => null),
+    ]);
+    return { me, share, inGroups: groups ? groups.groups.length > 0 : true };
   } catch (e) {
     if (e instanceof ApiError && e.status === 401) throw redirect("/login");
     throw e;
@@ -74,7 +83,8 @@ function Constraints() {
 }
 
 export default function Settings({ loaderData }: Route.ComponentProps) {
-  const { user, strava, strava_connect_url } = loaderData;
+  const { user, strava, strava_connect_url } = loaderData.me;
+  const { share, inGroups } = loaderData;
   const loginVia = useMock ? "示範資料" : config.cognitoIdp === "SignInWithApple" ? "Apple" : "Cognito";
   const revalidator = useRevalidator();
   const [busy, setBusy] = useState(false);
@@ -129,6 +139,15 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
         </p>
 
         <Constraints />
+
+        {share.state === "ok" ? <ShareSettingsSection initial={share.share} inGroups={inGroups} /> : null}
+        {share.state === "error" ? (
+          <section className="share" id="share" aria-label="群組看得到的">
+            <SectionH>群組看得到的</SectionH>
+            <p className="share-intro" role="alert">讀不到分享設定。</p>
+            <button type="button" className="chip" style={{ marginTop: 8 }} onClick={() => void revalidator.revalidate()}>再試一次</button>
+          </section>
+        ) : null}
 
         <SectionH>關於</SectionH>
         <div className="setting"><span className="k">資料來源</span><span className="v grey">{useMock ? "內建示範資料" : config.apiUrl.replace(/^https?:\/\//, "")}</span></div>

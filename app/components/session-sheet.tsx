@@ -8,6 +8,7 @@ import { activityDate, isRunSport, lastReminderFor, movedCountsIn, type PlanView
 import { segmentRows } from "../lib/segments";
 import { BottomSheet } from "./sheet";
 import { Avatar, CoachAvatar, VerdictTag } from "./ui";
+import { WooVerdict } from "./woo-verdict";
 
 /** The plan's Easy pace band ('7:15〜7:45'), for the warm-up / cool-down rows of a composite session. */
 function easyTarget(view: PlanView): string | null {
@@ -27,26 +28,35 @@ export function lastOfKind(view: PlanView, session: ApiSession): { a: ApiActivit
   return runs[0] ?? null;
 }
 
+/**
+ * `readOnly`: this is another member's plan (群組 → 大家的課表). Nothing in the sheet can change anything or lead to a report:
+ * the same how-to-run, Woo's line and note, plus the actual numbers when his `runs` is on and the verdict when his `reviews` is on.
+ */
+export interface SheetReadOnly { name: string; runs: boolean; reviews: boolean }
+
 /** 課表細節: how to run it, Woo's one line, the full note, the last session of this kind. */
-export function SessionSheet({ session, view, onClose, onOpen }: { session: ApiSession | null; view: PlanView; onClose: () => void; /** Swap the sheet to another session (an 已改期 row's 看 11/17 那堂 ›). */ onOpen?: (s: ApiSession) => void }) {
+export function SessionSheet({ session, view, onClose, onOpen, readOnly }: { session: ApiSession | null; view: PlanView; onClose: () => void; /** Swap the sheet to another session (an 已改期 row's 看 11/17 那堂 ›). */ onOpen?: (s: ApiSession) => void; readOnly?: SheetReadOnly }) {
   const s = session;
   const rows = s ? segmentRows(s, easyTarget(view)) : [];
-  const woo = s ? lastReminderFor(view, s) ?? s.brief : null;
-  const last = s ? lastOfKind(view, s) : null;
+  const woo = s ? (readOnly ? s.brief : lastReminderFor(view, s) ?? s.brief) : null;
+  const last = s && !readOnly ? lastOfKind(view, s) : null;
+  const day = s && readOnly ? view.days.find((d) => d.session.id === s.id) ?? null : null;
+  const done = day?.combined ?? null;
+  const review = readOnly?.reviews ? day?.activity?.review ?? null : null;
   const isRest = s?.type === "rest";
   // 補課: the row that was moved away says where it went; the new row says where it came from. N only when it counts in another week than the row's own.
   const movedTo = s?.moved_to_date ? view.data.sessions.find((x) => x.id === s.moved_to_session_id) ?? null : null;
   const countsIn = !s ? null : s.moved_to_date ? movedCountsIn(view, s) : s.moved_from_date ? s.counts_in_week_no : null;
   const n = countsIn != null && countsIn !== s?.week_no ? countsIn : null;
   return (
-    <BottomSheet open={!!s} onClose={onClose} label="課表細節">
+    <BottomSheet open={!!s} onClose={onClose} label="課表細節" className={readOnly ? "event-sheet" : undefined}>
       {s ? (
         <>
           <div className={`ss-head${s.moved_to_date ? " moved" : ""}`}>
             <Avatar session={s} />
             <div>
               <div className="t">{rowName(s)}</div>
-              <div className="s">{[mdDow(s.scheduled_date), s.week_no != null ? `第 ${s.week_no} 週` : null, s.phase].filter(Boolean).join(" · ")}</div>
+              <div className="s">{[mdDow(s.scheduled_date), s.week_no != null ? `第 ${s.week_no} 週` : null, s.phase, readOnly ? `${readOnly.name} 的課表` : null].filter(Boolean).join(" · ")}</div>
             </div>
           </div>
           {s.moved_to_date ? (
@@ -78,6 +88,17 @@ export function SessionSheet({ session, view, onClose, onOpen }: { session: ApiS
               <p className="ss-note">{s.note}</p>
             </>
           ) : null}
+          {done ? (
+            <>
+              <h2 className="section-h">實際</h2>
+              <div className="es-stats ss-actual">
+                {isRunSport(done.sport_type) || done.distance_m > 0 ? <span><b className="num">{km(done.distance_m)}</b> km</span> : <span><b className="num">{duration(done.moving_time_sec)}</b></span>}
+                {isRunSport(done.sport_type) && done.avg_pace_sec_km ? <span><b className="num">{pace(done.avg_pace_sec_km)}</b> /km</span> : null}
+                {done.avg_hr != null ? <span><b className="num">{int(done.avg_hr)}</b> bpm</span> : null}
+              </div>
+            </>
+          ) : null}
+          {review ? <WooVerdict review={review} /> : null}
           {last ? (
             <>
               <h2 className="section-h">上次這類課</h2>
@@ -94,6 +115,7 @@ export function SessionSheet({ session, view, onClose, onOpen }: { session: ApiS
               </Link>
             </>
           ) : null}
+          {readOnly ? <p className="sheet-foot">這是 {readOnly.name} 的課表，只能看。</p> : null}
         </>
       ) : null}
     </BottomSheet>
