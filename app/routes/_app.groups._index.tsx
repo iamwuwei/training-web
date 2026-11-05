@@ -100,7 +100,7 @@ export default function Groups({ loaderData }: Route.ComponentProps) {
               <button type="button" className="btn compact primary" onClick={() => setCreateOpen(true)}>建立群組</button>
               <p className="hint">有邀請連結？點連結就能加入。</p>
             </div>
-            <p className="group-privacy">每個人在<Link to="/settings">設定</Link>裡決定給群組看什麼（預設只有進度和完成的課）。跟 Woo 的對話、傷痛、心得和 Strava 的原始資料，永遠不會給別人看。</p>
+            <p className="group-privacy">每個人在<Link to="/settings">設定</Link>裡決定給群組看什麼（預設只有進度和完成的課）。跟 Woo 的對話、心得、Woo 記住的限制與傷痛和 Strava 的原始資料，永遠不會給別人看；課表的備註要本人打開「我的課表內容」才會分享。</p>
           </>
         ) : (
           <>

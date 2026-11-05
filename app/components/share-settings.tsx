@@ -4,7 +4,7 @@ import type { ShareSettings } from "../types/api";
 import { SectionH } from "./ui";
 
 const ROWS: { key: keyof ShareSettings; name: string; desc: string }[] = [
-  { key: "progress", name: "進度彙總", desc: "本週跑量、堂數、整體進度、最長一次" },
+  { key: "progress", name: "進度彙總", desc: "本週計畫幾公里、幾堂和你完成多少、整體進度、最長一次" },
   { key: "events", name: "完成事件", desc: "消息中心裡「你完成了○○」那一則和判定標籤" },
   { key: "plan", name: "我的課表內容", desc: "每週的課、配速、備註" },
   { key: "runs", name: "每趟跑步詳情", desc: "距離、時間、配速、心拍、每公里分段" },
@@ -46,6 +46,7 @@ export function ShareSettingsSection({ initial, inGroups }: { initial: ShareSett
           <div>
             <div className="t" id={`share-${r.key}`}>{r.name}</div>
             <div className="s">{r.desc}</div>
+            {r.key === "plan" ? <div className="risk">課表的備註和 Woo 的說明可能寫到調整的原因，例如受傷或出國。</div> : null}
             {r.key === "reviews" ? <div className="risk">Woo 的評論可能提到你寫的心得。</div> : null}
             {failed[r.key] ? <p className="err" role="alert">沒有存到，再試一次</p> : null}
           </div>
@@ -53,7 +54,7 @@ export function ShareSettingsSection({ initial, inGroups }: { initial: ShareSett
         </div>
       ))}
       <p className="share-note">切換就存好：關掉之後，群組裡的人下一次打開就看不到了（包含以前的）；打開也一樣馬上生效。</p>
-      <div className="share-never"><b>永遠不會給別人看：</b>跟 Woo 的對話、週回顧、記住的限制與傷痛、你寫的心得和 RPE、Strava 的原始資料、裝備與天氣、email、你在哪些其他群組。</div>
+      <div className="share-never"><b>永遠不會給別人看：</b>跟 Woo 的對話、週回顧、記住的限制與傷痛、你寫的心得和 RPE、Strava 的原始資料、裝備與天氣、email、你在哪些其他群組。打開「我的課表內容」「Woo 的判定」後，課表備註和 Woo 的評論別人看得到，裡面可能提到傷痛或行程。</div>
     </section>
   );
 }
