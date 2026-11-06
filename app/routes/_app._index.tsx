@@ -203,7 +203,7 @@ function ExtraRow({ a, view }: { a: ApiActivity; view: PlanView }) {
         <Avatar session={null} sport={a.sport_type} />
         <span className="txt">
           <span className="t">{sportName(a.sport_type)} {a.distance_m > 0 ? `${km(a.distance_m)} km` : duration(a.moving_time_sec)}</span>
-          <span className="s">{[timeJst(a.start_time), run ? `${pace(a.avg_pace_sec_km)} /km` : null, a.avg_hr != null ? `${a.avg_hr} bpm` : null].filter(Boolean).join(" · ")}</span>
+          <span className="s">{[timeJst(a.start_time), run ? `${pace(a.avg_pace_sec_km)} /km` : null].filter(Boolean).join(" · ")}</span>
         </span>
       </Link>
       {appendTo ? <button type="button" className="chip" onClick={() => void assign(a, appendTo.id, true)} disabled={busy}>{busy ? "…" : "也算今天的課"}</button>

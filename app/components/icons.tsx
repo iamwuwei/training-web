@@ -29,6 +29,9 @@ export const SendIcon = (p: SVGProps<SVGSVGElement>) => (
 export const BackIcon = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base({ width: 22, height: 22, viewBox: "0 0 22 22", strokeWidth: 2, ...p })}><path d="M13.5 5l-6 6 6 6" /></svg>
 );
+export const CloseIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base({ width: 24, height: 24, viewBox: "0 0 24 24", ...p })}><path d="M6 6l12 12M18 6 6 18" /></svg>
+);
 export const MountainIcon = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base({ width: 24, height: 24, viewBox: "0 0 28 28", strokeWidth: 2, ...p })}>
     <path d="M2 23 L11 7 L15 12 L18 9 L26 23 Z" /><path d="M8.5 11.5 L11 14 L13 11 L15 12" />

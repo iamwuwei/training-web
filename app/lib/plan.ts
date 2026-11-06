@@ -266,3 +266,9 @@ export function lastReminderFor(view: PlanView, session: ApiSession): string | n
   const action = r.split(/[；;]/).map((x) => x.trim()).filter(Boolean).pop() ?? r;
   return `這次記得：${action}`;
 }
+
+/** 目標字串拆成列上的行：「7:15〜7:45 / 心拍 140〜150」→ 兩行；三段以上（長跑分段）只放第一段，其餘在 sheet。 */
+export function targetLines(target: string): string[] {
+  const parts = target.split(/\s*\/\s*/).map((p) => p.trim()).filter(Boolean);
+  return parts.length >= 3 ? [parts[0]] : parts;
+}

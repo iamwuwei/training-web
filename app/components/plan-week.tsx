@@ -1,8 +1,9 @@
+import { Fragment } from "react";
 import { Link } from "react-router";
 import { mdDow, md } from "../lib/date";
 import { duration, km, kmPlan, pace } from "../lib/format";
 import { isStrengthDay, rowName, verdictKind } from "../lib/labels";
-import { isRunSport, movedCountsIn, type Day, type PlanView, type Week } from "../lib/plan";
+import { isRunSport, movedCountsIn, targetLines, type Day, type PlanView, type Week } from "../lib/plan";
 import type { ApiRoutine, ApiSession } from "../types/api";
 import { Avatar } from "./ui";
 
@@ -66,31 +67,22 @@ export function DayRow({ day, view, weekNo, isToday, onOpen, routine, was, previ
   const date = new Date(`${s.scheduled_date}T00:00:00Z`);
   const rest = s.type === "rest";
   const strength = rest && isStrengthDay(s);
-  let right: React.ReactNode = null;
+  let lines: React.ReactNode[] = [];
   let dot: string | null = null;
-  if (status === "moved") {
-    right = <span className="grey">已改期</span>;
-    dot = "moved";
-  } else if (a && day.combined) {
-    const c = day.combined;
-    const run = isRunSport(c.sport_type);
-    right = (
-      <>
-        {run || c.distance_m > 0 ? <><b className="num">{km(c.distance_m)}</b> km</> : <b className="num">{duration(c.moving_time_sec)}</b>}
-        {run && c.avg_pace_sec_km ? <> · <b className="num">{pace(c.avg_pace_sec_km)}</b></> : c.avg_hr != null ? <> · <b className="num">{c.avg_hr}</b> bpm</> : null}
-      </>
-    );
+  if (status === "moved") { lines = [<span key="m" className="grey">已改期</span>]; dot = "moved"; }
+  else if (a && day.combined) {
+    const c = day.combined; const run = isRunSport(c.sport_type);
+    lines = [
+      run || c.distance_m > 0 ? <Fragment key="a"><b className="num">{km(c.distance_m)}</b><span className="u"> km</span></Fragment> : <b key="a" className="num">{duration(c.moving_time_sec)}</b>,
+      run && c.avg_pace_sec_km ? <Fragment key="b"><b className="num">{pace(c.avg_pace_sec_km)}</b><span className="u"> /km</span></Fragment> : c.avg_hr != null ? <Fragment key="b"><b className="num">{c.avg_hr}</b><span className="u"> bpm</span></Fragment> : null,
+    ];
     dot = verdictKind(a.review?.verdict) ?? "none";
   } else if (routine?.completed_at) {
     const n = routine.items.filter((i) => i.done).length;
-    right = <><b className="num">{n}/{routine.items.length}</b> 項{routine.rpe ? <> · RPE <b className="num">{routine.rpe}</b></> : null}</>;
+    lines = [<Fragment key="a"><b className="num">{n}/{routine.items.length}</b><span className="u"> 項</span></Fragment>, routine.rpe ? <Fragment key="b"><span className="u">RPE </span><b className="num">{routine.rpe}</b></Fragment> : null];
     dot = "good";
-  } else if (status === "skipped") {
-    right = <span className="grey">跳過</span>;
-    dot = "skip";
-  } else if (!rest && s.target) {
-    right = <span className="grey">{s.target.replace(/\s*\/\s*/g, " · ")}</span>;
-  }
+  } else if (status === "skipped") { lines = [<span key="s" className="grey">跳過</span>]; dot = "skip"; }
+  else if (!rest && s.target) { lines = targetLines(s.target).map((t) => <span key={t} className="grey">{t}</span>); }
   // readonly, his `reviews` off: no verdict dot at all (not even the grey one)
   if (readonly && !readonly.reviews && dot !== "moved") dot = null;
   // 補課 rows: the second line is the row's identity ('補 10/27 的課'), kept after the run; 算第 N 週 only when it counts in another week than the one it sits in
@@ -106,7 +98,7 @@ export function DayRow({ day, view, weekNo, isToday, onOpen, routine, was, previ
       <div className="d"><span className="dow">{DOW[date.getUTCDay()]}</span><span className="num dom">{date.getUTCDate()}</span></div>
       <Avatar session={s} sport={a?.sport_type} />
       <div className="n"><div className={`t${rest && !strength ? " rest" : ""}`}>{rowName(s)}</div>{!was && sub ? <div className={`sub${s.moved_to_date || s.moved_from_date ? " wrap" : ""}`}>{sub}</div> : null}</div>
-      <div className="r">{right}{dot ? <i className={`dot ${dot}`} /> : null}</div>
+      <div className="r"><span className="stack">{lines.filter(Boolean).map((l, i) => <span key={i} className="l">{l}</span>)}</span>{dot ? <i className={`dot ${dot}`} /> : null}</div>
       {was ? <div className="was">{was}</div> : null}
     </>
   );
