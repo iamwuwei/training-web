@@ -2139,6 +2139,8 @@ export async function mockPutShare(body: PutShareRequest): Promise<ShareResponse
 //                   "notfound"                              GET /plan-drafts/{id} answers 404
 //   latestFail    404 (an api from before this) | 500     GET /plan-drafts/latest fails
 //   latestDelay   ms: GET /plan-drafts/latest answers that much later (the entry's grey skeleton, before either answer is in)
+//   pollFail      n: after the first reading of the draft, the next n readings fail (GET /plan-drafts/{id}); 1 = one failed poll, 3 = enough for the page to say so; then it recovers
+//   pollFailError "network" (default: a TypeError like fetch's) | "500"
 //   actionDelay   ms: send, adopt, resume and discard answer that much later (送出中… / 採用中… / 丟掉中… can be seen)
 //   strava        false → GET /me has no Strava
 //   planFinished  true → the demo plan's race_date is yesterday and its sessions end there (今天: 課表已結束，辛苦了。)
@@ -2154,7 +2156,7 @@ export async function mockPutShare(body: PutShareRequest): Promise<ShareResponse
 type DraftKind = "none" | "pending-profile" | "pending-skeleton" | "pending-chunk" | "walk" | "slow" | "ready" | "ready-noflags" | "ready-many" | "ready-norecord" | "ready-importerr"
   | "ready-lastrace" | "failed" | "failed-early" | "failed-exhausted" | "failed-stalled" | "expired" | "discarded" | "adopted" | "notfound";
 interface DraftSwitches {
-  draft?: DraftKind; latestFail?: 404 | 500; latestDelay?: number; actionDelay?: number; strava?: boolean; planFinished?: boolean; noRuns?: boolean;
+  draft?: DraftKind; latestFail?: 404 | 500; latestDelay?: number; actionDelay?: number; pollFail?: number; pollFailError?: "network" | "500"; strava?: boolean; planFinished?: boolean; noRuns?: boolean;
   draftPost?: "generating" | "limit" | "off" | "busy" | "active" | "strava" | "fail" | "invalid"; adoptFail?: "active" | "busy" | "state" | "fail"; resumeFail?: "exhausted" | "limit" | "state";
 }
 const dsw = (): DraftSwitches => (globalThis as unknown as { __mock?: DraftSwitches }).__mock ?? {};
@@ -2386,7 +2388,13 @@ export async function mockGetLatestPlanDraft(): Promise<LatestPlanDraftResponse>
   return { draft: draftOf(c) };
 }
 
+let draftReads = 0;
 export function mockGetPlanDraft(id: string): PlanDraftResponse {
+  draftReads += 1;
+  if (dsw().pollFail && draftReads > 1 && draftReads <= 1 + dsw().pollFail!) {
+    if (dsw().pollFailError === "500") throw new ApiError(500, SERVER_ERROR_TEXT);
+    throw new TypeError("Failed to fetch");
+  }
   const c = draftCellNow();
   if (!c || c.kind === "notfound" || id !== `mock-draft-${c.n}`) throw new ApiError(404, "draft not found");
   if (c.kind === "walk" && c.walkAt == null) c.walkAt = Date.now(); // the walk starts when the draft page first asks

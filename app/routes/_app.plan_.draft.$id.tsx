@@ -13,17 +13,33 @@ import {
   isDraftStateError, progressPct, resumeErrorText, saveIntake, stageText, startLine, weeksDone, weeksLine, type FlagItem,
 } from "../lib/draft";
 import { kmPlan, km } from "../lib/format";
+import { SEND_FAILED } from "../lib/groups";
 import { buildPlanView, weekSubline } from "../lib/plan";
 import { useReviewPolling } from "../lib/use-review-polling";
 import type { ApiPlanDraft } from "../types/api";
 
+/**
+ * The draft is read again on every poll (useReviewPolling revalidates). One failed read (a 5xx, the phone's network coming back from the
+ * background) must not take the page down: while the draft is pending the last good reading stays on screen, and only after
+ * `POLL_FAILS_SHOWN` failed reads in a row does the page say so. A first reading that fails has nothing to fall back on (`loadFailed`).
+ */
+const POLL_FAILS_SHOWN = 3;
+let lastGood: ApiPlanDraft | null = null;
+let failures = 0;
+
 export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   try {
     const { draft } = await getPlanDraft(params.id);
-    return { draft: draft as ApiPlanDraft | null, notFound: false };
+    lastGood = draft;
+    failures = 0;
+    return { draft: draft as ApiPlanDraft | null, notFound: false, failures: 0, loadFailed: false };
   } catch (e) {
-    if (e instanceof ApiError && e.status === 404) return { draft: null as ApiPlanDraft | null, notFound: true };
-    throw e; // anything else: the app's own error page
+    if (e instanceof ApiError && e.status === 404) { lastGood = null; failures = 0; return { draft: null as ApiPlanDraft | null, notFound: true, failures: 0, loadFailed: false }; }
+    if (e instanceof ApiError && e.status === 401) throw e; // the layout sends the person to the login page
+    failures += 1;
+    // only a pending draft falls back (that is the poll); a page opened fresh on a draft that can not be read says so
+    if (lastGood && lastGood.id === params.id && lastGood.status === "pending") return { draft: lastGood as ApiPlanDraft | null, notFound: false, failures, loadFailed: false };
+    return { draft: null as ApiPlanDraft | null, notFound: false, failures, loadFailed: true };
   }
 }
 
@@ -219,6 +235,8 @@ export default function PlanDraft({ loaderData }: Route.ComponentProps) {
   const [resuming, setResuming] = useState(false);
   const [resumeError, setResumeError] = useState<string | null>(null);
   const adopted = d?.status === "adopted";
+  // the last reads of this pending draft failed (the last good one is still drawn): say so, and offer 再看一次
+  const unreadable = pending && loaderData.failures >= POLL_FAILS_SHOWN;
   const ownAdopt = useRef(false);
 
   // opened an adopted draft (adopted in another tab, or the link kept): the plan is the active one now, the layout reads it again and 今天 draws it.
@@ -270,6 +288,20 @@ export default function PlanDraft({ loaderData }: Route.ComponentProps) {
   );
   const trash = <button type="button" className="icon-btn" aria-label={T.wait.discard} onClick={() => setDiscardOpen(true)}><TrashIcon /></button>;
 
+  if (loaderData.loadFailed) {
+    return (
+      <>
+        <TopBar title={title} back={back} aside={<button type="button" className="icon-btn" aria-label={T.wait.again} onClick={() => void revalidate()}><RefreshIcon /></button>} />
+        <main>
+          <div className="plan-entry">
+            <p className="err" role="alert">{SEND_FAILED}</p>
+            <Link to="/" className="link">{T.end.goToday}</Link>
+          </div>
+        </main>
+      </>
+    );
+  }
+
   if (!d || adopted) {
     return (
       <>
@@ -283,11 +315,12 @@ export default function PlanDraft({ loaderData }: Route.ComponentProps) {
     return (
       <>
         <TopBar title={title} back={back} aside={<>
-          {timedOut ? <button type="button" className="icon-btn" aria-label={T.wait.again} onClick={() => { restart(); void revalidate(); }}><RefreshIcon /></button> : null}
+          {timedOut || unreadable ? <button type="button" className="icon-btn" aria-label={T.wait.again} onClick={() => { restart(); void revalidate(); }}><RefreshIcon /></button> : null}
           {trash}
         </>} />
         <main>
           <DraftWait d={d} timedOut={timedOut} />
+          {unreadable ? <p className="plan-note" role="alert" style={{ color: "var(--v-bad)" }}>{SEND_FAILED}</p> : null}
           {d.summary ? <DraftWhy d={d} /> : null}
         </main>
         {discard}
