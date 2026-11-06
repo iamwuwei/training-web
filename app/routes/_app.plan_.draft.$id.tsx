@@ -320,7 +320,7 @@ export default function PlanDraft({ loaderData }: Route.ComponentProps) {
         </>} />
         <main>
           <DraftWait d={d} timedOut={timedOut} />
-          {unreadable ? <p className="plan-note" role="alert" style={{ color: "var(--v-bad)" }}>{SEND_FAILED}</p> : null}
+          {unreadable ? <p className="plan-note err" role="alert">{SEND_FAILED}</p> : null}
           {d.summary ? <DraftWhy d={d} /> : null}
         </main>
         {discard}

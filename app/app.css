@@ -1293,3 +1293,5 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 .choice.days .chip { min-width: 0; }
 /* reduced motion: the 產生中 page's progress bar does not slide (only this page; the other `.bar`s keep their own rules) */
 @media (prefers-reduced-motion: reduce) { .draft-wait .bar > i { transition: none; } }
+/* the line under 一般 1〜3 分鐘 when the last reads of the draft failed (instead of an inline style) */
+.plan-note.err { color: var(--v-bad); }
