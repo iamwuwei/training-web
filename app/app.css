@@ -1287,3 +1287,5 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 .draft-bar .row { max-width: 600px; margin: 0 auto; display: flex; align-items: center; gap: 12px; padding: 10px 20px; }
 .draft-bar .s { flex: 1 1 auto; min-width: 0; font-size: 13px; line-height: 1.4; color: var(--ink-2); }
 .draft-bar .s.err { color: var(--v-bad); }
+/* the status line's own `.t` (WooStatus) sits inside `.plan-entry .t`: without this it takes the title's top margin a second time */
+.plan-entry .t .woo-status .t { margin-top: 0; }

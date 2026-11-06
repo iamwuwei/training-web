@@ -2138,6 +2138,8 @@ export async function mockPutShare(body: PutShareRequest): Promise<ShareResponse
 //                   "expired" | "discarded" | "adopted"     the draft page says so (the entry does not see them: latest answers null)
 //                   "notfound"                              GET /plan-drafts/{id} answers 404
 //   latestFail    404 (an api from before this) | 500     GET /plan-drafts/latest fails
+//   latestDelay   ms: GET /plan-drafts/latest answers that much later (the entry's grey skeleton, before either answer is in)
+//   actionDelay   ms: send, adopt, resume and discard answer that much later (送出中… / 採用中… / 丟掉中… can be seen)
 //   strava        false → GET /me has no Strava
 //   planFinished  true → the demo plan's race_date is yesterday and its sessions end there (今天: 課表已結束，辛苦了。)
 //   noRuns        true → GET /activities answers [] (the intake's second step: 最近 12 週沒有跑步紀錄)
@@ -2152,7 +2154,7 @@ export async function mockPutShare(body: PutShareRequest): Promise<ShareResponse
 type DraftKind = "none" | "pending-profile" | "pending-skeleton" | "pending-chunk" | "walk" | "slow" | "ready" | "ready-noflags" | "ready-many" | "ready-norecord" | "ready-importerr"
   | "ready-lastrace" | "failed" | "failed-early" | "failed-exhausted" | "failed-stalled" | "expired" | "discarded" | "adopted" | "notfound";
 interface DraftSwitches {
-  draft?: DraftKind; latestFail?: 404 | 500; strava?: boolean; planFinished?: boolean; noRuns?: boolean;
+  draft?: DraftKind; latestFail?: 404 | 500; latestDelay?: number; actionDelay?: number; strava?: boolean; planFinished?: boolean; noRuns?: boolean;
   draftPost?: "generating" | "limit" | "off" | "active" | "strava" | "fail" | "invalid"; adoptFail?: "active" | "busy" | "state" | "fail"; resumeFail?: "exhausted" | "limit" | "state";
 }
 const dsw = (): DraftSwitches => (globalThis as unknown as { __mock?: DraftSwitches }).__mock ?? {};
@@ -2356,7 +2358,8 @@ function draftOf(c: DraftCell): ApiPlanDraft {
 
 const MOCK_NEW_PLAN_ID = "mock-plan-new";
 
-export function mockPostPlanDraft(body: PostPlanDraftRequest): PlanDraftResponse {
+export async function mockPostPlanDraft(body: PostPlanDraftRequest): Promise<PlanDraftResponse> {
+  if (dsw().actionDelay) await sleep(dsw().actionDelay as number);
   const sw = dsw().draftPost;
   if (sw === "generating") {
     const c = draftCellNow();
@@ -2373,7 +2376,8 @@ export function mockPostPlanDraft(body: PostPlanDraftRequest): PlanDraftResponse
   return { draft: draftOf(draftCell) };
 }
 
-export function mockGetLatestPlanDraft(): LatestPlanDraftResponse {
+export async function mockGetLatestPlanDraft(): Promise<LatestPlanDraftResponse> {
+  if (dsw().latestDelay) await sleep(dsw().latestDelay as number);
   if (dsw().latestFail === 404) throw new ApiError(404, "not found");
   if (dsw().latestFail === 500) throw new ApiError(500, SERVER_ERROR_TEXT);
   const c = draftCellNow();
@@ -2388,7 +2392,8 @@ export function mockGetPlanDraft(id: string): PlanDraftResponse {
   return { draft: draftOf(c) };
 }
 
-export function mockAdoptPlanDraft(id: string): AdoptPlanDraftResponse {
+export async function mockAdoptPlanDraft(id: string): Promise<AdoptPlanDraftResponse> {
+  if (dsw().actionDelay) await sleep(dsw().actionDelay as number);
   const c = draftCellNow();
   if (!c || id !== `mock-draft-${c.n}`) throw new ApiError(404, "draft not found");
   if (c.kind === "adopted" && adoptedPlan) return { plan_id: MOCK_NEW_PLAN_ID };
@@ -2410,7 +2415,8 @@ export function mockAdoptPlanDraft(id: string): AdoptPlanDraftResponse {
   return { plan_id: MOCK_NEW_PLAN_ID };
 }
 
-export function mockResumePlanDraft(id: string): PlanDraftResponse {
+export async function mockResumePlanDraft(id: string): Promise<PlanDraftResponse> {
+  if (dsw().actionDelay) await sleep(dsw().actionDelay as number);
   const c = draftCellNow();
   if (!c || id !== `mock-draft-${c.n}`) throw new ApiError(404, "draft not found");
   const sw = dsw().resumeFail;
@@ -2422,7 +2428,8 @@ export function mockResumePlanDraft(id: string): PlanDraftResponse {
   return { draft: draftOf(c) };
 }
 
-export function mockDiscardPlanDraft(id: string): PlanDraftOkResponse {
+export async function mockDiscardPlanDraft(id: string): Promise<PlanDraftOkResponse> {
+  if (dsw().actionDelay) await sleep(dsw().actionDelay as number);
   const c = draftCellNow();
   if (!c || id !== `mock-draft-${c.n}`) throw new ApiError(404, "draft not found");
   if (c.kind === "adopted") throw new ApiError(409, "draft is adopted");
