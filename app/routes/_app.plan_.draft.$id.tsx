@@ -24,10 +24,15 @@ import type { ApiPlanDraft } from "../types/api";
  * `POLL_FAILS_SHOWN` failed reads in a row does the page say so. A first reading that fails has nothing to fall back on (`loadFailed`).
  */
 const POLL_FAILS_SHOWN = 3;
+// What the polls share. They belong to one visit of one draft: leaving the page (see the effect in PlanDraft) or opening another draft
+// starts them again, so coming back never inherits an earlier visit's old progress or its failed reads.
 let lastGood: ApiPlanDraft | null = null;
 let failures = 0;
+let seenId: string | null = null;
+let mounted = 0;
 
 export async function clientLoader({ params }: Route.ClientLoaderArgs) {
+  if (seenId !== params.id) { seenId = params.id; lastGood = null; failures = 0; }
   try {
     const { draft } = await getPlanDraft(params.id);
     lastGood = draft;
@@ -37,7 +42,7 @@ export async function clientLoader({ params }: Route.ClientLoaderArgs) {
     if (e instanceof ApiError && e.status === 404) { lastGood = null; failures = 0; return { draft: null as ApiPlanDraft | null, notFound: true, failures: 0, loadFailed: false }; }
     if (e instanceof ApiError && e.status === 401) throw e; // the layout sends the person to the login page
     failures += 1;
-    // only a pending draft falls back (that is the poll); a page opened fresh on a draft that can not be read says so
+    // only a pending draft of this id falls back (that is the poll); a page opened fresh on a draft that can not be read says so
     if (lastGood && lastGood.id === params.id && lastGood.status === "pending") return { draft: lastGood as ApiPlanDraft | null, notFound: false, failures, loadFailed: false };
     return { draft: null as ApiPlanDraft | null, notFound: false, failures, loadFailed: true };
   }
@@ -238,6 +243,11 @@ export default function PlanDraft({ loaderData }: Route.ComponentProps) {
   // the last reads of this pending draft failed (the last good one is still drawn): say so, and offer 再看一次
   const unreadable = pending && loaderData.failures >= POLL_FAILS_SHOWN;
   const ownAdopt = useRef(false);
+  // leaving the page forgets the polls (the timeout lets development's mount–unmount–mount pass without forgetting)
+  useEffect(() => {
+    mounted += 1;
+    return () => { mounted -= 1; window.setTimeout(() => { if (mounted === 0) { lastGood = null; failures = 0; seenId = null; } }, 0); };
+  }, []);
 
   // opened an adopted draft (adopted in another tab, or the link kept): the plan is the active one now, the layout reads it again and 今天 draws it.
   // Our own 採用這份 does the same itself, below.
