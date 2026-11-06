@@ -13,12 +13,14 @@ import { isStrengthDay, shortName, sportName } from "../lib/labels";
 import { ApiError, putSession } from "../lib/api";
 import { appendTargetFor, assignErrorText, type Combined } from "../lib/combine";
 import { activityDate, hrOver, isLoggable, isRunSport, lastReminderFor, paceFast, sessionForExtra, type Day, type PlanView } from "../lib/plan";
-import { NoPlan, usePlan } from "../lib/use-plan";
+import { DRAFT_TEXT, useLatestDraft } from "../lib/draft";
+import { NoPlanEntry, usePlan } from "../lib/use-plan";
 import { useReviewPolling } from "../lib/use-review-polling";
 import type { ApiActivity, ApiSession } from "../types/api";
+import { pageTitle } from "../lib/meta";
 
-export function meta(): Route.MetaDescriptors {
-  return [{ title: "今天 · 富士山マラソン 2026" }];
+export function meta({ matches }: Route.MetaArgs): Route.MetaDescriptors {
+  return pageTitle("今天", matches);
 }
 
 // One post per state for today's session: not run → synced (log it) → coach analysing → verdict.
@@ -171,6 +173,25 @@ function TodayPost({ day, view, slow, onOpen }: { day: Day; view: PlanView; slow
   );
 }
 
+/**
+ * Under 「課表已結束，辛苦了。」: the way on to the next plan, following the draft Woo may already be making (02 §1.1). Reads GET /me
+ * and GET /plan-drafts/latest once, and only when this line is on the page. A missing or failed answer is "no draft".
+ */
+function PlanNext() {
+  const { draft, loading } = useLatestDraft();
+  const T = DRAFT_TEXT.finished;
+  if (loading) return <div className="plan-next" aria-hidden="true" style={{ minHeight: 44 }} />; // keeps the line's height, so the page does not jump when the answer is in
+  const to = draft && (draft.status === "pending" || draft.status === "ready" || draft.status === "failed") ? `/plan/draft/${draft.id}` : "/plan/new";
+  return (
+    <div className="plan-next">
+      {draft?.status === "pending" ? <Link to={to}><CoachAvatar size={20} />{T.pending}</Link>
+        : draft?.status === "ready" ? <Link to={to}><CoachAvatar size={20} badge="check" />{T.ready}</Link>
+        : draft?.status === "failed" ? <Link to={to}>{T.failed}</Link>
+        : <Link to={to}>{T.next}</Link>}
+    </div>
+  );
+}
+
 function ExtraRow({ a, view }: { a: ApiActivity; view: PlanView }) {
   const target = sessionForExtra(view, a);
   const appendTo = appendTargetFor(view, a);
@@ -200,7 +221,7 @@ export default function Today() {
   const analysing = !!(todayAct && !todayAct.review) && !view?.data.coach_checkin_open;
   const { timedOut } = useReviewPolling(analysing);
   const [open, setOpen] = useState<ApiSession | null>(null);
-  if (!view) return <NoPlan title="今天" />;
+  if (!view) return <NoPlanEntry title="今天" />;
   const { todayDay, todayActivities, upcoming, currentWeek, daysToRace, data, today } = view;
 
   // The activity surfaced inside today's post (state "synced") is not repeated below.
@@ -214,7 +235,7 @@ export default function Today() {
   return (
     <>
       <TopBar
-        title={<><MountainIcon />富士山マラソン 2026</>}
+        title={<><MountainIcon /><span className="t">{data.plan.race_name}</span></>}
         aside={<Link to="/settings" className="gear" aria-label="設定"><GearIcon /></Link>}
       />
       <main>
@@ -241,7 +262,10 @@ export default function Today() {
         {todayDay ? (
           <TodayPost day={todayDay} view={view} slow={timedOut} onOpen={setOpen} />
         ) : (
-          <p className="empty">{today > data.plan.race_date ? "課表已結束，辛苦了。" : data.weeks[0] && today < data.weeks[0].week_start ? "課表還沒開始。" : "今天沒有排課。"}</p>
+          <>
+            <p className="empty">{today > data.plan.race_date ? "課表已結束，辛苦了。" : data.weeks[0] && today < data.weeks[0].week_start ? "課表還沒開始。" : "今天沒有排課。"}</p>
+            {today > data.plan.race_date ? <PlanNext /> : null}
+          </>
         )}
 
         {extras.length ? (

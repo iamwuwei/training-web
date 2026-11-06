@@ -15,6 +15,7 @@ import { useReviewPolling } from "../lib/use-review-polling";
 import { movedCountsIn, type PlanView } from "../lib/plan";
 import { usePlan } from "../lib/use-plan";
 import type { ApiActivity, ApiCoachMessage, ApiProposal, ApiWeeklyAsk, ApiWeeklyReview } from "../types/api";
+import { pageTitle } from "../lib/meta";
 
 // Woo's thread: weekly reviews (with their proposals), each run's verdict, his
 // post-run check-in (which activity → how did it feel → verdict), and the
@@ -48,8 +49,8 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   }
 }
 
-export function meta(): Route.MetaDescriptors {
-  return [{ title: "教練 Woo · 富士山マラソン 2026" }];
+export function meta({ matches }: Route.MetaArgs): Route.MetaDescriptors {
+  return pageTitle("教練 Woo", matches);
 }
 
 /** Woo's cards failed the api's check: only his text stays. */

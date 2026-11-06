@@ -8,13 +8,14 @@ import { deleteGroup, getGroup, postGroupLeave } from "../lib/api";
 import { dow } from "../lib/date";
 import { isStatus, NOTICE_GONE } from "../lib/groups";
 import { loadGroupData } from "../lib/group-load";
+import { pageTitle } from "../lib/meta";
 
 export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   return loadGroupData(() => getGroup(params.id));
 }
 
-export function meta(): Route.MetaDescriptors {
-  return [{ title: "群組設定 · 富士山マラソン 2026" }];
+export function meta({ matches }: Route.MetaArgs): Route.MetaDescriptors {
+  return pageTitle("群組設定", matches);
 }
 
 /**

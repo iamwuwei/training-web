@@ -14,6 +14,7 @@ import { loadGroupData } from "../lib/group-load";
 import { memberPlanRange, toPlanResponse } from "../lib/member-plan";
 import { buildPlanView, weekSubline } from "../lib/plan";
 import type { ApiSession, MemberPlanResponse } from "../types/api";
+import { pageTitle } from "../lib/meta";
 
 export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   return loadGroupData(() => getGroup(params.id));
@@ -25,8 +26,8 @@ export function shouldRevalidate({ currentUrl, nextUrl, defaultShouldRevalidate 
   return defaultShouldRevalidate;
 }
 
-export function meta(): Route.MetaDescriptors {
-  return [{ title: "大家的課表 · 富士山マラソン 2026" }];
+export function meta({ matches }: Route.MetaArgs): Route.MetaDescriptors {
+  return pageTitle("大家的課表", matches);
 }
 
 type Pane = { key: string; status: "ok"; data: MemberPlanResponse } | { key: string; status: "missing" } | { key: string; status: "error" };

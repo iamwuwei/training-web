@@ -9,6 +9,7 @@ import { config, useMock } from "../lib/config";
 import { periodMeta } from "../lib/constraints";
 import { md, todayJst, toJstDate } from "../lib/date";
 import { usePlan } from "../lib/use-plan";
+import { pageTitle } from "../lib/meta";
 
 export async function clientLoader() {
   if (!hasSession()) throw redirect("/login");
@@ -28,8 +29,8 @@ export async function clientLoader() {
   }
 }
 
-export function meta(): Route.MetaDescriptors {
-  return [{ title: "設定 · 富士山マラソン 2026" }];
+export function meta({ matches }: Route.MetaArgs): Route.MetaDescriptors {
+  return pageTitle("設定", matches);
 }
 
 /**

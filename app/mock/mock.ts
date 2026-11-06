@@ -3,7 +3,7 @@
 // results become an activity + manual review on the same local date.
 
 import plans from "./plans.json";
-import type { AcceptInviteResponse, ActivitiesResponse, ApiActivity, ApiGroup, ApiGroupEvent, ApiGroupMember, ApiGroupProgress, ApiSharedActivity, ApiSharedReview, GroupEventDetailResponse, GroupEventsResponse, GroupOkResponse, GroupResponse, GroupsResponse, InvitePreviewResponse, InviteState, MemberPlanResponse, PostGroupInviteResponse, PostGroupRequest, PostGroupResponse, PutShareRequest, ShareResponse, ShareSettings, ApiCoachMessage, ApiConstraint, ApiProposal, ApiProposalChange, ApiRoutine, ApiSession, ApiSplit, ApiWeek, ApiWeeklyReview, CoachResponse, DetailOptionsResponse, PutDetailsRequest, PutDetailsResponse, PostCoachMessageRequest, PostCoachMessageResponse,
+import type { AcceptInviteResponse, ActivitiesResponse, AdoptPlanDraftResponse, ApiActivity, ApiAthleteProfile, ApiDraftSession, ApiDraftWeek, ApiPlanDraft, LatestPlanDraftResponse, PlanDraftOkResponse, PlanDraftResponse, PlanIntake, PostPlanDraftRequest, SessionType, ApiGroup, ApiGroupEvent, ApiGroupMember, ApiGroupProgress, ApiSharedActivity, ApiSharedReview, GroupEventDetailResponse, GroupEventsResponse, GroupOkResponse, GroupResponse, GroupsResponse, InvitePreviewResponse, InviteState, MemberPlanResponse, PostGroupInviteResponse, PostGroupRequest, PostGroupResponse, PutShareRequest, ShareResponse, ShareSettings, ApiCoachMessage, ApiConstraint, ApiProposal, ApiProposalChange, ApiRoutine, ApiSession, ApiSplit, ApiWeek, ApiWeeklyReview, CoachResponse, DetailOptionsResponse, PutDetailsRequest, PutDetailsResponse, PostCoachMessageRequest, PostCoachMessageResponse,
   PostCheckinPickRequest,
   PostCheckinPickResponse,
   PostCheckinResetResponse,
@@ -19,8 +19,10 @@ import type { AcceptInviteResponse, ActivitiesResponse, ApiActivity, ApiGroup, A
 import { ApiError } from "../lib/api";
 import { combine, groupBySession, MAX_PER_SESSION, overlaps } from "../lib/combine";
 import { buildPlanView } from "../lib/plan";
-import { addDays, md, mdDow, timeJst, todayJst, toJstDate } from "../lib/date";
-import { kmPlan, pace } from "../lib/format";
+import { addDays, dayDiff, md, mdDow, timeJst, todayJst, toJstDate } from "../lib/date";
+import { draftToPlanResponse, nextMonday } from "../lib/draft";
+import { mdPlain } from "../lib/groups";
+import { duration, kmPlan, pace } from "../lib/format";
 import { shortName, typeLabel, typeName } from "../lib/labels";
 const MOCK_USER_ID = "7d1c3a0e-4f7b-4d2e-9c1a-5b8e2f6a1c01"; // ww in training-api seed
 
@@ -397,14 +399,20 @@ const withoutMakeupFields = (sessions: ApiSession[]): ApiSession[] =>
   });
 
 export function mockPlan(): PlanResponse {
+  if (adoptedPlan) return { ...adoptedPlan, groups_unread: groupsUnreadTotal() }; // ai-plan-generation: a draft was adopted, that is my plan now
   if (has("nomyplan")) throw new ApiError(404, "no active plan"); // the api answers 404 to someone without an active plan
   refreshSegments();
   const d = data();
+  // `planFinished`: the plan ended yesterday (its sessions stop there); the activities stay
+  const ended = dsw().planFinished === true ? addDays(todayJst(), -1) : null;
   const t = threadData();
   const openAsk = [...t].reverse().find((m) => m.kind === "ask" && m.ask?.state === "open")?.ask ?? null;
+  const sessions = ended ? d.sessions.filter((s) => s.scheduled_date <= ended) : d.sessions;
   return {
     ...d,
-    sessions: knobs().__mockNoCounts ? withoutMakeupFields(d.sessions) : d.sessions,
+    plan: ended ? { ...d.plan, race_date: ended } : d.plan,
+    weeks: ended ? d.weeks.filter((w) => w.week_start <= ended) : d.weeks,
+    sessions: knobs().__mockNoCounts ? withoutMakeupFields(sessions) : sessions,
     coach_unread: coachUnread,
     coach_checkin_open: !!openAsk || t.some((m) => m.kind === "checkin" && m.checkin?.state === "open"),
     coach_ask_kind: openAsk?.kind ?? null,
@@ -419,7 +427,7 @@ export function mockPlan(): PlanResponse {
 export function mockMe(): MeResponse {
   return {
     user: { id: MOCK_USER_ID, display_name: "Wei Wu", email: "wei@example.com" },
-    strava: { athlete_id: "12345678", scope: "read,activity:read_all", expires_at: new Date(Date.now() + 3600_000).toISOString() },
+    strava: dsw().strava === false ? null : { athlete_id: "12345678", scope: "read,activity:read_all", expires_at: new Date(Date.now() + 3600_000).toISOString() },
     strava_connect_url: `https://example.invalid/strava/oauth/start?user=${MOCK_USER_ID}`,
   };
 }
@@ -694,6 +702,7 @@ export function mockPutSession(activityId: string, body: PutSessionRequest): Put
 }
 
 export function mockActivities(status?: MatchStatus): ActivitiesResponse {
+  if (dsw().noRuns) return { activities: [] }; // ai-plan-generation: the intake's second step with nothing to show
   refreshSegments();
   const all = [...data().activities, ...data().unassigned].sort((a, b) => b.start_time.localeCompare(a.start_time));
   return { activities: status ? all.filter((a) => a.match_status === status) : all };
@@ -1727,7 +1736,7 @@ function cast(): Record<string, Person> {
   return people;
 }
 /** My own plan is the live one (what I do in the app shows up in the group). */
-function personPlan(p: Person): PlanResponse | null { return p.key === "me" ? (has("nomyplan") ? null : mockPlan()) : p.plan; }
+function personPlan(p: Person): PlanResponse | null { return p.key === "me" ? (has("nomyplan") && !adoptedPlan ? null : mockPlan()) : p.plan; }
 function personRuns(p: Person): Person["runs"] {
   if (p.key !== "me") return p.runs;
   return everyActivity().filter((a) => isRunAct(a) && a.match_status !== "ignored").map((a) => ({ date: toJstDate(a.start_time), m: a.distance_m }));
@@ -2108,4 +2117,336 @@ export async function mockPutShare(body: PutShareRequest): Promise<ShareResponse
   }
   myShare = { ...myShare, ...body.share };
   return { share: { ...myShare } };
+}
+
+// =====================================================================================================================
+// ai-plan-generation (demo): the draft Woo writes from the intake form. In memory like everything above; `page.goto` resets it.
+//
+// Switches (`window.__mock = { … }`, set before the page loads, e.g. with addInitScript; the same object as the group switches).
+//   draft         the newest draft (read once, when it is first needed):
+//                   "none" (default)                        no draft: 今天／課表 show the entry (nomyplan = no plan at all; planFinished = the plan has ended)
+//                   "pending-profile" | "pending-skeleton"  generating: reading Strava / the week structure (no thought yet)
+//                   "pending-chunk"                         generating: chunk 1 of 3 is in (weeks 1〜4), Woo is on weeks 5〜8; his thought is there
+//                   "walk"                                  from the first time the draft page asks: every 4 s profile → skeleton → chunk 1/3 → chunk 2/3 → ready
+//                   "slow"                                  pending-chunk for ever (the 3-minute 比較久 line; use a fake clock)
+//                   "ready"                                 10 weeks, 6 flags (2 on weeks, 4 on days); his thought has several sentences
+//                   "ready-noflags" | "ready-many"          0 flags | 9 flags (8 + the whole-draft line: 還有 n 條 ›, the first line has no place)
+//                   "ready-norecord" | "ready-importerr" | "ready-lastrace"     the 依據 line: no runs | Strava unreadable | + 上一場 line and its flag
+//                   "ready-norecord-importerr"              no runs and Strava unreadable
+//                   "failed"                                chunk 1 in (weeks 1〜4), validation_failed, can_resume
+//                   "failed-early"                          the skeleton failed: no weeks, no thought, model_failed, can_resume
+//                   "failed-exhausted"                      calls 12, calls_exhausted, no resume   "failed-stalled"   stalled, can_resume
+//                   "expired-start"                         ready, but its start day (2 days ago) has passed: GET, latest and adopt all say expired
+//                   "expired-start"                         ready, but its start day (2 days ago) has passed: GET, latest and adopt all say expired
+//                   "expired" | "discarded" | "adopted"     the draft page says so (the entry does not see them: latest answers null)
+//                   "notfound"                              GET /plan-drafts/{id} answers 404
+//   latestFail    404 (an api from before this) | 500     GET /plan-drafts/latest fails
+//   latestDelay   ms: GET /plan-drafts/latest answers that much later (the entry's grey skeleton, before either answer is in)
+//   pollFail      n: after the first reading of the draft, the next n readings fail (GET /plan-drafts/{id}); 1 = one failed poll, 3 = enough for the page to say so; then it recovers
+//   pollFailError "network" (default: a TypeError like fetch's) | "500"
+//   actionDelay   ms: send, adopt, resume and discard answer that much later (送出中… / 採用中… / 丟掉中… can be seen)
+//   strava        false → GET /me has no Strava
+//   planFinished  true → the demo plan's race_date is yesterday and its sessions end there (今天: 課表已結束，辛苦了。)
+//   noRuns        true → GET /activities answers [] (the intake's second step: 最近 12 週沒有跑步紀錄)
+//   draftPost     "generating" (409 + latest is that pending draft) | "limit" 429 | "off" 503 plan generation is off | "busy" 503 any other | "active" 409 | "strava" 409 | "fail" 500
+//                 | "invalid" (400 distance_m …: back to step 1)       without it: 202, and the new draft walks like `walk`
+//   adoptFail     "active" 409 | "busy" 503 | "state" (409 draft is expired, and the draft is expired from then on) | "fail" 500
+//   resumeFail    "exhausted" | "limit" | "state" (each 409)           without it: 202, the draft is pending-chunk
+// After 採用 GET /plan is the adopted draft's plan (starts next Monday: 課表還沒開始。) and `variant: "nomyplan"` no longer applies;
+// after 不要這份 latest answers null. A draft sent from the form is built from the answers in it (any 4〜20 weeks).
+// =====================================================================================================================
+
+type DraftKind = "none" | "pending-profile" | "pending-skeleton" | "pending-chunk" | "walk" | "slow" | "ready" | "ready-noflags" | "ready-many" | "ready-norecord" | "ready-norecord-importerr" | "ready-importerr"
+  | "ready-lastrace" | "failed" | "failed-early" | "failed-exhausted" | "failed-stalled" | "expired" | "expired-start" | "discarded" | "adopted" | "notfound";
+interface DraftSwitches {
+  draft?: DraftKind; latestFail?: 404 | 500; latestDelay?: number; actionDelay?: number; pollFail?: number; pollFailError?: "network" | "500"; strava?: boolean; planFinished?: boolean; noRuns?: boolean;
+  draftPost?: "generating" | "limit" | "off" | "busy" | "active" | "strava" | "fail" | "invalid"; adoptFail?: "active" | "busy" | "state" | "fail"; resumeFail?: "exhausted" | "limit" | "state";
+}
+const dsw = (): DraftSwitches => (globalThis as unknown as { __mock?: DraftSwitches }).__mock ?? {};
+const SERVER_ERROR_TEXT = "伺服器錯誤，稍後再試";
+
+const f1 = (n: number) => n.toFixed(1);
+const sundayOn = (iso: string) => addDays(iso, (7 - new Date(`${iso}T00:00:00Z`).getUTCDay()) % 7);
+const dowOf = (iso: string) => new Date(`${iso}T00:00:00Z`).getUTCDay();
+
+/**
+ * A plan from an intake, the way Woo would lay it out: weeks cut at Mondays (the first from the start day, the last to the race), the long
+ * run on the first of Sunday／Tuesday／Thursday／Saturday／Monday／Friday that is not a fixed rest day, tempo on the third run day, a
+ * lighter week every fourth, two weeks of taper, the race on its day. `extraFri`: weeks (1-based) that get one more easy run on a Friday.
+ */
+const pacetxt = (sec: number) => pace(sec);
+function genPlan(intake: PlanIntake, extraFri: number[] = []): { weeks: ApiDraftWeek[]; sessions: ApiDraftSession[] } {
+  const g = intake.goals[0];
+  const km = g.distance_m / 1000;
+  const spans: { week_no: number; week_start: string; week_end: string }[] = [];
+  for (let ws = intake.start_date; ws <= g.race_date; ) {
+    const we = sundayOn(ws) < g.race_date ? sundayOn(ws) : g.race_date;
+    spans.push({ week_no: spans.length + 1, week_start: ws, week_end: we });
+    ws = addDays(we, 1);
+  }
+  const n = spans.length;
+  const peak = Math.min(32, Math.max(8, Math.round(km * 0.75)));
+  const easy = Math.min(10, Math.max(4, Math.round(peak * 0.4)));
+  const tempoKm = Math.min(12, Math.max(4, Math.round(peak * 0.5)));
+  const gp = g.target_time_sec ? Math.round(g.target_time_sec / km) : 390; // goal pace, sec/km
+  const runDays = [0, 2, 4, 6, 1, 5, 3].filter((d) => !intake.fixed_rest_weekdays.includes(d)).slice(0, intake.days_per_week);
+  const hard = (i: number) => i >= 1 && i % 4 !== 3 && i < n - 2;
+  const longKm = (i: number) => {
+    if (i >= n - 2) return Math.round(peak * 0.6);
+    const base = peak * (0.55 + (0.45 * i) / Math.max(1, n - 3));
+    return Math.round(i % 4 === 3 ? base * 0.6 : base);
+  };
+  const mk = (date: string, week_no: number, type: SessionType, label: string, content: string, note: string | null, km_: number | null, pace: [number, number] | null, hr: [number, number] | null): ApiDraftSession => ({
+    date, week_no, type, label, content, note, target_distance_m: km_ == null ? null : Math.round(km_ * 1000),
+    target_pace_sec_km: pace ? Math.round((pace[0] + pace[1]) / 2) : null, target_pace_min_sec_km: pace?.[0] ?? null, target_pace_max_sec_km: pace?.[1] ?? null,
+    target_hr_min: hr?.[0] ?? null, target_hr_max: hr?.[1] ?? null,
+    target: pace ? `${pacetxt(pace[0])}〜${pacetxt(pace[1])}${hr ? ` / 心拍 ${hr[0]}〜${hr[1]}` : ""}` : null, flags: [],
+  });
+  const sessions: ApiDraftSession[] = [];
+  for (const w of spans) {
+    const i = w.week_no - 1;
+    for (let date = w.week_start; date <= w.week_end; date = addDays(date, 1)) {
+      const dow = dowOf(date);
+      const wk = w.week_no;
+      const fixed = intake.fixed_rest_weekdays.includes(dow);
+      if (date === g.race_date) {
+        sessions.push(mk(date, wk, "race", "比賽", `${g.name} ${f1(km)} km`, g.target_time_sec ? `目標 ${duration(g.target_time_sec)}，前半不要衝。` : "完賽就好，前半不要衝。", km, [gp - 3, gp + 3], null));
+      } else if (fixed) {
+        sessions.push(mk(date, wk, "rest", "休息", "休息", `你說週${"日一二三四五六"[dow]}固定休息。`, null, null, null));
+      } else if (date === addDays(g.race_date, -1) && runDays.includes(dow)) {
+        sessions.push(mk(date, wk, "easy", "Easy", "Easy 3 km", "賽前一天，放鬆跑，順便確認裝備。", 3, [gp + 75, gp + 105], [130, 145]));
+      } else if (runDays.includes(dow)) {
+        const at = runDays.indexOf(dow);
+        if (at === 0) {
+          const L = longKm(i);
+          sessions.push(mk(date, wk, "long", "Long", `Long ${L} km`, "慢慢跑，後段不要加速。", L, [gp + 45, gp + 75], [140, 155]));
+        } else if (at === 2 && hard(i)) {
+          sessions.push(mk(date, wk, "tempo", "Tempo", `2 km 熱身 + ${tempoKm - 4} km 節奏 + 2 km 緩和`, "節奏段用你的目標配速附近，感覺「有點喘但說得出短句」。", tempoKm, [gp - 10, gp + 5], [160, 172]));
+        } else {
+          const E = i >= n - 2 ? Math.max(3, easy - 2) : at === 3 ? Math.max(3, Math.round(easy * 0.8)) : easy;
+          sessions.push(mk(date, wk, "easy", "Easy", `Easy ${E} km`, "對話配速，結束後還有餘力。", E, [gp + 75, gp + 105], [135, 150]));
+        }
+      } else if (dow === 5 && extraFri.includes(wk)) {
+        sessions.push(mk(date, wk, "easy", "Easy", "Easy 3 km", "多一天輕鬆跑，讓腿熟悉頻率。", 3, [gp + 75, gp + 105], [135, 150]));
+      } else if (dow === 1 && wk <= n - 2) {
+        sessions.push(mk(date, wk, "rest", "肌力", "肌力", "肌力日：下肢與核心 30 分鐘，做完告訴 Woo。", null, null, null));
+      } else {
+        sessions.push(mk(date, wk, "rest", "休息", "休息", "完全休息，睡飽一點。", null, null, null));
+      }
+    }
+  }
+  const weeks: ApiDraftWeek[] = spans.map((w) => {
+    const i = w.week_no - 1;
+    const mine = sessions.filter((s) => s.week_no === w.week_no);
+    const longest = Math.max(0, ...mine.filter((s) => s.type === "long").map((s) => (s.target_distance_m ?? 0) / 1000));
+    const taper = n >= 5 && i >= n - 2;
+    return {
+      ...w, phase: taper ? "賽前期" : i < n * 0.4 ? "基礎期" : "建立期",
+      focus: i === 0 ? "穩定跑量，先找回節奏" : taper ? (i === n - 1 ? "比賽週，保腿" : "賽前減量，強度留著量降下來") : i % 4 === 3 ? "減量週，讓身體吸收" : hard(i) ? "節奏跑 + 長跑漸進" : "輕鬆跑為主",
+      km: Math.round(mine.reduce((t, s) => t + (s.target_distance_m ?? 0), 0) / 100) / 10, long_km: longest, key: longest ? `Long ${longest} km` : "比賽", taper, flags: [],
+    };
+  });
+  return { weeks, sessions };
+}
+
+/** The few of the api's flags (01b §5.5) the demo can state from the days it laid out; the sentences are the api's. */
+function drawFlags(weeks: ApiDraftWeek[], sessions: ApiDraftSession[], intake: PlanIntake, profile: ApiAthleteProfile): string[] {
+  const runKm = (no: number) => sessions.filter((s) => s.week_no === no && s.type !== "rest" && s.type !== "race").reduce((t, s) => t + (s.target_distance_m ?? 0), 0) / 1000;
+  const days = (no: number) => sessions.filter((s) => s.week_no === no && s.type !== "rest" && s.type !== "race").length;
+  const last = weeks[weeks.length - 1]?.week_no;
+  let total = 0;
+  for (const w of weeks) {
+    const prev = runKm(w.week_no - 1);
+    if (prev > 0 && runKm(w.week_no) >= prev * 1.15) { w.flags.push(`這週 ${f1(runKm(w.week_no))} km，比上週多 ${Math.round((runKm(w.week_no) / prev - 1) * 100)}%`); total++; }
+    if (w.taper && prev > 0 && runKm(w.week_no) > prev) { w.flags.push(`這週是減量週，卻比上週多 ${f1(runKm(w.week_no) - prev)} km`); total++; }
+    if (w.week_no !== last && days(w.week_no) !== intake.days_per_week) { w.flags.push(`這週排 ${days(w.week_no)} 天，你說每週 ${intake.days_per_week} 天`); total++; }
+  }
+  let prevLong: ApiDraftSession | null = null;
+  for (const s of sessions) {
+    if (s.type !== "long") continue;
+    const b = (s.target_distance_m ?? 0) / 1000;
+    const a = profile.longest?.km ?? ((prevLong?.target_distance_m ?? 0) / 1000);
+    if ((profile.longest || prevLong) && b - a >= 3) { s.flags.push(`比你目前最長多 ${f1(b - a)} km（${f1(a)} → ${f1(b)} km）`); total++; }
+    if (prevLong && dayDiff(prevLong.date, s.date) < 6) { s.flags.push(`跟上一次長跑只隔 ${dayDiff(prevLong.date, s.date)} 天`); total++; }
+    prevLong = s;
+  }
+  return total >= 8 ? ["旗標比較多，採用前看一下每週的量"] : [];
+}
+
+const DRAFT_PROFILE = (): ApiAthleteProfile => {
+  const today = todayJst();
+  const mon = addDays(today, -((new Date(`${today}T00:00:00Z`).getUTCDay() + 6) % 7));
+  const km = [12, 15, 18, 0, 16, 20, 22, 18, 24, 20, 26, 19];
+  return {
+    from: addDays(mon, -77), to: today,
+    weeks: km.map((k, i) => ({ week_start: addDays(mon, -7 * (11 - i)), runs: k ? Math.max(1, Math.round(k / 7)) : 0, km: k, longest_km: k ? Math.min(8, Math.round(k / 2.5)) : 0 })),
+    last4: { runs_per_week: 3, km_per_week: 21.8 }, longest: { date: addDays(today, -20), km: 8, pace_sec_km: 430, avg_hr: 148 },
+    avg_pace_sec_km: 425, avg_hr: 147, total_runs: 33, import_error: false,
+    hr_zones: { lt140: 0.22, z140_155: 0.51, z155_170: 0.24, gte170: 0.03 }, pace_bands: { lt6: 0.04, p6_7: 0.31, p7_8: 0.52, gte8: 0.13 }, last_race: null,
+  };
+};
+
+const THOUGHT = "你最近 12 週每週跑 3 次、約 22 km，最長一次 8 km，所以前幾週先把量穩住，不急著加速。第 5 週起長跑拉到 13 km 以上，是這份課表第一個比較硬的地方，其餘的週都在你現在的量上緩緩往上。每四週放一個輕鬆的週，最後兩週降量保腿。週三是你說的固定休息日，全部排休息；你提到的左膝，前幾週不排坡跑。";
+
+function fixtureIntake(): PlanIntake {
+  const start = nextMonday(todayJst());
+  return {
+    goals: [{ kind: "race", priority: "A", name: "新春ハーフ 2027", race_date: addDays(start, 69), distance_m: 21097, target_time_sec: 7140 }],
+    days_per_week: 4, fixed_rest_weekdays: [3], experience: "finished", weekday_minutes: 60, notes: "左膝不舒服到月底", start_date: start,
+  };
+}
+
+interface DraftCell { n: number; kind: DraftKind; intake: PlanIntake; walkAt: number | null; adoptedPlanId: string | null }
+let draftCell: DraftCell | null | undefined; // undefined: not read yet; null: no draft
+let draftSeq = 0;
+let adoptedPlan: PlanResponse | null = null;
+const nowIso = () => new Date().toISOString();
+
+function draftCellNow(): DraftCell | null {
+  if (draftCell === undefined) {
+    const kind = dsw().draft ?? "none";
+    const intake = fixtureIntake();
+    if (kind === "expired-start") intake.start_date = addDays(todayJst(), -2); // a ready draft whose start day went by while it waited
+    draftCell = kind === "none" ? null : { n: ++draftSeq, kind, intake, walkAt: null, adoptedPlanId: null };
+  }
+  return draftCell;
+}
+
+/** The walk's kind at this moment: profile → skeleton → chunk 1/3 → chunk 2/3 → ready, 4 s each. */
+function walkKind(c: DraftCell): DraftKind {
+  if (c.walkAt == null) return "pending-profile";
+  const step = Math.floor((Date.now() - c.walkAt) / 4000);
+  return step <= 0 ? "pending-profile" : step === 1 ? "pending-skeleton" : step === 2 ? "pending-chunk" : step === 3 ? "pending-chunk" : "ready";
+}
+
+/** The draft the cell stands for right now, shaped like GET /plan-drafts/{id}. */
+function draftOf(c: DraftCell): ApiPlanDraft {
+  const kind = c.kind === "walk" ? walkKind(c) : c.kind === "slow" ? "pending-chunk" : c.kind;
+  const walkStep = c.kind === "walk" && c.walkAt != null ? Math.floor((Date.now() - c.walkAt) / 4000) : 0;
+  const plan = genPlan(c.intake, kind === "ready-many" ? [2, 7] : [7]); // week 7 gets a fifth run (a week flag); `ready-many` one in week 2 too
+  let profile: ApiAthleteProfile | null = DRAFT_PROFILE();
+  if (kind === "ready-norecord" || kind === "ready-norecord-importerr") profile = { ...profile, weeks: profile.weeks.map((w) => ({ ...w, runs: 0, km: 0, longest_km: 0 })), last4: { runs_per_week: 0, km_per_week: 0 }, longest: null, avg_pace_sec_km: null, avg_hr: null, total_runs: 0, hr_zones: null, pace_bands: null };
+  if (kind === "ready-importerr" || kind === "ready-norecord-importerr") profile = { ...profile, import_error: true };
+  if (kind === "ready-lastrace") profile = { ...profile, last_race: { name: "富士山マラソン", date: addDays(todayJst(), -5), distance_m: 42195, actual_time_sec: 17480, days_ago: 5 } };
+
+  const total = plan.weeks.length;
+  const chunksTotal = Math.ceil(total / 4);
+  let status: ApiPlanDraft["status"] = "ready", stage: ApiPlanDraft["stage"] = null, done = chunksTotal, withSkeleton = true, sessions = plan.sessions, flagsOn = true;
+  let error: string | null = null, canResume = false, calls = chunksTotal + 1;
+  if (kind === "pending-profile") { status = "pending"; stage = "profile"; done = 0; withSkeleton = false; profile = null; sessions = []; flagsOn = false; calls = 0; }
+  else if (kind === "pending-skeleton") { status = "pending"; stage = "skeleton"; done = 0; withSkeleton = false; sessions = []; flagsOn = false; calls = 0; }
+  else if (kind === "pending-chunk") { status = "pending"; stage = "chunk"; done = c.kind === "walk" ? Math.max(1, Math.min(walkStep - 1, chunksTotal - 1)) : 1; sessions = plan.sessions.filter((s) => s.week_no <= done * 4); flagsOn = false; calls = done + 1; }
+  else if (kind === "failed") { status = "failed"; done = 1; sessions = plan.sessions.filter((s) => s.week_no <= 4); flagsOn = false; error = "Woo 排的格式沒過檢查"; canResume = true; calls = 5; }
+  else if (kind === "failed-early") { status = "failed"; done = 0; withSkeleton = false; sessions = []; flagsOn = false; error = "Woo 這次沒有回完"; canResume = true; calls = 2; }
+  else if (kind === "failed-exhausted") { status = "failed"; done = 2; sessions = plan.sessions.filter((s) => s.week_no <= 8); flagsOn = false; error = "這份用掉的次數到上限了"; calls = 12; }
+  else if (kind === "failed-stalled") { status = "failed"; done = 1; sessions = plan.sessions.filter((s) => s.week_no <= 4); flagsOn = false; error = "產生中斷了"; canResume = true; calls = 3; }
+  else if (kind === "expired" || kind === "expired-start") status = "expired";
+  else if (kind === "discarded") status = "discarded";
+  else if (kind === "adopted") status = "adopted";
+
+  const weeks = withSkeleton ? plan.weeks : [];
+  let flags: string[] = [];
+  if (flagsOn && kind !== "ready-noflags") {
+    flags = drawFlags(weeks, sessions, c.intake, profile ?? DRAFT_PROFILE());
+    if (kind === "ready-lastrace") {
+      const first = sessions.find((s) => s.type === "long" || s.type === "tempo");
+      if (first) first.flags.unshift(`${mdPlain((profile as ApiAthleteProfile).last_race!.date)} 剛比完全馬，這天就有${first.label}`);
+    }
+  }
+  const from = done * 4 + 1;
+  return {
+    id: `mock-draft-${c.n}`, mode: "new", status, stage,
+    progress: { chunks_done: done, chunks_total: stage === "profile" || stage === "skeleton" ? null : chunksTotal, from_week: stage === "chunk" ? from : null, to_week: stage === "chunk" ? Math.min(from + 3, total) : null },
+    intake: c.intake, profile, summary: withSkeleton ? THOUGHT : null, weeks, sessions, flags,
+    calls, max_calls: 12, can_resume: canResume, error, adopted_plan_id: kind === "adopted" ? (c.adoptedPlanId ?? "mock-plan-new") : null,
+    created_at: nowIso(), updated_at: nowIso(),
+  };
+}
+
+const MOCK_NEW_PLAN_ID = "mock-plan-new";
+
+export async function mockPostPlanDraft(body: PostPlanDraftRequest): Promise<PlanDraftResponse> {
+  if (dsw().actionDelay) await sleep(dsw().actionDelay as number);
+  const sw = dsw().draftPost;
+  if (sw === "generating") {
+    const c = draftCellNow();
+    if (!c || !(c.kind.startsWith("pending") || c.kind === "walk" || c.kind === "slow")) draftCell = { n: ++draftSeq, kind: "pending-chunk", intake: fixtureIntake(), walkAt: null, adoptedPlanId: null };
+    throw new ApiError(409, "generating");
+  }
+  if (sw === "limit") throw new ApiError(429, "daily limit");
+  if (sw === "off") throw new ApiError(503, SERVER_ERROR_TEXT, "plan generation is off");
+  if (sw === "busy") throw new ApiError(503, SERVER_ERROR_TEXT, "database starting, retry shortly");
+  if (sw === "active") throw new ApiError(409, "has active plan");
+  if (sw === "strava") throw new ApiError(409, "strava not connected");
+  if (sw === "fail") throw new ApiError(500, SERVER_ERROR_TEXT);
+  if (sw === "invalid") throw new ApiError(400, "distance_m must be 1000-100000");
+  draftCell = { n: ++draftSeq, kind: "walk", intake: body.intake, walkAt: Date.now(), adoptedPlanId: null };
+  return { draft: draftOf(draftCell) };
+}
+
+export async function mockGetLatestPlanDraft(): Promise<LatestPlanDraftResponse> {
+  if (dsw().latestDelay) await sleep(dsw().latestDelay as number);
+  if (dsw().latestFail === 404) throw new ApiError(404, "not found");
+  if (dsw().latestFail === 500) throw new ApiError(500, SERVER_ERROR_TEXT);
+  const c = draftCellNow();
+  if (!c || ["expired", "expired-start", "discarded", "adopted", "notfound"].includes(c.kind)) return { draft: null };
+  return { draft: draftOf(c) };
+}
+
+let draftReads = 0;
+export function mockGetPlanDraft(id: string): PlanDraftResponse {
+  draftReads += 1;
+  if (dsw().pollFail && draftReads > 1 && draftReads <= 1 + dsw().pollFail!) {
+    if (dsw().pollFailError === "500") throw new ApiError(500, SERVER_ERROR_TEXT);
+    throw new TypeError("Failed to fetch");
+  }
+  const c = draftCellNow();
+  if (!c || c.kind === "notfound" || id !== `mock-draft-${c.n}`) throw new ApiError(404, "draft not found");
+  if (c.kind === "walk" && c.walkAt == null) c.walkAt = Date.now(); // the walk starts when the draft page first asks
+  return { draft: draftOf(c) };
+}
+
+export async function mockAdoptPlanDraft(id: string): Promise<AdoptPlanDraftResponse> {
+  if (dsw().actionDelay) await sleep(dsw().actionDelay as number);
+  const c = draftCellNow();
+  if (!c || id !== `mock-draft-${c.n}`) throw new ApiError(404, "draft not found");
+  if (c.kind === "adopted" && adoptedPlan) return { plan_id: MOCK_NEW_PLAN_ID };
+  const sw = dsw().adoptFail;
+  if (sw === "active") throw new ApiError(409, "has active plan");
+  if (sw === "busy") throw new ApiError(503, SERVER_ERROR_TEXT, "busy");
+  if (sw === "fail") throw new ApiError(500, SERVER_ERROR_TEXT);
+  if (sw === "state") { c.kind = "expired"; throw new ApiError(409, "draft is expired"); }
+  const d = draftOf(c);
+  if (d.status !== "ready") throw new ApiError(409, `draft is ${d.status}`);
+  const p = draftToPlanResponse(d);
+  adoptedPlan = {
+    ...p,
+    plan: { ...p.plan, id: MOCK_NEW_PLAN_ID, user_id: MOCK_USER_ID, status: "active" },
+    sessions: p.sessions.map((s) => ({ ...s, id: `s-new-${s.scheduled_date}`, plan_id: MOCK_NEW_PLAN_ID })),
+  };
+  c.kind = "adopted";
+  c.adoptedPlanId = MOCK_NEW_PLAN_ID;
+  return { plan_id: MOCK_NEW_PLAN_ID };
+}
+
+export async function mockResumePlanDraft(id: string): Promise<PlanDraftResponse> {
+  if (dsw().actionDelay) await sleep(dsw().actionDelay as number);
+  const c = draftCellNow();
+  if (!c || id !== `mock-draft-${c.n}`) throw new ApiError(404, "draft not found");
+  const sw = dsw().resumeFail;
+  if (sw === "exhausted") throw new ApiError(409, "calls exhausted");
+  if (sw === "limit") throw new ApiError(409, "resume limit");
+  if (sw === "state") throw new ApiError(409, "draft is pending");
+  if (!c.kind.startsWith("failed")) throw new ApiError(409, `draft is ${draftOf(c).status}`);
+  c.kind = "pending-chunk";
+  return { draft: draftOf(c) };
+}
+
+export async function mockDiscardPlanDraft(id: string): Promise<PlanDraftOkResponse> {
+  if (dsw().actionDelay) await sleep(dsw().actionDelay as number);
+  const c = draftCellNow();
+  if (!c || id !== `mock-draft-${c.n}`) throw new ApiError(404, "draft not found");
+  if (c.kind === "adopted") throw new ApiError(409, "draft is adopted");
+  c.kind = "discarded";
+  return { ok: true };
 }

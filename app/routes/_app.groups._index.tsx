@@ -12,13 +12,14 @@ import { countdown, limitText } from "../lib/groups";
 import { loadGroupData } from "../lib/group-load";
 import { usePlan } from "../lib/use-plan";
 import type { ApiGroup } from "../types/api";
+import { pageTitle } from "../lib/meta";
 
 export async function clientLoader() {
   return loadGroupData(() => getGroups());
 }
 
-export function meta(): Route.MetaDescriptors {
-  return [{ title: "群組 · 富士山マラソン 2026" }];
+export function meta({ matches }: Route.MetaArgs): Route.MetaDescriptors {
+  return pageTitle("群組", matches);
 }
 
 /** One group: name, who owns it, the unread count, the race and head count, the countdown. 72 px, the whole row is the link. */
