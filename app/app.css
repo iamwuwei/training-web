@@ -1314,3 +1314,8 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 @media (prefers-reduced-motion: reduce) { .fold-head > svg { transition: none; } .fold-panel { animation: none; } }
 .join-card .privacy-risk, .group-create .privacy-risk { margin-top: 4px; font-size: 13px; line-height: 1.6; color: var(--v-warn); }
 .group-create .privacy { margin-top: 16px; font-size: 13px; line-height: 1.6; color: var(--ink-2); }
+
+/* 320 px: 採用這份 kept its words on one line (the row's text takes what is left, the button no longer shrinks to 101 px and wraps) */
+.draft-bar .btn { flex: none; white-space: nowrap; }
+/* the two inline links in a sentence (全文 ›, 去設定 ›／看那份 ›) get a 44 px touch height without moving the text: same method as `.group-foot a` */
+.draft-why .more, .intake .err a { display: inline-flex; align-items: center; min-height: 44px; margin: -13px 0; }
