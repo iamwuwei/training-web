@@ -14,6 +14,8 @@ export interface ReadOnly { runs: boolean; reviews: boolean }
 export function WeekBars({ weeks, selected, onSelect, changed, readonly }: { weeks: Week[]; selected: number; onSelect: (weekNo: number) => void; changed?: Set<number>; readonly?: ReadOnly }) {
   const max = Math.max(1, ...weeks.map((w) => w.plan_m));
   const isRace = (w: Week) => w.days.some((d) => d.session.type === "race");
+  // the race week is labelled with the race's distance in km (42 for a marathon, 21 for a half …), 42 when the row carries none
+  const raceKm = (w: Week) => { const m = w.days.find((d) => d.session.type === "race")?.session.target_distance_m; return m ? String(Math.round(m / 1000)) : "42"; };
   return (
     <section className="weekbars" style={{ "--n": weeks.length } as React.CSSProperties} aria-label="每週跑量，點一週切換下面的課表">
       <div className="cols" role="tablist" aria-label="週">
@@ -40,7 +42,7 @@ export function WeekBars({ weeks, selected, onSelect, changed, readonly }: { wee
       <div className="labels" aria-hidden="true">
         {weeks.map((w) => (
           <span key={w.week_no} className={[isRace(w) ? "race" : "", w.isCurrent ? "cur" : "", w.week_no === selected ? "on" : "", changed?.has(w.week_no) ? "changed" : ""].join(" ")}>
-            {isRace(w) ? "42" : w.week_no}
+            {isRace(w) ? raceKm(w) : w.week_no}
           </span>
         ))}
       </div>
