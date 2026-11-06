@@ -99,7 +99,7 @@ export const DRAFT_TEXT = {
     noResume: "這份不能再繼續了，重新開始一份。",
     exhausted: "重新開始一份，答案會帶過去。",
     expiredTitle: "這份已經過期了",
-    expiredSub: "排好 7 天沒採用就失效。重新開始一份，Woo 會用最新的紀錄排。",
+    expiredSub: "排好超過 7 天、或開始日已經過了，這份就失效。重新開始一份，Woo 會用最新的紀錄排。",
     discardedTitle: "這份已經丟掉了",
     discardedSub: "要的話重新排一份。",
     goToday: "回今天 ›",
@@ -431,7 +431,9 @@ export function basisLines(p: ApiAthleteProfile): string[] {
   const one = (n: number) => String(Math.round(n * 10) / 10);
   const lines: string[] = [];
   if (p.total_runs === 0) {
-    lines.push("依據 · 最近 12 週沒有跑步紀錄，從你填的經驗起步、第一週保守");
+    lines.push(p.import_error
+      ? "依據 · Strava 讀不到，app 裡也沒有最近 12 週的紀錄，從你填的經驗起步、第一週保守"
+      : "依據 · Strava 最近 12 週沒有跑步紀錄，從你填的經驗起步、第一週保守");
   } else {
     const head = p.import_error ? "依據 · Strava 讀不到，用的是已經在 app 裡的紀錄：" : "依據 · Strava 最近 12 週：";
     lines.push(`${head}每週 ${one(p.last4.runs_per_week)} 次、${one(p.last4.km_per_week)} km${p.longest ? `，最長 ${one(p.longest.km)} km（${mdPlain(p.longest.date)}）` : ""}`);
