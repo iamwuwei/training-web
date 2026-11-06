@@ -1289,3 +1289,5 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 .draft-bar .s.err { color: var(--v-bad); }
 /* the status line's own `.t` (WooStatus) sits inside `.plan-entry .t`: without this it takes the title's top margin a second time */
 .plan-entry .t .woo-status .t { margin-top: 0; }
+/* 320 px: the seven weekday chips are 35 px wide cells (02 §2); `.choice .chip`'s min-width 44 would make them overlap and push the last one out of the column */
+.choice.days .chip { min-width: 0; }
