@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Link, redirect, useRevalidator, useSearchParams } from "react-router";
+import { Link, redirect, useLocation, useNavigate, useRevalidator, useSearchParams } from "react-router";
 import type { Route } from "./+types/_app.coach";
-import { SendIcon } from "../components/icons";
+import { CloseIcon, SendIcon } from "../components/icons";
 import { CoachProposals, ConstraintCard, ProposalCard } from "../components/proposals";
 import { CoachAvatar, VerdictTag, verdictBadge } from "../components/ui";
 import { ApiError, getActivities, getCoach, getWeekly, postCheckinPick, postCheckinReset, postCoachMessage, postWeeklyAsk, putCoachSeen } from "../lib/api";
@@ -48,6 +48,10 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
     throw e;
   }
 }
+
+/** The layout draws no tab bar under this page and gives the shell the `modal` class (AppLayout reads it with useMatches). */
+// oxlint-disable-next-line react/only-export-components -- a route export, like the others in this file (meta, clientLoader)
+export const handle = { modal: true } as const;
 
 export function meta({ matches }: Route.MetaArgs): Route.MetaDescriptors {
   return pageTitle("教練 Woo", matches);
@@ -289,19 +293,20 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
     return () => ro.disconnect();
   }, []);
 
-  // The composer sits right on top of the tab bar, so it follows the bar's measured height
-  // (--tabbar-h on <html>) rather than a hard-coded 66px. Suspected cause of the gap seen on iOS Safari
-  // (not reproduced on desktop): the bar's height follows env(safe-area-inset-bottom) as the browser
-  // toolbar collapses, and a fixed number can drift from it.
-  useLayoutEffect(() => {
-    const el = document.querySelector<HTMLElement>(".tabbar");
-    if (!el) return;
-    const root = document.documentElement;
-    const measure = () => root.style.setProperty("--tabbar-h", `${el.getBoundingClientRect().height}px`);
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => { ro.disconnect(); root.style.removeProperty("--tabbar-h"); };
+  // This page is a modal (the layout draws no tab bar): the composer sits on the bottom edge, so there is no tab bar
+  // height to follow. Closing goes one step back in history (the page you came from); with nothing to go back to
+  // (the app was opened at /coach) it goes to 今天, replacing this entry.
+  const navigate = useNavigate();
+  const location = useLocation();
+  const cameFromApp = location.key !== "default";
+  const close = () => void (cameFromApp ? navigate(-1) : navigate("/", { replace: true }));
+  const closeRef = useRef(close);
+  useEffect(() => { closeRef.current = close; });
+  // Esc closes the page too, but not while a sheet is open (that Esc closes the sheet)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !document.querySelector(".sheet-root")) closeRef.current(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, []);
 
   // To the bottom when the newest message changes, the wait row comes or goes, or the composer grows.
@@ -522,8 +527,9 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
   return (
     <>
       <header className="topbar coach-head">
+        <button type="button" className="back" aria-label="關閉" onClick={close}><CloseIcon /></button>
         <CoachAvatar />
-        <div><h1>Woo</h1><div className="sub">你的教練 · 只聊跑步和課表</div></div>
+        <div className="who"><h1>Woo</h1><div className="sub">你的教練 · 只聊跑步和課表</div></div>
       </header>
       <main className="thread" style={{ "--composer-h": `${composerH}px` } as React.CSSProperties}>
         <div className={`thread-top${hasMore ? "" : " end"}`} ref={topRef} aria-live="polite">

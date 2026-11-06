@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Route } from "./+types/_app.plan";
-import { Link, useNavigate, useRevalidator, useSearchParams } from "react-router";
+import { Link, useLocation, useNavigate, useRevalidator, useSearchParams } from "react-router";
 import { BackIcon } from "../components/icons";
 import { DayRow, WeekBars } from "../components/plan-week";
 import { SessionSheet } from "../components/session-sheet";
@@ -54,6 +54,10 @@ export default function Plan() {
   const proposalId = useSearchParams()[0].get("proposal");
   const { proposal, ready } = useProposal(proposalId);
   const navigate = useNavigate();
+  const location = useLocation();
+  // the preview is reached from the thread's 「在課表上看」: going back to the thread is one step back in history (the thread is a modal; closing it again lands before it)
+  const cameFromApp = location.key !== "default";
+  const backToCoach = () => void (cameFromApp ? navigate(-1) : navigate("/coach", { replace: true }));
   const revalidator = useRevalidator();
   const [picked, setPicked] = useState<number | null>(null);
   const [open, setOpen] = useState<ApiSession | null>(null);
@@ -105,10 +109,10 @@ export default function Plan() {
         setPicked(null);
         await revalidator.revalidate();
         void navigate("/plan", { replace: true });
-      } else void navigate("/coach");
+      } else backToCoach();
     } catch (e) {
       // 409: the plan changed since — the card is stale now, the thread says so.
-      if (e instanceof ApiError && e.status === 409) void navigate("/coach");
+      if (e instanceof ApiError && e.status === 409) backToCoach();
       else setError(e instanceof ApiError ? e.message : "送出失敗，再試一次");
     } finally {
       setBusy(false);
@@ -119,7 +123,7 @@ export default function Plan() {
     <>
       {preview ? (
         <header className="plan-preview-bar">
-          <Link to="/coach" className="back" aria-label="返回教練"><BackIcon /></Link>
+          <button type="button" className="back" aria-label="返回教練" onClick={backToCoach}><BackIcon /></button>
           <CoachAvatar size={24} />
           <div className="mid">
             <div className="t">預覽 Woo 的提案</div>
