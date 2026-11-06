@@ -11,12 +11,13 @@ import { km, kmPlan, pace } from "../lib/format";
 import { sportName } from "../lib/labels";
 import { activityDate, buildPlanView, isRunSport, weekSubline, type Week } from "../lib/plan";
 import { buildPreview, type Preview } from "../lib/preview";
-import { NoPlan, usePlan } from "../lib/use-plan";
+import { NoPlanEntry, usePlan } from "../lib/use-plan";
 import { useProposal, useReviewedWeeks } from "../lib/use-proposal";
 import type { ApiActivity, ApiSession, ApiWeek, PlanResponse } from "../types/api";
+import { pageTitle } from "../lib/meta";
 
-export function meta(): Route.MetaDescriptors {
-  return [{ title: "課表 · 富士山マラソン 2026" }];
+export function meta({ matches }: Route.MetaArgs): Route.MetaDescriptors {
+  return pageTitle("課表", matches);
 }
 
 const NO_WEEKS: ApiWeek[] = [];
@@ -81,7 +82,7 @@ export default function Plan() {
     return () => window.clearTimeout(t);
   }, [notice, proposalId]);
 
-  if (!view || !base) return <NoPlan title="課表" />;
+  if (!view || !base) return <NoPlanEntry title="課表" />;
   const { weeks, currentWeek, today } = view;
   const current = currentWeek?.week_no ?? weeks.find((w) => w.isFuture)?.week_no ?? weeks[weeks.length - 1]?.week_no;
   // a 補課 card opens on the week it moves to: the week it came from is over, with one grey row in it

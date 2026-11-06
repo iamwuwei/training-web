@@ -11,6 +11,7 @@ import { todayJst } from "../lib/date";
 import { isStatus } from "../lib/groups";
 import { loadGroupData } from "../lib/group-load";
 import type { ApiGroupEvent } from "../types/api";
+import { pageTitle } from "../lib/meta";
 
 export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   return loadGroupData(async () => {
@@ -20,8 +21,8 @@ export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   });
 }
 
-export function meta(): Route.MetaDescriptors {
-  return [{ title: "消息中心 · 富士山マラソン 2026" }];
+export function meta({ matches }: Route.MetaArgs): Route.MetaDescriptors {
+  return pageTitle("消息中心", matches);
 }
 
 /**

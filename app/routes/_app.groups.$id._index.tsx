@@ -12,13 +12,14 @@ import { todayJst } from "../lib/date";
 import { countdown, mdDowPlain } from "../lib/groups";
 import { loadGroupData } from "../lib/group-load";
 import type { ApiGroupEvent } from "../types/api";
+import { pageTitle } from "../lib/meta";
 
 export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   return loadGroupData(() => getGroup(params.id));
 }
 
-export function meta(): Route.MetaDescriptors {
-  return [{ title: "群組 · 富士山マラソン 2026" }];
+export function meta({ matches }: Route.MetaArgs): Route.MetaDescriptors {
+  return pageTitle("群組", matches);
 }
 
 /** 群組詳細頁: the countdown, everyone's numbers (as each one shares them), the latest three events, the ways into the sub pages. */

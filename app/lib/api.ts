@@ -1,6 +1,7 @@
 import type {
   AcceptInviteResponse,
   ActivitiesResponse,
+  AdoptPlanDraftResponse,
   DeleteStravaResponse,
   ErrorResponse,
   GroupEventDetailResponse,
@@ -9,7 +10,11 @@ import type {
   GroupResponse,
   GroupsResponse,
   InvitePreviewResponse,
+  LatestPlanDraftResponse,
   MemberPlanResponse,
+  PlanDraftOkResponse,
+  PlanDraftResponse,
+  PostPlanDraftRequest,
   PostGroupInviteResponse,
   PostGroupRequest,
   PostGroupResponse,
@@ -331,4 +336,44 @@ export function getShare(): Promise<ShareResponse> {
 export function putShare(body: PutShareRequest): Promise<ShareResponse> {
   if (useMock) return mock().then((m) => m.mockPutShare(body));
   return request<ShareResponse>("/me/share", { method: "PUT", body: JSON.stringify(body) });
+}
+
+// ---- ai-plan-generation -------------------------------------------------------------------
+// Woo writes a whole plan from an intake form and the athlete's Strava history. 4xx errors carry the api's fixed code in
+// `ApiError.message` (see app/lib/draft.ts for the sentences); a 5xx is always 伺服器錯誤，稍後再試, its status is all there is.
+
+/** Start a draft (202). 400 a code per field, 409 `generating` | `has active plan` | `strava not connected`, 429 `daily limit`, 503 plan generation is off. */
+export function postPlanDraft(body: PostPlanDraftRequest): Promise<PlanDraftResponse> {
+  if (useMock) return mock().then((m) => m.mockPostPlanDraft(body));
+  return request<PlanDraftResponse>("/plan-drafts", { method: "POST", body: JSON.stringify(body) });
+}
+
+/** The newest draft worth showing (pending, ready or failed), for the entry on 今天／課表; `{ draft: null }` when there is none. 404 = an api from before this. */
+export function getLatestPlanDraft(): Promise<LatestPlanDraftResponse> {
+  if (useMock) return mock().then((m) => m.mockGetLatestPlanDraft());
+  return request<LatestPlanDraftResponse>("/plan-drafts/latest");
+}
+
+/** One draft, for polling and the preview. 404: not mine, or no such draft. */
+export function getPlanDraft(id: string): Promise<PlanDraftResponse> {
+  if (useMock) return mock().then((m) => m.mockGetPlanDraft(id));
+  return request<PlanDraftResponse>(`/plan-drafts/${encodeURIComponent(id)}`);
+}
+
+/** Take the draft as my plan (one transaction; again on an adopted draft answers the same plan). 409 `has active plan` | `draft is <status>`, 503 busy. */
+export function adoptPlanDraft(id: string): Promise<AdoptPlanDraftResponse> {
+  if (useMock) return mock().then((m) => m.mockAdoptPlanDraft(id));
+  return request<AdoptPlanDraftResponse>(`/plan-drafts/${encodeURIComponent(id)}/adopt`, { method: "POST" });
+}
+
+/** 繼續: pick a failed draft up where it stopped (202, back to pending). 409 `calls exhausted` | `resume limit` | `draft is <status>`. */
+export function resumePlanDraft(id: string): Promise<PlanDraftResponse> {
+  if (useMock) return mock().then((m) => m.mockResumePlanDraft(id));
+  return request<PlanDraftResponse>(`/plan-drafts/${encodeURIComponent(id)}/resume`, { method: "POST" });
+}
+
+/** 不要這份. 409 `draft is adopted`. */
+export function discardPlanDraft(id: string): Promise<PlanDraftOkResponse> {
+  if (useMock) return mock().then((m) => m.mockDiscardPlanDraft(id));
+  return request<PlanDraftOkResponse>(`/plan-drafts/${encodeURIComponent(id)}/discard`, { method: "POST" });
 }

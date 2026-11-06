@@ -1,8 +1,12 @@
 import { useMemo } from "react";
-import { useRouteLoaderData } from "react-router";
+import { Link, useRouteLoaderData } from "react-router";
 import type { clientLoader } from "../routes/_app";
+import { GearIcon } from "../components/icons";
+import { CoachAvatar, TopBar } from "../components/ui";
+import { WooStatus } from "../components/woo-status";
 import type { SessionUser } from "./auth";
 import { todayJst } from "./date";
+import { draftWeeks, DRAFT_TEXT, draftName, useLatestDraft } from "./draft";
 import { buildPlanView, type PlanView } from "./plan";
 
 /** The plan loaded by routes/_app as a derived view, or null when the user has no active plan. */
@@ -17,11 +21,79 @@ export function useUser(): SessionUser | null {
   return useRouteLoaderData<typeof clientLoader>("routes/_app")?.user ?? null;
 }
 
-export function NoPlan({ title }: { title: string }) {
+/**
+ * What 今天 and 課表 show to someone without an active plan (02 §1): the way to ask Woo for one, or where the draft Woo is
+ * making for him stands. Reads GET /me (Strava) and GET /plan-drafts/latest once; the `_app` loader is not involved.
+ */
+export function NoPlanEntry({ title }: { title: "今天" | "課表" }) {
+  const { me, draft, latestNotFound, loading } = useLatestDraft();
+  const T = DRAFT_TEXT.entry;
+  const aside = title === "今天" ? <Link to="/settings" className="gear" aria-label="設定"><GearIcon /></Link> : undefined;
+
+  let body: React.ReactNode;
+  if (loading) {
+    // both answers are not in yet: a round and two lines, no words
+    body = (
+      <div className="plan-entry" aria-busy="true" aria-label="載入中">
+        <div className="sk" style={{ width: 44, height: 44, borderRadius: "50%" }} />
+        <div className="sk" style={{ width: 140, height: 20, marginTop: 14 }} />
+        <div className="sk" style={{ width: 240, height: 14, marginTop: 10 }} />
+      </div>
+    );
+  } else if (me && !me.strava) {
+    body = (
+      <div className="plan-entry">
+        <CoachAvatar size={44} />
+        <p className="t">{T.noneTitle}</p>
+        <p className="sub">{T.stravaSub}</p>
+        <div className="actions-row center"><Link to="/settings" className="btn primary compact">{T.stravaCta}</Link></div>
+      </div>
+    );
+  } else if (latestNotFound) {
+    body = <p className="empty">{T.apiMissing}</p>;
+  } else if (draft?.status === "pending") {
+    body = (
+      <div className="plan-entry">
+        <CoachAvatar size={44} />
+        <p className="t"><WooStatus stage={null} fallback={T.pendingTitle} /></p>
+        <p className="sub">{T.pendingSub}</p>
+        <div className="actions-row center"><Link to={`/plan/draft/${draft.id}`} className="btn primary compact">{T.pendingCta}</Link></div>
+      </div>
+    );
+  } else if (draft?.status === "ready") {
+    body = (
+      <div className="plan-entry">
+        <CoachAvatar size={44} badge="check" />
+        <p className="t">{T.readyTitle}</p>
+        <p className="sub">{T.readySub(draftName(draft), draftWeeks(draft))}</p>
+        <div className="actions-row center"><Link to={`/plan/draft/${draft.id}`} className="btn primary compact">{T.readyCta}</Link></div>
+      </div>
+    );
+  } else if (draft?.status === "failed") {
+    body = (
+      <div className="plan-entry">
+        <CoachAvatar size={44} />
+        <p className="t">{T.failedTitle}</p>
+        <p className="sub">{draft.can_resume ? T.failedSub : T.failedSubNoResume}</p>
+        <div className="actions-row center"><Link to={`/plan/draft/${draft.id}`} className="btn primary compact">{T.failedCta}</Link></div>
+      </div>
+    );
+  } else {
+    body = (
+      <div className="plan-entry">
+        <CoachAvatar size={44} />
+        <p className="t">{T.noneTitle}</p>
+        <p className="sub">{T.noneSub}</p>
+        <div className="actions-row center"><Link to="/plan/new" className="btn primary compact woo"><span className="w" aria-hidden="true">W</span>{T.noneCta}</Link></div>
+        <p className="hint">{T.noneHint}</p>
+      </div>
+    );
+  }
+
   return (
     <>
-      <header className="topbar"><h1>{title}</h1></header>
-      <main><p className="empty">還沒有課表。請先在 training-api 建立計畫。</p></main>
+      <TopBar title={title} aside={aside} />
+      <main>{body}</main>
     </>
   );
 }
