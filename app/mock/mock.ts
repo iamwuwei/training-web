@@ -2132,6 +2132,7 @@ export async function mockPutShare(body: PutShareRequest): Promise<ShareResponse
 //                   "ready"                                 10 weeks, 6 flags (2 on weeks, 4 on days); his thought has several sentences
 //                   "ready-noflags" | "ready-many"          0 flags | 9 flags (8 + the whole-draft line: 還有 n 條 ›, the first line has no place)
 //                   "ready-norecord" | "ready-importerr" | "ready-lastrace"     the 依據 line: no runs | Strava unreadable | + 上一場 line and its flag
+//                   "ready-norecord-importerr"              no runs and Strava unreadable
 //                   "failed"                                chunk 1 in (weeks 1〜4), validation_failed, can_resume
 //                   "failed-early"                          the skeleton failed: no weeks, no thought, model_failed, can_resume
 //                   "failed-exhausted"                      calls 12, calls_exhausted, no resume   "failed-stalled"   stalled, can_resume
@@ -2155,7 +2156,7 @@ export async function mockPutShare(body: PutShareRequest): Promise<ShareResponse
 // after 不要這份 latest answers null. A draft sent from the form is built from the answers in it (any 4〜20 weeks).
 // =====================================================================================================================
 
-type DraftKind = "none" | "pending-profile" | "pending-skeleton" | "pending-chunk" | "walk" | "slow" | "ready" | "ready-noflags" | "ready-many" | "ready-norecord" | "ready-importerr"
+type DraftKind = "none" | "pending-profile" | "pending-skeleton" | "pending-chunk" | "walk" | "slow" | "ready" | "ready-noflags" | "ready-many" | "ready-norecord" | "ready-norecord-importerr" | "ready-importerr"
   | "ready-lastrace" | "failed" | "failed-early" | "failed-exhausted" | "failed-stalled" | "expired" | "expired-start" | "discarded" | "adopted" | "notfound";
 interface DraftSwitches {
   draft?: DraftKind; latestFail?: 404 | 500; latestDelay?: number; actionDelay?: number; pollFail?: number; pollFailError?: "network" | "500"; strava?: boolean; planFinished?: boolean; noRuns?: boolean;
@@ -2324,8 +2325,8 @@ function draftOf(c: DraftCell): ApiPlanDraft {
   const walkStep = c.kind === "walk" && c.walkAt != null ? Math.floor((Date.now() - c.walkAt) / 4000) : 0;
   const plan = genPlan(c.intake, kind === "ready-many" ? [2, 7] : [7]); // week 7 gets a fifth run (a week flag); `ready-many` one in week 2 too
   let profile: ApiAthleteProfile | null = DRAFT_PROFILE();
-  if (kind === "ready-norecord") profile = { ...profile, weeks: profile.weeks.map((w) => ({ ...w, runs: 0, km: 0, longest_km: 0 })), last4: { runs_per_week: 0, km_per_week: 0 }, longest: null, avg_pace_sec_km: null, avg_hr: null, total_runs: 0, hr_zones: null, pace_bands: null };
-  if (kind === "ready-importerr") profile = { ...profile, import_error: true };
+  if (kind === "ready-norecord" || kind === "ready-norecord-importerr") profile = { ...profile, weeks: profile.weeks.map((w) => ({ ...w, runs: 0, km: 0, longest_km: 0 })), last4: { runs_per_week: 0, km_per_week: 0 }, longest: null, avg_pace_sec_km: null, avg_hr: null, total_runs: 0, hr_zones: null, pace_bands: null };
+  if (kind === "ready-importerr" || kind === "ready-norecord-importerr") profile = { ...profile, import_error: true };
   if (kind === "ready-lastrace") profile = { ...profile, last_race: { name: "富士山マラソン", date: addDays(todayJst(), -5), distance_m: 42195, actual_time_sec: 17480, days_ago: 5 } };
 
   const total = plan.weeks.length;
