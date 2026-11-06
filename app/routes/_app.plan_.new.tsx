@@ -7,7 +7,7 @@ import { ApiError, getActivities, getLatestPlanDraft, postPlanDraft } from "../l
 import { addDays, todayJst } from "../lib/date";
 import {
   clearIntake, defaultForm, DISTANCES, DRAFT_TEXT, EXPERIENCES, FIELD_ORDER, fieldOfCode, formDistanceM, formFromParams, formTargetSec, fromIntake,
-  loadIntake, MINUTES, saveIntake, startWithWeeks, submitErrorLink, submitErrorText, targetPace, toIntake, validateForm, weeksBetween, WEEKDAYS,
+  loadIntake, MINUTES, startWithWeeks, submitErrorLink, submitErrorText, targetPace, toIntake, validateForm, weeksBetween, WEEKDAYS,
   type FormErrors, type IntakeForm,
 } from "../lib/draft";
 import { mdDowPlain, mdPlain } from "../lib/groups";
@@ -77,7 +77,6 @@ function SummaryStep({ form, today, onBack, onDone }: { form: IntakeForm; today:
     try {
       const intake: PlanIntake = toIntake(form);
       const { draft } = await postPlanDraft({ intake });
-      saveIntake(intake);
       await navigate(`/plan/draft/${draft.id}`);
     } catch (e) {
       setBusy(false);

@@ -5,6 +5,7 @@
 import { useEffect, useState } from "react";
 import type { ApiAthleteProfile, ApiPlanDraft, ApiSession, MeResponse, PlanGoalInput, PlanIntake, PlanResponse } from "../types/api";
 import { ApiError, getLatestPlanDraft, getMe } from "./api";
+import { INTAKE_KEY } from "./auth";
 import { addDays, dayDiff } from "./date";
 import { duration, km, pace } from "./format";
 import { mdDowPlain, mdPlain, SEND_FAILED } from "./groups";
@@ -312,8 +313,6 @@ export function formFromParams(params: URLSearchParams, today: string): IntakeFo
 }
 
 // ---- the answers to come back to (改答案再排, 重新開始): sessionStorage, read once ------------------------------------------------------
-
-const INTAKE_KEY = "training-web.intake";
 
 export function saveIntake(i: PlanIntake): void {
   try { sessionStorage.setItem(INTAKE_KEY, JSON.stringify(i)); } catch { /* storage blocked: the form just starts with its defaults */ }

@@ -14,6 +14,8 @@ const ID_KEY = "training-web.id_token";
 const REFRESH_KEY = "training-web.refresh_token";
 const PKCE_KEY = "training-web.pkce";
 const RETURN_KEY = "training-web.return_to";
+/** The plan form's answers kept for 改答案再排／重新開始 (app/lib/draft.ts); here so logout can clear them. */
+export const INTAKE_KEY = "training-web.intake";
 
 const safe = <T>(fn: () => T, fallback: T): T => {
   try { return fn(); } catch { return fallback; }
@@ -191,6 +193,7 @@ export function takeReturnTo(): string | null {
 export function logout(): void {
   clearSession();
   safe(() => sessionStorage.removeItem(RETURN_KEY), undefined); // a remembered invite link is not carried to the next person on this tab
+  safe(() => sessionStorage.removeItem(INTAKE_KEY), undefined); // nor the answers of the plan form (they may say where it hurts)
   if (useMock || !config.cognitoDomain) { window.location.assign("/login"); return; }
   const p = new URLSearchParams({ client_id: config.cognitoClientId, logout_uri: redirectUri() });
   window.location.assign(`${config.cognitoDomain}/logout?${p}`);
