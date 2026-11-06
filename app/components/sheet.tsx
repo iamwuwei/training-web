@@ -24,7 +24,7 @@ function unlock(root: HTMLElement | null) {
 /**
  * A bottom sheet over the whole screen, tab bar included, drawn under <body> (portal) so the page (.shell) can be made
  * inert while it is open: keyboard focus, screen readers and taps stay inside the sheet. Closes on the backdrop,
- * Escape, or the handle; the page behind stops scrolling; focus goes back to
+ * Escape (not while an input method is composing), or the handle; the page behind stops scrolling; focus goes back to
  * the element that opened it. Several sheets may be open at once (see `stack` above).
  */
 export function BottomSheet({ open, onClose, label, className, children }: { open: boolean; onClose: () => void; label: string; className?: string; children: ReactNode }) {
@@ -39,7 +39,7 @@ export function BottomSheet({ open, onClose, label, className, children }: { ope
     if (!el) return;
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     lock(el);
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && stack[stack.length - 1] === el) closeRef.current(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !e.isComposing && stack[stack.length - 1] === el) closeRef.current(); };
     window.addEventListener("keydown", onKey);
     panel.current?.focus();
     return () => {

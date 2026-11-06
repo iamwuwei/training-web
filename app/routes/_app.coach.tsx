@@ -304,7 +304,7 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
   useEffect(() => { closeRef.current = close; });
   // Esc closes the page too, but not while a sheet is open (that Esc closes the sheet)
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !document.querySelector(".sheet-root")) closeRef.current(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !e.isComposing && !document.querySelector(".sheet-root")) closeRef.current(); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
