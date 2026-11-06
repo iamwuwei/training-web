@@ -2135,6 +2135,8 @@ export async function mockPutShare(body: PutShareRequest): Promise<ShareResponse
 //                   "failed"                                chunk 1 in (weeks 1〜4), validation_failed, can_resume
 //                   "failed-early"                          the skeleton failed: no weeks, no thought, model_failed, can_resume
 //                   "failed-exhausted"                      calls 12, calls_exhausted, no resume   "failed-stalled"   stalled, can_resume
+//                   "expired-start"                         ready, but its start day (2 days ago) has passed: GET, latest and adopt all say expired
+//                   "expired-start"                         ready, but its start day (2 days ago) has passed: GET, latest and adopt all say expired
 //                   "expired" | "discarded" | "adopted"     the draft page says so (the entry does not see them: latest answers null)
 //                   "notfound"                              GET /plan-drafts/{id} answers 404
 //   latestFail    404 (an api from before this) | 500     GET /plan-drafts/latest fails
@@ -2154,7 +2156,7 @@ export async function mockPutShare(body: PutShareRequest): Promise<ShareResponse
 // =====================================================================================================================
 
 type DraftKind = "none" | "pending-profile" | "pending-skeleton" | "pending-chunk" | "walk" | "slow" | "ready" | "ready-noflags" | "ready-many" | "ready-norecord" | "ready-importerr"
-  | "ready-lastrace" | "failed" | "failed-early" | "failed-exhausted" | "failed-stalled" | "expired" | "discarded" | "adopted" | "notfound";
+  | "ready-lastrace" | "failed" | "failed-early" | "failed-exhausted" | "failed-stalled" | "expired" | "expired-start" | "discarded" | "adopted" | "notfound";
 interface DraftSwitches {
   draft?: DraftKind; latestFail?: 404 | 500; latestDelay?: number; actionDelay?: number; pollFail?: number; pollFailError?: "network" | "500"; strava?: boolean; planFinished?: boolean; noRuns?: boolean;
   draftPost?: "generating" | "limit" | "off" | "busy" | "active" | "strava" | "fail" | "invalid"; adoptFail?: "active" | "busy" | "state" | "fail"; resumeFail?: "exhausted" | "limit" | "state";
@@ -2302,7 +2304,9 @@ const nowIso = () => new Date().toISOString();
 function draftCellNow(): DraftCell | null {
   if (draftCell === undefined) {
     const kind = dsw().draft ?? "none";
-    draftCell = kind === "none" ? null : { n: ++draftSeq, kind, intake: fixtureIntake(), walkAt: null, adoptedPlanId: null };
+    const intake = fixtureIntake();
+    if (kind === "expired-start") intake.start_date = addDays(todayJst(), -2); // a ready draft whose start day went by while it waited
+    draftCell = kind === "none" ? null : { n: ++draftSeq, kind, intake, walkAt: null, adoptedPlanId: null };
   }
   return draftCell;
 }
@@ -2335,7 +2339,7 @@ function draftOf(c: DraftCell): ApiPlanDraft {
   else if (kind === "failed-early") { status = "failed"; done = 0; withSkeleton = false; sessions = []; flagsOn = false; error = "Woo 這次沒有回完"; canResume = true; calls = 2; }
   else if (kind === "failed-exhausted") { status = "failed"; done = 2; sessions = plan.sessions.filter((s) => s.week_no <= 8); flagsOn = false; error = "這份用掉的次數到上限了"; calls = 12; }
   else if (kind === "failed-stalled") { status = "failed"; done = 1; sessions = plan.sessions.filter((s) => s.week_no <= 4); flagsOn = false; error = "產生中斷了"; canResume = true; calls = 3; }
-  else if (kind === "expired") status = "expired";
+  else if (kind === "expired" || kind === "expired-start") status = "expired";
   else if (kind === "discarded") status = "discarded";
   else if (kind === "adopted") status = "adopted";
 
@@ -2384,7 +2388,7 @@ export async function mockGetLatestPlanDraft(): Promise<LatestPlanDraftResponse>
   if (dsw().latestFail === 404) throw new ApiError(404, "not found");
   if (dsw().latestFail === 500) throw new ApiError(500, SERVER_ERROR_TEXT);
   const c = draftCellNow();
-  if (!c || ["expired", "discarded", "adopted", "notfound"].includes(c.kind)) return { draft: null };
+  if (!c || ["expired", "expired-start", "discarded", "adopted", "notfound"].includes(c.kind)) return { draft: null };
   return { draft: draftOf(c) };
 }
 
