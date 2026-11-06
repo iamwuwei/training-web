@@ -2137,7 +2137,6 @@ export async function mockPutShare(body: PutShareRequest): Promise<ShareResponse
 //                   "failed-early"                          the skeleton failed: no weeks, no thought, model_failed, can_resume
 //                   "failed-exhausted"                      calls 12, calls_exhausted, no resume   "failed-stalled"   stalled, can_resume
 //                   "expired-start"                         ready, but its start day (2 days ago) has passed: GET, latest and adopt all say expired
-//                   "expired-start"                         ready, but its start day (2 days ago) has passed: GET, latest and adopt all say expired
 //                   "expired" | "discarded" | "adopted"     the draft page says so (the entry does not see them: latest answers null)
 //                   "notfound"                              GET /plan-drafts/{id} answers 404
 //   latestFail    404 (an api from before this) | 500     GET /plan-drafts/latest fails
@@ -2151,7 +2150,7 @@ export async function mockPutShare(body: PutShareRequest): Promise<ShareResponse
 //   draftPost     "generating" (409 + latest is that pending draft) | "limit" 429 | "off" 503 plan generation is off | "busy" 503 any other | "active" 409 | "strava" 409 | "fail" 500
 //                 | "invalid" (400 distance_m …: back to step 1)       without it: 202, and the new draft walks like `walk`
 //   adoptFail     "active" 409 | "busy" 503 | "state" (409 draft is expired, and the draft is expired from then on) | "fail" 500
-//   resumeFail    "exhausted" | "limit" | "state" (each 409)           without it: 202, the draft is pending-chunk
+//   resumeFail    "exhausted" | "limit" | "state" | "generating" | "active" | "expired" (each 409; the api's resume answers calls exhausted, resume limit, draft is <status>)           without it: 202, the draft is pending-chunk
 // After 採用 GET /plan is the adopted draft's plan (starts next Monday: 課表還沒開始。) and `variant: "nomyplan"` no longer applies;
 // after 不要這份 latest answers null. A draft sent from the form is built from the answers in it (any 4〜20 weeks).
 // =====================================================================================================================
@@ -2160,7 +2159,7 @@ type DraftKind = "none" | "pending-profile" | "pending-skeleton" | "pending-chun
   | "ready-lastrace" | "failed" | "failed-early" | "failed-exhausted" | "failed-stalled" | "expired" | "expired-start" | "discarded" | "adopted" | "notfound";
 interface DraftSwitches {
   draft?: DraftKind; latestFail?: 404 | 500; latestDelay?: number; actionDelay?: number; pollFail?: number; pollFailError?: "network" | "500"; strava?: boolean; planFinished?: boolean; noRuns?: boolean;
-  draftPost?: "generating" | "limit" | "off" | "busy" | "active" | "strava" | "fail" | "invalid"; adoptFail?: "active" | "busy" | "state" | "fail"; resumeFail?: "exhausted" | "limit" | "state";
+  draftPost?: "generating" | "limit" | "off" | "busy" | "active" | "strava" | "fail" | "invalid"; adoptFail?: "active" | "busy" | "state" | "fail"; resumeFail?: "exhausted" | "limit" | "state" | "generating" | "active" | "expired";
 }
 const dsw = (): DraftSwitches => (globalThis as unknown as { __mock?: DraftSwitches }).__mock ?? {};
 const SERVER_ERROR_TEXT = "伺服器錯誤，稍後再試";
@@ -2437,6 +2436,9 @@ export async function mockResumePlanDraft(id: string): Promise<PlanDraftResponse
   if (sw === "exhausted") throw new ApiError(409, "calls exhausted");
   if (sw === "limit") throw new ApiError(409, "resume limit");
   if (sw === "state") throw new ApiError(409, "draft is pending");
+  if (sw === "generating") throw new ApiError(409, "generating");
+  if (sw === "active") throw new ApiError(409, "has active plan");
+  if (sw === "expired") throw new ApiError(409, "draft is expired");
   if (!c.kind.startsWith("failed")) throw new ApiError(409, `draft is ${draftOf(c).status}`);
   c.kind = "pending-chunk";
   return { draft: draftOf(c) };
