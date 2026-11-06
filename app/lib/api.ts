@@ -106,7 +106,7 @@ export function getMe(): Promise<MeResponse> {
 }
 
 export function disconnectStrava(): Promise<DeleteStravaResponse> {
-  if (useMock) return Promise.resolve({ ok: true });
+  if (useMock) return mock().then((m) => m.mockDisconnectStrava());
   return request<DeleteStravaResponse>("/me/strava", { method: "DELETE" });
 }
 

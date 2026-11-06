@@ -3,7 +3,7 @@
 // results become an activity + manual review on the same local date.
 
 import plans from "./plans.json";
-import type { AcceptInviteResponse, ActivitiesResponse, AdoptPlanDraftResponse, ApiActivity, ApiAthleteProfile, ApiDraftSession, ApiDraftWeek, ApiPlanDraft, LatestPlanDraftResponse, PlanDraftOkResponse, PlanDraftResponse, PlanIntake, PostPlanDraftRequest, SessionType, ApiGroup, ApiGroupEvent, ApiGroupMember, ApiGroupProgress, ApiSharedActivity, ApiSharedReview, GroupEventDetailResponse, GroupEventsResponse, GroupOkResponse, GroupResponse, GroupsResponse, InvitePreviewResponse, InviteState, MemberPlanResponse, PostGroupInviteResponse, PostGroupRequest, PostGroupResponse, PutShareRequest, ShareResponse, ShareSettings, ApiCoachMessage, ApiConstraint, ApiProposal, ApiProposalChange, ApiRoutine, ApiSession, ApiSplit, ApiWeek, ApiWeeklyReview, CoachResponse, DetailOptionsResponse, PutDetailsRequest, PutDetailsResponse, PostCoachMessageRequest, PostCoachMessageResponse,
+import type { AcceptInviteResponse, DeleteStravaResponse, ActivitiesResponse, AdoptPlanDraftResponse, ApiActivity, ApiAthleteProfile, ApiDraftSession, ApiDraftWeek, ApiPlanDraft, LatestPlanDraftResponse, PlanDraftOkResponse, PlanDraftResponse, PlanIntake, PostPlanDraftRequest, SessionType, ApiGroup, ApiGroupEvent, ApiGroupMember, ApiGroupProgress, ApiSharedActivity, ApiSharedReview, GroupEventDetailResponse, GroupEventsResponse, GroupOkResponse, GroupResponse, GroupsResponse, InvitePreviewResponse, InviteState, MemberPlanResponse, PostGroupInviteResponse, PostGroupRequest, PostGroupResponse, PutShareRequest, ShareResponse, ShareSettings, ApiCoachMessage, ApiConstraint, ApiProposal, ApiProposalChange, ApiRoutine, ApiSession, ApiSplit, ApiWeek, ApiWeeklyReview, CoachResponse, DetailOptionsResponse, PutDetailsRequest, PutDetailsResponse, PostCoachMessageRequest, PostCoachMessageResponse,
   PostCheckinPickRequest,
   PostCheckinPickResponse,
   PostCheckinResetResponse,
@@ -424,10 +424,19 @@ export function mockPlan(): PlanResponse {
   };
 }
 
+/** 解除 Strava (設定): after it answers ok, GET /me has no Strava (the page stays as it is, unfolded, and shows 尚未連結). `strava: "unlink-fail"` answers 500 and the link stays. */
+let stravaUnlinked = false;
+export async function mockDisconnectStrava(): Promise<DeleteStravaResponse> {
+  await new Promise((r) => setTimeout(r, 600)); // long enough to see 解除中…
+  if (gsw().strava === "unlink-fail") throw new ApiError(500, "伺服器錯誤，稍後再試");
+  stravaUnlinked = true;
+  return { ok: true };
+}
+
 export function mockMe(): MeResponse {
   return {
     user: { id: MOCK_USER_ID, display_name: "Wei Wu", email: "wei@example.com" },
-    strava: dsw().strava === false || gsw().strava === "none" ? null : { athlete_id: "12345678", scope: "read,activity:read_all", expires_at: new Date(Date.now() + 3600_000).toISOString() },
+    strava: stravaUnlinked || dsw().strava === false || gsw().strava === "none" ? null : { athlete_id: "12345678", scope: "read,activity:read_all", expires_at: new Date(Date.now() + 3600_000).toISOString() },
     strava_connect_url: `https://example.invalid/strava/oauth/start?user=${MOCK_USER_ID}`,
   };
 }
@@ -1653,9 +1662,10 @@ export function mockPostCoachMessage(body: PostCoachMessageRequest): PostCoachMe
 //              The first time I become a member (建立 / 加入 with `groups: "none"`: I was never in a group) they all go on, like the api's first-join row,
 //              unless `myShare` is given or I already switched something (then the row exists and is kept).
 //   strava     "none" → GET /me has no Strava (設定 shows 尚未連結, unfolded; `false` of the plan-draft switches does the same)
+//              "unlink-fail" → 解除 Strava 連結 (after the confirm) answers 500 after 0.6 s: the red line shows, still 已連結. Without it the unlink works: 解除中… then GET /me has no Strava.
 // =====================================================================================================================
 
-interface GroupSwitches { groups?: "none" | "one" | "two" | "three"; share?: Partial<ShareSettings>; variant?: string | string[]; invite?: InviteState | "not_found"; shareFail?: boolean; shareGetFail?: boolean; myShare?: Partial<ShareSettings>; strava?: "none" }
+interface GroupSwitches { groups?: "none" | "one" | "two" | "three"; share?: Partial<ShareSettings>; variant?: string | string[]; invite?: InviteState | "not_found"; shareFail?: boolean; shareGetFail?: boolean; myShare?: Partial<ShareSettings>; strava?: "none" | "unlink-fail" }
 const gsw = (): GroupSwitches => (globalThis as unknown as { __mock?: GroupSwitches }).__mock ?? {};
 const variants = (): Set<string> => {
   const v = gsw().variant;
