@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { putShare } from "../lib/api";
 import type { ShareSettings } from "../types/api";
-import { SectionH } from "./ui";
+import { Fold } from "./fold";
 
 const ROWS: { key: keyof ShareSettings; name: string; desc: string }[] = [
   { key: "progress", name: "進度彙總", desc: "本週計畫幾公里、幾堂和你完成多少、整體進度、最長一次" },
@@ -11,12 +11,19 @@ const ROWS: { key: keyof ShareSettings; name: string; desc: string }[] = [
   { key: "reviews", name: "Woo 的判定", desc: "判定、提醒和 Woo 的評論全文" },
 ];
 
+/** The folded row's one line: how many of the five switches are on right now. */
+function shareSummary(share: ShareSettings): string {
+  const on = ROWS.filter((r) => share[r.key]).length;
+  return on === ROWS.length ? "5 項都開著" : on === 0 ? "都關著" : `${on} 項開著`;
+}
+
 /**
- * 設定 ·「群組看得到的」: five switches for what the people of my groups see of me (the same for every group). A switch saves
+ * 設定 ·「隱私」(a Fold, folded by default; the page owns `open`): five switches for what the people of my groups see of me (the same for every group). A switch saves
  * at once — it flips first, stays disabled until the answer is back, and flips back with 沒有存到，再試一次 under its row if
- * the save fails. `inGroups` only changes the first sentence.
+ * the save fails. `inGroups` only changes the first sentence. The switches stay mounted while folded (their state is not lost), and the
+ * folded row shows the count of the ones that are on.
  */
-export function ShareSettingsSection({ initial, inGroups }: { initial: ShareSettings; inGroups: boolean }) {
+export function ShareSettingsSection({ initial, inGroups, open, onToggle }: { initial: ShareSettings; inGroups: boolean; open: boolean; onToggle: () => void }) {
   const [share, setShare] = useState(initial);
   const [busy, setBusy] = useState<Partial<Record<keyof ShareSettings, boolean>>>({});
   const [failed, setFailed] = useState<Partial<Record<keyof ShareSettings, boolean>>>({});
@@ -38,23 +45,24 @@ export function ShareSettingsSection({ initial, inGroups }: { initial: ShareSett
   }
 
   return (
-    <section className="share" id="share" aria-label="群組看得到的">
-      <SectionH>群組看得到的</SectionH>
-      <p className="share-intro">{inGroups ? "同一個群組的人看得到你打開的項目；你在的每個群組都一樣。" : "你還沒有加入群組。加入之後，群組裡的人只看得到你打開的項目。"}</p>
-      {ROWS.map((r) => (
-        <div key={r.key} className="share-row">
-          <div>
-            <div className="t" id={`share-${r.key}`}>{r.name}</div>
-            <div className="s">{r.desc}</div>
-            {r.key === "plan" ? <div className="risk">課表的備註和 Woo 的說明可能寫到調整的原因，例如受傷或出國。</div> : null}
-            {r.key === "reviews" ? <div className="risk">Woo 的評論可能提到你寫的心得。</div> : null}
-            {failed[r.key] ? <p className="err" role="alert">沒有存到，再試一次</p> : null}
+    <Fold id="share" title="隱私" summary={shareSummary(share)} open={open} onToggle={onToggle}>
+      <div className="share">
+        <p className="share-intro">{inGroups ? "同一個群組的人看得到你打開的項目；你在的每個群組都一樣。" : "你還沒有加入群組。加入之後，群組裡的人只看得到你打開的項目。"}</p>
+        {ROWS.map((r) => (
+          <div key={r.key} className="share-row">
+            <div>
+              <div className="t" id={`share-${r.key}`}>{r.name}</div>
+              <div className="s">{r.desc}</div>
+              {r.key === "plan" ? <div className="risk">課表的備註和 Woo 的說明可能寫到調整的原因，例如受傷或出國。</div> : null}
+              {r.key === "reviews" ? <div className="risk">Woo 的評論可能提到你寫的心得。</div> : null}
+              {failed[r.key] ? <p className="err" role="alert">沒有存到，再試一次</p> : null}
+            </div>
+            <button type="button" role="switch" className="switch" aria-checked={share[r.key]} aria-labelledby={`share-${r.key}`} disabled={!!busy[r.key]} onClick={() => void toggle(r.key)} />
           </div>
-          <button type="button" role="switch" className="switch" aria-checked={share[r.key]} aria-labelledby={`share-${r.key}`} disabled={!!busy[r.key]} onClick={() => void toggle(r.key)} />
-        </div>
-      ))}
-      <p className="share-note">切換就存好：關掉之後，群組裡的人下一次打開就看不到了（包含以前的）；打開也一樣馬上生效。</p>
-      <div className="share-never"><b>永遠不會給別人看：</b>跟 Woo 的對話、週回顧、記住的限制與傷痛、你寫的心得和 RPE、Strava 的原始資料、裝備與天氣、email、你在哪些其他群組。打開「我的課表內容」「Woo 的判定」後，課表備註和 Woo 的評論別人看得到，裡面可能提到傷痛或行程。</div>
-    </section>
+        ))}
+        <p className="share-note">切換就存好：關掉之後，群組裡的人下一次打開就看不到了（包含以前的）；打開也一樣馬上生效。</p>
+        <div className="share-never"><b>永遠不會給別人看：</b>跟 Woo 的對話、週回顧、記住的限制與傷痛、你寫的心得和 RPE、Strava 的原始資料、裝備與天氣、email、你在哪些其他群組。打開「我的課表內容」「Woo 的判定」後，課表備註和 Woo 的評論別人看得到，裡面可能提到傷痛或行程。</div>
+      </div>
+    </Fold>
   );
 }

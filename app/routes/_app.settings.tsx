@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { redirect, useRevalidator } from "react-router";
+import { redirect, useLocation, useRevalidator } from "react-router";
 import type { Route } from "./+types/_app.settings";
+import { Fold } from "../components/fold";
 import { ShareSettingsSection } from "../components/share-settings";
 import { SectionH, TopBar } from "../components/ui";
 import { ApiError, disconnectStrava, getGroups, getMe, getShare, postConstraint } from "../lib/api";
@@ -90,6 +91,10 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
   const revalidator = useRevalidator();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Folded unless the url asks for it (#share, #strava) or there is nothing else to do here (no Strava yet). Not stored anywhere.
+  const { hash } = useLocation();
+  const [stravaOpen, setStravaOpen] = useState(() => hash === "#strava" || !strava);
+  const [shareOpen, setShareOpen] = useState(() => hash === "#share");
 
   async function unlink() {
     if (!window.confirm("解除 Strava 連結？之後的跑步不會再自動匯入，已匯入的紀錄會保留。")) return;
@@ -114,41 +119,43 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
         <div className="setting"><span className="k">Email</span><span className="v">{user.email ?? "–"}</span></div>
         <div className="setting"><span className="k">登入方式</span><span className="v grey">{loginVia}</span></div>
 
-        <SectionH>Strava</SectionH>
-        <div className="setting">
-          <span className="k">狀態</span>
-          <span className="v">
-            {strava
-              ? <span className="status on">已連結 · athlete {strava.athlete_id}</span>
-              : <span className="status">尚未連結</span>}
-          </span>
-        </div>
-        {strava ? (
-          <div className="setting"><span className="k">權限</span><span className="v grey">{strava.scope}</span></div>
+        <Fold id="strava" title="Strava" summary={<span className={`status${strava ? " on" : ""}`}>{strava ? "已連結" : "尚未連結"}</span>} open={stravaOpen} onToggle={() => setStravaOpen((o) => !o)}>
+          <div className="setting">
+            <span className="k">狀態</span>
+            <span className="v">
+              {strava
+                ? <span className="status on">已連結 · athlete {strava.athlete_id}</span>
+                : <span className="status">尚未連結</span>}
+            </span>
+          </div>
+          {strava ? (
+            <div className="setting"><span className="k">權限</span><span className="v grey">{strava.scope}</span></div>
+          ) : null}
+          <a className={`btn${strava ? "" : " primary"}`} href={strava_connect_url} target="_blank" rel="noopener">
+            {strava ? "重新連結 Strava" : "連結 Strava"}
+          </a>
+          {strava ? (
+            <button type="button" className="btn danger" onClick={() => void unlink()} disabled={busy}>
+              {busy ? "解除中…" : "解除 Strava 連結"}
+            </button>
+          ) : null}
+          {error ? <p className="err" role="alert" style={{ marginTop: 8, fontSize: 13, color: "var(--v-bad)" }}>{error}</p> : null}
+          <p className="note" style={{ textAlign: "left" }}>
+            連結後 Strava 的每次跑步會自動配對課表。{strava ? "重新連結會換新的授權；解除連結會向 Strava 撤銷授權，已匯入的紀錄保留。" : "會開 Strava 的授權頁，同意後回到這裡重新整理。"}
+          </p>
+        </Fold>
+
+        {share.state === "ok" ? <ShareSettingsSection initial={share.share} inGroups={inGroups} open={shareOpen} onToggle={() => setShareOpen((o) => !o)} /> : null}
+        {share.state === "error" ? (
+          <Fold id="share" title="隱私" summary="讀不到" open={shareOpen} onToggle={() => setShareOpen((o) => !o)}>
+            <div className="share">
+              <p className="share-intro" role="alert">讀不到分享設定。</p>
+              <button type="button" className="chip" style={{ marginTop: 8 }} onClick={() => void revalidator.revalidate()}>再試一次</button>
+            </div>
+          </Fold>
         ) : null}
-        <a className={`btn${strava ? "" : " primary"}`} href={strava_connect_url} target="_blank" rel="noopener">
-          {strava ? "重新連結 Strava" : "連結 Strava"}
-        </a>
-        {strava ? (
-          <button type="button" className="btn danger" onClick={() => void unlink()} disabled={busy}>
-            {busy ? "解除中…" : "解除 Strava 連結"}
-          </button>
-        ) : null}
-        {error ? <p className="err" role="alert" style={{ marginTop: 8, fontSize: 13, color: "var(--v-bad)" }}>{error}</p> : null}
-        <p className="note" style={{ textAlign: "left" }}>
-          連結後 Strava 的每次跑步會自動配對課表。{strava ? "重新連結會換新的授權；解除連結會向 Strava 撤銷授權，已匯入的紀錄保留。" : "會開 Strava 的授權頁，同意後回到這裡重新整理。"}
-        </p>
 
         <Constraints />
-
-        {share.state === "ok" ? <ShareSettingsSection initial={share.share} inGroups={inGroups} /> : null}
-        {share.state === "error" ? (
-          <section className="share" id="share" aria-label="群組看得到的">
-            <SectionH>群組看得到的</SectionH>
-            <p className="share-intro" role="alert">讀不到分享設定。</p>
-            <button type="button" className="chip" style={{ marginTop: 8 }} onClick={() => void revalidator.revalidate()}>再試一次</button>
-          </section>
-        ) : null}
 
         <SectionH>關於</SectionH>
         <div className="setting"><span className="k">資料來源</span><span className="v grey">{useMock ? "內建示範資料" : config.apiUrl.replace(/^https?:\/\//, "")}</span></div>
