@@ -427,7 +427,7 @@ export function mockPlan(): PlanResponse {
 export function mockMe(): MeResponse {
   return {
     user: { id: MOCK_USER_ID, display_name: "Wei Wu", email: "wei@example.com" },
-    strava: dsw().strava === false ? null : { athlete_id: "12345678", scope: "read,activity:read_all", expires_at: new Date(Date.now() + 3600_000).toISOString() },
+    strava: dsw().strava === false || gsw().strava === "none" ? null : { athlete_id: "12345678", scope: "read,activity:read_all", expires_at: new Date(Date.now() + 3600_000).toISOString() },
     strava_connect_url: `https://example.invalid/strava/oauth/start?user=${MOCK_USER_ID}`,
   };
 }
@@ -1649,9 +1649,13 @@ export function mockPostCoachMessage(body: PostCoachMessageRequest): PostCoachMe
 //                gone       every action on the group (invite, remove, leave, disband, picking a member) answers 404, and after that so does reading it: I was removed
 //   invite     "ok" (default) | "expired" | "revoked" | "used_up" | "full" | "already_member" | "group_limit" | "not_found"    what /join/<token> says
 //   shareFail  true → PUT /me/share answers 500          shareGetFail  true → GET /me/share answers 500
+//   myShare    Partial<ShareSettings>    MY switches at the start (default: progress and events on, plan / runs / reviews off = a user from before 2026-11-06); read once.
+//              The first time I become a member (建立 / 加入 with `groups: "none"`: I was never in a group) they all go on, like the api's first-join row,
+//              unless `myShare` is given or I already switched something (then the row exists and is kept).
+//   strava     "none" → GET /me has no Strava (設定 shows 尚未連結, unfolded; `false` of the plan-draft switches does the same)
 // =====================================================================================================================
 
-interface GroupSwitches { groups?: "none" | "one" | "two" | "three"; share?: Partial<ShareSettings>; variant?: string | string[]; invite?: InviteState | "not_found"; shareFail?: boolean; shareGetFail?: boolean }
+interface GroupSwitches { groups?: "none" | "one" | "two" | "three"; share?: Partial<ShareSettings>; variant?: string | string[]; invite?: InviteState | "not_found"; shareFail?: boolean; shareGetFail?: boolean; myShare?: Partial<ShareSettings>; strava?: "none" }
 const gsw = (): GroupSwitches => (globalThis as unknown as { __mock?: GroupSwitches }).__mock ?? {};
 const variants = (): Set<string> => {
   const v = gsw().variant;
@@ -1879,6 +1883,7 @@ export function mockPostGroup(body: PostGroupRequest): PostGroupResponse {
   const race = body.race_name.replace(/\s+/g, " ").trim();
   if (!name || name.length > 30 || !race || race.length > 40 || !/^\d{4}-\d{2}-\d{2}$/.test(body.race_date) || body.race_date < todayJst()) throw new ApiError(400, "bad request");
   if (myGroups().length >= 3) throw new ApiError(409, "group limit");
+  firstJoin();
   const id = `g-new-${++groupSeq}`;
   const now = new Date().toISOString();
   const g: MGroup = { id, name, race_name: race, race_date: body.race_date, created: now, owner: "me", members: [{ id: `m-${id}-me`, key: "me", joined: now }], events: [{ id: `e-${++eventSeq}`, kind: "joined", by: "me", at: now }], unread: 0, invite: null };
@@ -2088,6 +2093,7 @@ export function mockGetInvite(_token: string): InvitePreviewResponse {
 export function mockPostInviteAccept(_token: string): AcceptInviteResponse {
   const state = inviteState();
   if (state !== "ok") throw new ApiError(409, state);
+  firstJoin();
   const now = new Date().toISOString();
   const g: MGroup = {
     id: INVITE_GROUP.id, name: INVITE_GROUP.name, race_name: INVITE_GROUP.race_name, race_date: INVITE_GROUP.race_date, created: "2026-10-30T09:00:00+09:00", owner: "taro",
@@ -2102,11 +2108,22 @@ export function mockPostInviteAccept(_token: string): AcceptInviteResponse {
 
 // ---- my own switches ----------------------------------------------------------------------------------------------------
 
-let myShare: ShareSettings = { ...DEFAULT_SHARE };
+let myShareNow: ShareSettings | null = null;
+const myShare = (): ShareSettings => (myShareNow ??= { ...DEFAULT_SHARE, ...gsw().myShare });
+/** Was I in any group before this page load? (`groups: "none"` = never; the default 富士山組 = a user from before the first-join rule, like Wei and Sara.) */
+let everMember: boolean | null = null;
+let shareTouched = false;
+const wasEverMember = (): boolean => (everMember ??= gsw().groups !== "none");
+/** The api writes all five switches on, in the same transaction, the first time someone becomes a member; a row that exists is never touched (mock: a `myShare` knob, or a PUT /me/share, means the row exists). */
+function firstJoin() {
+  if (wasEverMember()) return;
+  everMember = true;
+  if (!shareTouched && !gsw().myShare) myShareNow = { ...ALL_SHARED };
+}
 
 export function mockGetShare(): ShareResponse {
   if (gsw().shareGetFail) throw new ApiError(500, "伺服器錯誤，稍後再試");
-  return { share: { ...myShare } };
+  return { share: { ...myShare() } };
 }
 
 export async function mockPutShare(body: PutShareRequest): Promise<ShareResponse> {
@@ -2115,8 +2132,9 @@ export async function mockPutShare(body: PutShareRequest): Promise<ShareResponse
   for (const [k, v] of Object.entries(body.share)) {
     if (!(k in DEFAULT_SHARE) || typeof v !== "boolean") throw new ApiError(400, "bad request");
   }
-  myShare = { ...myShare, ...body.share };
-  return { share: { ...myShare } };
+  myShareNow = { ...myShare(), ...body.share };
+  shareTouched = true;
+  return { share: { ...myShare() } };
 }
 
 // =====================================================================================================================
