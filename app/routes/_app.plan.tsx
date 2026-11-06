@@ -38,10 +38,8 @@ function ExtraRows({ week, unassigned }: { week: Week; unassigned: ApiActivity[]
             <span aria-hidden="true" />
             <Avatar session={null} sport={a.sport_type} />
             <span className="n"><span className="t">{sportName(a.sport_type)}</span><span className="when">{md(activityDate(a))} {timeJst(a.start_time)}</span></span>
-            <span className="r">
-              {run || a.distance_m > 0 ? <><b className="num">{km(a.distance_m)}</b> km</> : <><b className="num">{Math.round(a.moving_time_sec / 60)}</b> 分</>}
-              {run && a.avg_pace_sec_km ? <> · <b className="num">{pace(a.avg_pace_sec_km)}</b></> : a.avg_hr != null ? <> · <b className="num">{a.avg_hr}</b> bpm</> : null}
-            </span>
+            <span className="r">{run || a.distance_m > 0 ? <><b className="num">{km(a.distance_m)}</b> km</> : <><b className="num">{Math.round(a.moving_time_sec / 60)}</b> 分</>}</span>
+            <span className="r">{run && a.avg_pace_sec_km ? <><b className="num">{pace(a.avg_pace_sec_km)}</b> /km</> : a.avg_hr != null ? <><b className="num">{a.avg_hr}</b> bpm</> : null}</span>
           </Link>
         );
       })}

@@ -335,17 +335,18 @@ ul { padding: 0; list-style: none; }
 .today-open .synced i { width: 7px; height: 7px; border-radius: 50%; background: #fc5200; align-self: center; margin-right: 4px; }
 .today-open .synced .num { font-size: 16px; color: var(--ink); }
 .today-open .hint { margin: 0 0 0 52px; font-size: 13px; color: var(--ink-3); }
-.extra-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.extra-row { display: grid; grid-template-columns: minmax(0, 1fr) 128px; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
 .extra-row .who { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 12px; align-items: center; color: var(--ink); }
 .extra-row .txt { display: flex; flex-direction: column; min-width: 0; }
 .extra-row .t { font-weight: 600; }
 .extra-row .s { font-size: 13px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.extra-row .chip { color: var(--ink); }
+.extra-row .chip { color: var(--ink); width: 100%; justify-content: center; height: auto; min-height: 32px; padding: 5px 10px; white-space: normal; text-align: center; line-height: 1.25; }
 .next-row { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); color: var(--ink); }
 .next-row .avatar { width: 28px; height: 28px; font-size: 13px; justify-self: center; }
 .next-row .avatar.cjk { font-size: 12px; }
 .next-row .t { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .next-row .when { font-size: 13px; color: var(--ink-3); white-space: nowrap; }
+.next-row.first .t { white-space: normal; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.35; }
 
 /* ---- report: target vs actual, km dots --------------------------------------- */
 .report-head { align-items: center; padding: 16px 0 14px; }
@@ -583,7 +584,6 @@ ul { padding: 0; list-style: none; }
 .card .d { margin-top: 3px; font-size: 11px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .card .d.good { color: var(--accent-ink); } .card .d.flat { color: var(--ink-3); } .card .d.worse { color: var(--v-warn); }
 .card svg { display: block; width: 100%; height: 40px; margin-top: 10px; color: var(--ink); overflow: visible; }
-.card .ph { height: 40px; margin-top: 10px; border-radius: 8px; background: var(--chip); }
 .totals { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 20px; padding: 14px 0; border-bottom: 1px solid var(--line); }
 .totals .k { font-size: 12px; color: var(--ink-3); letter-spacing: 0.04em; }
 .totals .v { display: flex; align-items: baseline; gap: 4px; margin-top: 4px; font-size: 13px; color: var(--ink-2); white-space: nowrap; }
@@ -662,7 +662,7 @@ ul { padding: 0; list-style: none; }
 .week-head2 .back-today { font-size: 12px; font-weight: 500; color: var(--ink-2); border: 1px solid var(--chip-line); border-radius: var(--r-pill); padding: 0 8px; }
 main > .bar { height: 4px; margin: 6px 0 6px; }
 .dayrows { display: flex; flex-direction: column; }
-.dayrow { display: grid; grid-template-columns: 34px 28px minmax(0, 1fr) auto; gap: 10px; align-items: center; width: 100%; height: 56px; border-bottom: 1px solid var(--line); color: var(--ink); text-align: left; border-radius: 0; }
+.dayrow { display: grid; grid-template-columns: 34px 28px minmax(0, 1fr) 112px; gap: 10px; align-items: center; width: 100%; height: 56px; border-bottom: 1px solid var(--line); color: var(--ink); text-align: left; border-radius: 0; }
 .dayrow.today { outline: 2px solid var(--ink); outline-offset: -2px; border-radius: var(--r-m); margin: 0 -8px; padding: 0 8px; width: calc(100% + 16px); }
 .dayrow.skipped .n .t { color: var(--ink-2); }
 .dayrow.skipped .n .sub, .dayrow.skipped .d .dow, .dayrow.skipped .d .dom, .dayrow.skipped .r { color: var(--ink-3); }
@@ -677,10 +677,15 @@ main > .bar { height: 4px; margin: 6px 0 6px; }
 .dayrow .n .t { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dayrow .n .t.rest { font-weight: 400; color: var(--ink-3); }
 .dayrow .n .sub { font-size: 12px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dayrow .r { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2); white-space: nowrap; max-width: 46vw; overflow: hidden; }
-.dayrow .r .grey { color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; }
-.dayrow .r .num { font-size: 17px; color: var(--ink); }
-.dayrow .r .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--ink-3); }
+.dayrow .r { display: grid; grid-template-columns: minmax(0, 1fr) 8px; column-gap: 8px; align-items: center; font-size: 13px; color: var(--ink-2); }
+.dayrow .r .stack { min-width: 0; text-align: right; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.dayrow .r .l { display: block; white-space: nowrap; }
+.dayrow .r .l .num { font-size: 17px; color: var(--ink); }
+.dayrow .r .l + .l .num { font-size: 15px; color: var(--ink-2); }
+.dayrow .r .u { font-size: 12px; color: var(--ink-2); }
+.dayrow .r .l + .l .u { color: var(--ink-3); }
+.dayrow .r .grey { color: var(--ink-3); font-size: 12px; white-space: normal; word-break: keep-all; overflow-wrap: normal; }
+.dayrow .r .dot { grid-column: 2; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--ink-3); }
 .dayrow .r .dot.good { background: var(--v-good); } .dayrow .r .dot.warn { background: var(--v-warn); } .dayrow .r .dot.bad { background: var(--v-bad); } .dayrow .r .dot.skip, .dayrow .r .dot.none { background: var(--chip-line); }
 /* 已改期 (a 補課's original day): not faded like 跳過 — grey name, dashed hollow disc, hollow dot */
 .dayrow.moved .n .t { font-weight: 400; color: var(--ink-3); }
@@ -692,13 +697,13 @@ main > .bar { height: 4px; margin: 6px 0 6px; }
 /* ---- 課表: 其他活動 (unassigned, under the week's rows) ---- */
 .extras { padding-top: 4px; }
 .extras .h { margin: 14px 0 2px; font-size: 12px; font-weight: 700; color: var(--ink-3); }
-.extras .row { display: grid; grid-template-columns: 34px 28px minmax(0, 1fr) auto; gap: 10px; align-items: center; height: 48px; border-bottom: 1px solid var(--line); color: var(--ink-2); }
+.extras .row { display: grid; grid-template-columns: 34px 28px minmax(0, 1fr) 60px 64px; gap: 10px; align-items: center; height: 48px; border-bottom: 1px solid var(--line); color: var(--ink-2); }
 .extras .avatar { width: 28px; height: 28px; font-size: 13px; }
 .extras .avatar.cjk { font-size: 12px; }
 .extras .n { min-width: 0; display: flex; align-items: baseline; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .extras .n .t { font-size: 15px; font-weight: 600; }
 .extras .n .when { font-size: 13px; color: var(--ink-3); }
-.extras .r { font-size: 13px; color: var(--ink-2); white-space: nowrap; }
+.extras .r { font-size: 12px; color: var(--ink-2); white-space: nowrap; text-align: right; }
 .extras .r .num { font-size: 17px; color: var(--ink); }
 
 /* ---- today: rows that open the session sheet ---- */
@@ -858,7 +863,6 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 .dayrow.changed { margin: 0 -20px; padding: 0 20px 0 17px; width: calc(100% + 40px); border-left: 3px solid var(--v-warn); }
 .dayrow > .was { grid-column: 3 / -1; font-size: 12px; line-height: 1.35; color: var(--ink-3); margin-top: -4px; }
 .dayrow.changed { height: auto; min-height: 56px; grid-template-rows: minmax(44px, auto) auto; align-content: center; padding-top: 6px; padding-bottom: 8px; row-gap: 0; } /* the 原本 line gets its own full-width line */
-.dayrow.changed .r { max-width: 34vw; }
 .plan-note { margin: 12px 0 0; font-size: 12px; line-height: 1.5; color: var(--ink-3); }
 .plan-notice { margin: 8px 0 0; font-size: 12px; color: var(--ink-3); }
 
@@ -1341,3 +1345,13 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 
 /* ---- v4 (design-refresh): dark cards use the surface, not a line ---- */
 @media (prefers-color-scheme: dark) { .card, .proposal-card, .memo-card { border-color: transparent; } }
+
+/* 320 px column widths (v4) */
+@media (max-width: 359px) {
+  .dayrow { grid-template-columns: 34px 28px minmax(0, 1fr) 96px; }
+  .dayrow .r .l .num { font-size: 16px; }
+  .extras .row { grid-template-columns: 28px minmax(0, 1fr) 56px 60px; }
+  .extras .row > span:first-child { display: none; }
+  .extras .n { flex-direction: column; align-items: flex-start; gap: 0; white-space: normal; }
+  .extra-row { grid-template-columns: minmax(0, 1fr) 112px; }
+}
