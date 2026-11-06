@@ -48,7 +48,7 @@ export const DRAFT_TEXT = {
     fixedHint: "沒有就不用勾。勾了的那天一定排休息。",
     minutesHint: "週末的長跑不受這個限制。",
     notesPlaceholder: "例如：左膝不舒服到月底；長跑想排週六",
-    notesHint: "傷痛、時間限制、喜歡的排法都可以寫。Woo 會照你的狀況調整。",
+    notesHint: "傷痛、時間限制、喜歡的排法都可以寫。Woo 會照你的狀況調整。課表備註可能提到這些；分享課表給群組時，群組成員看得到（可在設定關掉）。",
     anyMinutes: "不限",
   },
   summary: {
