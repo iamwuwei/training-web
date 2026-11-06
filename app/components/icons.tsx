@@ -67,3 +67,7 @@ export const LinkIcon = (p: SVGProps<SVGSVGElement>) => (<svg {...small(p)}><pat
 /** › and ▾ at 16 px (list rows, the member picker). */
 export const ChevronIcon = (p: SVGProps<SVGSVGElement>) => (<svg {...base({ width: 16, height: 16, viewBox: "0 0 16 16", strokeWidth: 2, ...p })}><path d="M6 3l5 5-5 5" /></svg>);
 export const CaretDownIcon = (p: SVGProps<SVGSVGElement>) => (<svg {...base({ width: 16, height: 16, viewBox: "0 0 16 16", strokeWidth: 2, ...p })}><path d="M3.5 6l4.5 4.5L12.5 6" /></svg>);
+
+// ---- ai-plan-generation ----
+/** 改答案再排: a pencil (22 px, 24 viewBox, stroke 2 like the other small icons). */
+export const EditIcon = (p: SVGProps<SVGSVGElement>) => (<svg {...small(p)}><path d="M4 20h4.2L19.4 8.8a2 2 0 0 0 0-2.8l-1.4-1.4a2 2 0 0 0-2.8 0L4 15.8z" /><path d="M13.5 6.5l4 4" /></svg>);

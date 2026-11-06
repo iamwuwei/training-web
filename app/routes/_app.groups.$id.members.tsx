@@ -11,13 +11,14 @@ import { toJstDate } from "../lib/date";
 import { groupIsGone, isStatus, mdPlain, NOTICE_GONE } from "../lib/groups";
 import { loadGroupData } from "../lib/group-load";
 import type { ApiGroupMember } from "../types/api";
+import { pageTitle } from "../lib/meta";
 
 export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   return loadGroupData(() => getGroup(params.id));
 }
 
-export function meta(): Route.MetaDescriptors {
-  return [{ title: "成員 · 富士山マラソン 2026" }];
+export function meta({ matches }: Route.MetaArgs): Route.MetaDescriptors {
+  return pageTitle("成員", matches);
 }
 
 /**

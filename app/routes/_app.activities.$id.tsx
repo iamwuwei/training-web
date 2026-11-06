@@ -20,6 +20,7 @@ import { focusLabel, focusStats, fullSplits, planFor, sessionBand, splitPace, ty
 import { kindSeries } from "../lib/trend";
 import type { ApiActivity, ApiSession } from "../types/api";
 import { usePlan } from "../lib/use-plan";
+import { pageTitle } from "../lib/meta";
 
 // The activity usually comes from the already-loaded plan; fall back to
 // /activities for unplanned runs (which /plan does not return).
@@ -37,8 +38,8 @@ export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   }
 }
 
-export function meta(): Route.MetaDescriptors {
-  return [{ title: "報告 · 富士山マラソン 2026" }];
+export function meta({ matches }: Route.MetaArgs): Route.MetaDescriptors {
+  return pageTitle("報告", matches);
 }
 
 const pos = (v: number, lo: number, hi: number) => Math.max(0, Math.min(100, ((v - lo) / (hi - lo)) * 100));

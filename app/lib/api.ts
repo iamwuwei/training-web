@@ -1,6 +1,7 @@
 import type {
   AcceptInviteResponse,
   ActivitiesResponse,
+  AdoptPlanDraftResponse,
   DeleteStravaResponse,
   ErrorResponse,
   GroupEventDetailResponse,
@@ -9,7 +10,11 @@ import type {
   GroupResponse,
   GroupsResponse,
   InvitePreviewResponse,
+  LatestPlanDraftResponse,
   MemberPlanResponse,
+  PlanDraftOkResponse,
+  PlanDraftResponse,
+  PostPlanDraftRequest,
   PostGroupInviteResponse,
   PostGroupRequest,
   PostGroupResponse,
@@ -54,12 +59,16 @@ const mock = () => import("../mock/mock");
 
 /** 401: API Gateway rejected the token. 403: token fine, but this account is not in the users table. */
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  /** `code`: the api's own fixed code, kept only for the 503s in `KNOWN_503` (the message stays the Chinese line, so no page prints an English code). */
+  constructor(public status: number, message: string, public code?: string) {
     super(message);
   }
 }
 
 const SERVER_ERROR = "伺服器錯誤，稍後再試";
+
+/** The three fixed codes the api sends with a 503: the plan-generation switch is off, an adopt that lost the lock, Aurora waking up. Any other 503 body is dropped like every 5xx body. */
+const KNOWN_503 = new Set(["plan generation is off", "busy", "database starting, retry shortly"]);
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = await getIdToken();
@@ -77,7 +86,13 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
   if (!res.ok) {
     // 5xx bodies can carry pg / SDK / model error text; the UI never shows those.
-    if (res.status >= 500) throw new ApiError(res.status, SERVER_ERROR);
+    if (res.status >= 500) {
+      let code: string | undefined;
+      if (res.status === 503) {
+        try { const e = ((await res.json()) as ErrorResponse).error; if (typeof e === "string" && KNOWN_503.has(e)) code = e; } catch { /* not JSON */ }
+      }
+      throw new ApiError(res.status, SERVER_ERROR, code);
+    }
     let message = res.statusText;
     try { message = ((await res.json()) as ErrorResponse).error ?? message; } catch { /* non-JSON error body */ }
     throw new ApiError(res.status, message);
@@ -91,7 +106,7 @@ export function getMe(): Promise<MeResponse> {
 }
 
 export function disconnectStrava(): Promise<DeleteStravaResponse> {
-  if (useMock) return Promise.resolve({ ok: true });
+  if (useMock) return mock().then((m) => m.mockDisconnectStrava());
   return request<DeleteStravaResponse>("/me/strava", { method: "DELETE" });
 }
 
@@ -331,4 +346,44 @@ export function getShare(): Promise<ShareResponse> {
 export function putShare(body: PutShareRequest): Promise<ShareResponse> {
   if (useMock) return mock().then((m) => m.mockPutShare(body));
   return request<ShareResponse>("/me/share", { method: "PUT", body: JSON.stringify(body) });
+}
+
+// ---- ai-plan-generation -------------------------------------------------------------------
+// Woo writes a whole plan from an intake form and the athlete's Strava history. 4xx errors carry the api's fixed code in
+// `ApiError.message` (see app/lib/draft.ts for the sentences); a 5xx is always 伺服器錯誤，稍後再試, its status is all there is.
+
+/** Start a draft (202). 400 a code per field, 409 `generating` | `has active plan` | `strava not connected`, 429 `daily limit`, 503 plan generation is off. */
+export function postPlanDraft(body: PostPlanDraftRequest): Promise<PlanDraftResponse> {
+  if (useMock) return mock().then((m) => m.mockPostPlanDraft(body));
+  return request<PlanDraftResponse>("/plan-drafts", { method: "POST", body: JSON.stringify(body) });
+}
+
+/** The newest draft worth showing (pending, ready or failed), for the entry on 今天／課表; `{ draft: null }` when there is none. 404 = an api from before this. */
+export function getLatestPlanDraft(): Promise<LatestPlanDraftResponse> {
+  if (useMock) return mock().then((m) => m.mockGetLatestPlanDraft());
+  return request<LatestPlanDraftResponse>("/plan-drafts/latest");
+}
+
+/** One draft, for polling and the preview. 404: not mine, or no such draft. */
+export function getPlanDraft(id: string): Promise<PlanDraftResponse> {
+  if (useMock) return mock().then((m) => m.mockGetPlanDraft(id));
+  return request<PlanDraftResponse>(`/plan-drafts/${encodeURIComponent(id)}`);
+}
+
+/** Take the draft as my plan (one transaction; again on an adopted draft answers the same plan). 409 `has active plan` | `draft is <status>`, 503 busy. */
+export function adoptPlanDraft(id: string): Promise<AdoptPlanDraftResponse> {
+  if (useMock) return mock().then((m) => m.mockAdoptPlanDraft(id));
+  return request<AdoptPlanDraftResponse>(`/plan-drafts/${encodeURIComponent(id)}/adopt`, { method: "POST" });
+}
+
+/** 繼續: pick a failed draft up where it stopped (202, back to pending). 409 `calls exhausted` | `resume limit` | `draft is <status>`. */
+export function resumePlanDraft(id: string): Promise<PlanDraftResponse> {
+  if (useMock) return mock().then((m) => m.mockResumePlanDraft(id));
+  return request<PlanDraftResponse>(`/plan-drafts/${encodeURIComponent(id)}/resume`, { method: "POST" });
+}
+
+/** 不要這份. 409 `draft is adopted`. */
+export function discardPlanDraft(id: string): Promise<PlanDraftOkResponse> {
+  if (useMock) return mock().then((m) => m.mockDiscardPlanDraft(id));
+  return request<PlanDraftOkResponse>(`/plan-drafts/${encodeURIComponent(id)}/discard`, { method: "POST" });
 }
