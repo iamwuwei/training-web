@@ -1291,3 +1291,5 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 .plan-entry .t .woo-status .t { margin-top: 0; }
 /* 320 px: the seven weekday chips are 35 px wide cells (02 §2); `.choice .chip`'s min-width 44 would make them overlap and push the last one out of the column */
 .choice.days .chip { min-width: 0; }
+/* reduced motion: the 產生中 page's progress bar does not slide (only this page; the other `.bar`s keep their own rules) */
+@media (prefers-reduced-motion: reduce) { .draft-wait .bar > i { transition: none; } }
