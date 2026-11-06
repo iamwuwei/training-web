@@ -3,7 +3,9 @@
   --ink-2: #5c6370;
   --ink-3: #6b7180; /* 4.9:1 on white: small grey text passes WCAG AA */
   --line: #ecedf0;
-  --chip: #f1f2f5;
+  --surface: #ffffff;   /* v4: sheet, cards, tab bar, composer, draft bar, member menu (light = the page) */
+  --raised: #f1f2f5;    /* v4: one layer up: bubbles, ask block, notes, skeleton, pressed rows, member avatar */
+  --chip: var(--raised); /* v4: the old name stays as an alias */
   --chip-line: #dde0e6;
   --field-line: #8a909c; /* v4: textarea / oneline / radio / checkbox border, 3.21:1 */
   --tab-off: var(--ink-3);
@@ -85,7 +87,7 @@ ul { padding: 0; list-style: none; }
 
 .tabbar {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 3;
-  background: var(--bg); border-top: 1px solid var(--line);
+  background: var(--surface); border-top: 1px solid var(--line);
 }
 .tabbar nav { max-width: 600px; margin: 0 auto; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 6px 8px calc(10px + env(safe-area-inset-bottom)); }
 .tabbar a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 48px; color: var(--tab-off); font-size: 11px; }
@@ -93,7 +95,7 @@ ul { padding: 0; list-style: none; }
 .tabbar a[aria-current="page"] { color: var(--ink); font-weight: 700; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .tabbar a .icon { position: relative; display: flex; }
-.tabbar a .unread { position: absolute; top: -2px; right: -5px; width: 8px; height: 8px; border-radius: 50%; background: var(--ink); box-shadow: 0 0 0 2px var(--bg); }
+.tabbar a .unread { position: absolute; top: -2px; right: -5px; width: 8px; height: 8px; border-radius: 50%; background: var(--ink); box-shadow: 0 0 0 2px var(--surface); }
 
 /* ---- sections / feed -------------------------------------------------------- */
 .section-h { margin: 22px 0 4px; font-size: 13px; font-weight: 700; color: var(--ink-2); letter-spacing: 0.04em; }
@@ -165,7 +167,7 @@ ul { padding: 0; list-style: none; }
 
 .chip {
   flex: none; height: 32px; padding: 0 14px; border-radius: var(--r-pill); border: 1px solid var(--chip-line);
-  background: var(--bg); color: var(--ink); font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px;
+  background: transparent; color: var(--ink); font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px;
 }
 .chip:disabled { opacity: 0.6; }
 .chip[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--bg); }
@@ -192,7 +194,7 @@ ul { padding: 0; list-style: none; }
 .week-head .line { display: flex; align-items: center; gap: 8px; }
 .week-head .title { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 6px; }
 .week-head .title .sub { flex-basis: 100%; font-size: 13px; }
-.week-head .step { flex: none; width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--chip-line); font-size: 20px; line-height: 1; color: var(--ink); background: var(--bg); }
+.week-head .step { flex: none; width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--chip-line); font-size: 20px; line-height: 1; color: var(--ink); background: transparent; }
 .week-head .step:disabled { opacity: 0.3; }
 .week-head .back-today { font-size: 12px; color: var(--ink-2); border: 1px solid var(--chip-line); border-radius: var(--r-pill); padding: 0 8px; }
 .weekbars .legend { display: flex; justify-content: space-between; font-size: 12px; color: var(--ink-3); gap: 12px; }
@@ -254,7 +256,7 @@ ul { padding: 0; list-style: none; }
 .memo .body.placeholder { color: var(--ink-3); }
 .memo .rpe-k { font-size: 12px; color: var(--ink-3); }
 .rpe { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 4px; }
-.rpe button { height: 44px; border-radius: var(--r-s); border: 1px solid var(--chip-line); font-family: var(--font-num); font-size: 15px; font-weight: 600; color: var(--ink-2); background: var(--bg); }
+.rpe button { height: 44px; border-radius: var(--r-s); border: 1px solid var(--chip-line); font-family: var(--font-num); font-size: 15px; font-weight: 600; color: var(--ink-2); background: transparent; }
 .rpe button[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--bg); }
 .rpe-scale { display: flex; justify-content: space-between; font-size: 11px; color: var(--ink-3); }
 .memo textarea { width: 100%; min-height: 110px; padding: 10px 12px; border: 1px solid var(--field-line); border-radius: var(--r-m); font: inherit; font-size: 16px; line-height: 1.55; color: var(--ink); background: var(--bg); resize: vertical; }
@@ -272,7 +274,7 @@ ul { padding: 0; list-style: none; }
 .setting .v .status { display: inline-flex; align-items: center; gap: 6px; }
 .setting .v .status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--ink-3); }
 .setting .v .status.on::before { background: var(--v-good); }
-.btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; height: 48px; border-radius: var(--r-m); border: 1px solid var(--chip-line); font-size: 15px; font-weight: 600; color: var(--ink); background: var(--bg); margin-top: 12px; }
+.btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; height: 48px; border-radius: var(--r-m); border: 1px solid var(--chip-line); font-size: 15px; font-weight: 600; color: var(--ink); background: transparent; margin-top: 12px; }
 .btn.primary { background: var(--ink); border-color: var(--ink); color: var(--bg); }
 .btn.danger { color: var(--v-bad); }
 .btn:disabled { opacity: 0.6; }
@@ -298,10 +300,10 @@ ul { padding: 0; list-style: none; }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0f1013; --ink: #f2f3f5; --ink-2: #a8adb8; --ink-3: #7d8390; --line: #23262c; --chip: #1a1c21; --chip-line: #2c3038; --field-line: #737987; --tab-off: #7d8390;
+    --bg: #0f1013; --surface: #1a1c21; --raised: #202328; --ink: #f2f3f5; --ink-2: #a8adb8; --ink-3: #858b98; --line: #282b31; --chip-line: #2c3038; --field-line: #737987;
     --t-easy: #6b8ff0; --t-long: #a37cf0; --t-hard: #f08a3c; --t-race: #ff7b7b;
     --accent: #ff6a4d; --accent-ink: var(--accent); --accent-bg: #2a1915; --band: #23262c;
-    --v-good: var(--accent); --v-warn: #f0b34a; --v-bad: #ff7b7b; --v-skip: #7d8390;
+    --v-good: var(--accent); --v-warn: #f0b34a; --v-bad: #ff7b7b;
     color-scheme: dark;
   }
   .avatar.rest { color: var(--ink-3); }
@@ -471,8 +473,8 @@ ul { padding: 0; list-style: none; }
 .proposal .decided.applied { color: var(--accent-ink); }
 /* bottom = the tab bar's measured height (it already includes the safe area). z-index 2 < the tab bar's 3 so the ::after
    below slides under the bar: if the two fixed elements ever drift apart (iOS toolbar collapse), the gap shows --bg, not the thread. */
-.composer { position: fixed; left: 0; right: 0; bottom: var(--tabbar-h, calc(66px + env(safe-area-inset-bottom))); background: var(--bg); border-top: 1px solid var(--line); z-index: 2; }
-.composer::after { content: ""; position: absolute; left: 0; right: 0; top: 100%; height: 48px; background: var(--bg); pointer-events: none; }
+.composer { position: fixed; left: 0; right: 0; bottom: var(--tabbar-h, calc(66px + env(safe-area-inset-bottom))); background: var(--surface); border-top: 1px solid var(--line); z-index: 2; }
+.composer::after { content: ""; position: absolute; left: 0; right: 0; top: 100%; height: 48px; background: var(--surface); pointer-events: none; }
 .composer .row, .composer .quote-chip, .composer .hint { max-width: 600px; margin: 0 auto; padding-left: 20px; padding-right: 20px; }
 .composer .row { display: flex; gap: 12px; align-items: flex-end; padding-top: 10px; padding-bottom: 10px; }
 .composer .rpe-row + .row { padding-top: 2px; }
@@ -504,7 +506,7 @@ ul { padding: 0; list-style: none; }
 .composer .rpe-row { max-width: 600px; margin: 0 auto; padding: 8px 20px; display: flex; align-items: center; gap: 4px; overflow-x: auto; scrollbar-width: none; }
 .composer .rpe-row .k { flex: none; font-size: 12px; color: var(--ink-3); margin-right: 4px; }
 /* RPE button: 28px disc, 32x44 touch area (the ::before). Not .rpe: that is the report page's 10-column grid */
-.composer .rpe-btn { position: relative; flex: none; display: inline-flex; align-items: center; justify-content: center; padding: 0; width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--chip-line); background: var(--bg); color: var(--ink); font-family: "Barlow Condensed", sans-serif; font-size: 14px; font-weight: 700; line-height: 1; }
+.composer .rpe-btn { position: relative; flex: none; display: inline-flex; align-items: center; justify-content: center; padding: 0; width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--chip-line); background: transparent; color: var(--ink); font-family: "Barlow Condensed", sans-serif; font-size: 14px; font-weight: 700; line-height: 1; }
 .composer .rpe-btn::before { content: ""; position: absolute; inset: -9px -3px; } /* the 1px border sits outside the abs-positioning box: -9/-3 from it = a 32x44 hit area */
 .composer .rpe-btn.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
 .btn.primary.woo { gap: 8px; }
@@ -573,7 +575,7 @@ ul { padding: 0; list-style: none; }
 .progress .delta .unit { font-size: 14px; color: var(--ink-2); }
 .progress .delta .sub { font-size: 13px; color: var(--ink-3); margin-left: 6px; }
 .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
-.card { min-width: 0; padding: 10px 10px 12px; border: 1px solid var(--line); border-radius: var(--r-m); display: flex; flex-direction: column; }
+.card { min-width: 0; padding: 10px 10px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-m); display: flex; flex-direction: column; }
 .card .k { font-size: 11px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .card .v { display: flex; align-items: baseline; gap: 3px; margin-top: 6px; white-space: nowrap; }
 .card .v .num { font-size: 24px; }
@@ -608,7 +610,7 @@ ul { padding: 0; list-style: none; }
 /* ---- bottom sheet (over the tab bar) ---- */
 .sheet-root { position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column; justify-content: flex-end; }
 .sheet-backdrop { position: absolute; inset: 0; background: rgba(20, 22, 27, 0.45); animation: fade var(--d-2) var(--ease-out); border-radius: 0; }
-.sheet { position: relative; max-width: 600px; width: 100%; margin: 0 auto; max-height: 86dvh; display: flex; flex-direction: column; background: var(--bg); border-radius: var(--r-sheet) var(--r-sheet) 0 0; animation: up var(--d-3) var(--ease-sheet); outline: none; }
+.sheet { position: relative; max-width: 600px; width: 100%; margin: 0 auto; max-height: 86dvh; display: flex; flex-direction: column; background: var(--surface); border-radius: var(--r-sheet) var(--r-sheet) 0 0; animation: up var(--d-3) var(--ease-sheet); outline: none; }
 .sheet-handle { display: flex; justify-content: center; padding: 10px 0 6px; width: 100%; border-radius: var(--r-sheet) var(--r-sheet) 0 0; }
 .sheet-handle i { width: 36px; height: 4px; border-radius: var(--r-pill); background: var(--chip-line); }
 .sheet-body { overflow-y: auto; padding: 0 20px calc(28px + env(safe-area-inset-bottom)); }
@@ -646,7 +648,7 @@ ul { padding: 0; list-style: none; }
 
 /* ---- 課表: one fixed-height row per day ---- */
 .week-head2 { display: flex; align-items: center; gap: 10px; padding: 14px 0 4px; }
-.week-head2 .step { flex: none; width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--chip-line); font-size: 18px; line-height: 1; color: var(--ink); background: var(--bg); }
+.week-head2 .step { flex: none; width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--chip-line); font-size: 18px; line-height: 1; color: var(--ink); background: transparent; }
 .week-head2 .step:disabled { opacity: 0.3; }
 .week-head2 .mid { flex: 1 1 auto; min-width: 0; }
 .week-head2 .line { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
@@ -722,7 +724,7 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 .routine .items li.done .box { background: var(--accent); border-color: var(--accent); color: #fff; animation: pop var(--d-2) var(--ease-out); }
 .routine .items li.done .name { color: var(--ink-3); text-decoration: line-through; }
 .routine .items input:focus-visible + .box { outline: 2px solid var(--ink); outline-offset: 2px; }
-.routine .items .how { position: absolute; right: 0; top: 13px; width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--chip-line); font-size: 12px; font-weight: 700; color: var(--ink-3); background: var(--bg); }
+.routine .items .how { position: absolute; right: 0; top: 13px; width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--chip-line); font-size: 12px; font-weight: 700; color: var(--ink-3); background: transparent; }
 .routine .items .how.on { background: var(--ink); border-color: var(--ink); color: var(--bg); }
 .routine .items .howtext { margin: -6px 0 10px 34px; font-size: 13px; color: var(--ink-2); line-height: 1.55; }
 .routine .foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 12px; font-size: 12px; color: var(--ink-3); }
@@ -752,7 +754,7 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 .msg.coach .said { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 13px; color: var(--ink-3); }
 .msg.coach .said a { color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; }
 .msg.coach .cancelled { margin: 8px 0 0; font-size: 12px; color: var(--ink-3); line-height: 1.5; }
-.proposal-card { position: relative; margin-top: 10px; padding: 4px 12px 12px; border: 1px solid var(--line); border-radius: var(--r-m); display: flex; flex-direction: column; gap: 8px; }
+.proposal-card { position: relative; margin-top: 10px; padding: 4px 12px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-m); display: flex; flex-direction: column; gap: 8px; }
 .proposal-card > .proposal { gap: 0; padding: 10px 0 8px; }
 .proposal-card > .proposal:first-child { border-top: none; }
 .proposal-card > .proposal + .why, .proposal-card > .proposal + .flags { margin-top: -2px; }
@@ -830,7 +832,7 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 .proposal-card.superseded .opt-head + .folded-note + .collapse.open { margin-top: 8px; }
 
 /* 記下來 */
-.memo-card { position: relative; margin: 8px 0 0 -52px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-m); }
+.memo-card { position: relative; margin: 8px 0 0 -52px; padding: 10px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-m); }
 .memo-card.dismissed .t { color: var(--ink-3); }
 .memo-card.dismissed .avatar.woo { background: var(--ink-3); }
 .memo-card .who { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 12px; align-items: start; }
@@ -957,7 +959,7 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 
 /* glass tokens (only .member-menu uses them). alpha .88 so text keeps 4.5:1 even over solid black / white content */
 :root { --glass-bg: rgb(255 255 255 / 0.88); --glass-solid: var(--bg); --glass-border: rgb(20 22 27 / 0.10); --glass-highlight: inset 0 1px 0 rgb(255 255 255 / 0.7); --glass-shadow: 0 10px 30px rgb(20 22 27 / 0.16); }
-@media (prefers-color-scheme: dark) { :root { --glass-bg: rgb(26 28 33 / 0.88); --glass-solid: var(--chip); --glass-border: rgb(255 255 255 / 0.12); --glass-highlight: inset 0 1px 0 rgb(255 255 255 / 0.10); --glass-shadow: 0 10px 30px rgb(0 0 0 / 0.55); } }
+@media (prefers-color-scheme: dark) { :root { --glass-bg: rgb(26 28 33 / 0.88); --glass-solid: var(--surface); --glass-border: rgb(255 255 255 / 0.12); --glass-highlight: inset 0 1px 0 rgb(255 255 255 / 0.10); --glass-shadow: 0 10px 30px rgb(0 0 0 / 0.55); } }
 
 /* ---- group-race v3: 群組 tab (清單 → 詳細頁 → 消息中心／大家的課表／成員), 分享設定, /join (tokens only) ---- */
 
@@ -1073,7 +1075,7 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 /* 成員選擇器 (v3: dropdown, Liquid Glass popover — glass is used ONLY by .member-menu) */
 .member-pick-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; min-width: 0; }
 .member-pick-wrap { position: relative; min-width: 0; }
-.member-pick { max-width: 100%; display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 12px 0 6px; border-radius: var(--r-pill); border: 1px solid var(--chip-line); background: var(--bg); color: var(--ink); font-size: 15px; font-weight: 600; }
+.member-pick { max-width: 100%; display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 12px 0 6px; border-radius: var(--r-pill); border: 1px solid var(--chip-line); background: transparent; color: var(--ink); font-size: 15px; font-weight: 600; }
 .member-pick .nm { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .member-pick > svg { flex: none; width: 16px; height: 16px; color: var(--ink-2); transition: transform var(--d-2) var(--ease-move); }
 .member-pick[aria-expanded="true"] > svg { transform: rotate(180deg); }
@@ -1149,7 +1151,7 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 .share-row .t { font-size: 15px; font-weight: 600; }
 .share-row .s { margin-top: 1px; font-size: 13px; line-height: 1.45; color: var(--ink-2); }
 .share-row .risk { margin-top: 4px; font-size: 13px; line-height: 1.45; color: var(--v-warn); }
-.switch { position: relative; flex: none; width: 46px; height: 28px; border-radius: var(--r-pill); border: 2px solid var(--ink-3); background: var(--bg); transition: background-color var(--d-1) var(--ease-out), border-color var(--d-1) var(--ease-out); }
+.switch { position: relative; flex: none; width: 46px; height: 28px; border-radius: var(--r-pill); border: 2px solid var(--ink-3); background: transparent; transition: background-color var(--d-1) var(--ease-out), border-color var(--d-1) var(--ease-out); }
 .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--ink-3); transition: transform var(--d-1) var(--ease-out), background-color var(--d-1) var(--ease-out); }
 .switch[aria-checked="true"] { background: var(--ink); border-color: var(--ink); }
 .switch[aria-checked="true"]::after { transform: translateX(18px); background: var(--bg); }
@@ -1301,7 +1303,7 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 .draft-days .dayrow > .was { color: var(--v-warn); }
 
 .shell > main.draft { padding-bottom: calc(64px + var(--tabbar-h, calc(66px + env(safe-area-inset-bottom))) + 16px); }
-.draft-bar { position: fixed; left: 0; right: 0; bottom: var(--tabbar-h, calc(66px + env(safe-area-inset-bottom))); z-index: 2; background: var(--bg); border-top: 1px solid var(--line); }
+.draft-bar { position: fixed; left: 0; right: 0; bottom: var(--tabbar-h, calc(66px + env(safe-area-inset-bottom))); z-index: 2; background: var(--surface); border-top: 1px solid var(--line); }
 .draft-bar .row { max-width: 600px; margin: 0 auto; display: flex; align-items: center; gap: 12px; padding: 10px 20px; }
 .draft-bar .s { flex: 1 1 auto; min-width: 0; font-size: 13px; line-height: 1.4; color: var(--ink-2); }
 .draft-bar .s.err { color: var(--v-bad); }
@@ -1336,3 +1338,6 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 .draft-bar .btn { flex: none; white-space: nowrap; }
 /* the two inline links in a sentence (全文 ›, 去設定 ›／看那份 ›) get a 44 px touch height without moving the text: same method as `.group-foot a` */
 .draft-why .more, .intake .err a { display: inline-flex; align-items: center; min-height: 44px; margin: -13px 0; }
+
+/* ---- v4 (design-refresh): dark cards use the surface, not a line ---- */
+@media (prefers-color-scheme: dark) { .card, .proposal-card, .memo-card { border-color: transparent; } }
