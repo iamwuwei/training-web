@@ -11,8 +11,12 @@ const ROWS: { key: keyof ShareSettings; name: string; desc: string }[] = [
   { key: "reviews", name: "Woo 的判定", desc: "判定、提醒和 Woo 的評論全文" },
 ];
 
-/** The folded row's one line: how many of the five switches are on right now. */
-function shareSummary(share: ShareSettings): string {
+/**
+ * The folded row's one line: how many of the five switches are on right now. Someone in no group yet has no say yet to count: the api
+ * cannot tell "never set" from "set, and these happen to be on", and the first create or join turns all five on, so the row says that.
+ */
+function shareSummary(share: ShareSettings, inGroups: boolean): string {
+  if (!inGroups) return "第一次加入時全部打開";
   const on = ROWS.filter((r) => share[r.key]).length;
   return on === ROWS.length ? "5 項都開著" : on === 0 ? "都關著" : `${on} 項開著`;
 }
@@ -20,7 +24,7 @@ function shareSummary(share: ShareSettings): string {
 /**
  * 設定 ·「隱私」(a Fold, folded by default; the page owns `open`): five switches for what the people of my groups see of me (the same for every group). A switch saves
  * at once — it flips first, stays disabled until the answer is back, and flips back with 沒有存到，再試一次 under its row if
- * the save fails. `inGroups` only changes the first sentence. The switches stay mounted while folded (their state is not lost), and the
+ * the save fails. `inGroups` decides the first sentence and the folded row's line. The switches stay mounted while folded (their state is not lost), and the
  * folded row shows the count of the ones that are on.
  */
 export function ShareSettingsSection({ initial, inGroups, open, onToggle }: { initial: ShareSettings; inGroups: boolean; open: boolean; onToggle: () => void }) {
@@ -45,9 +49,9 @@ export function ShareSettingsSection({ initial, inGroups, open, onToggle }: { in
   }
 
   return (
-    <Fold id="share" title="隱私" summary={shareSummary(share)} open={open} onToggle={onToggle}>
+    <Fold id="share" title="隱私" summary={shareSummary(share, inGroups)} open={open} onToggle={onToggle}>
       <div className="share">
-        <p className="share-intro">{inGroups ? "同一個群組的人看得到你打開的項目；你在的每個群組都一樣。" : "你還沒有加入群組。加入之後，群組裡的人只看得到你打開的項目。"}</p>
+        <p className="share-intro">{inGroups ? "同一個群組的人看得到你打開的項目；你在的每個群組都一樣。" : "你還沒有加入群組。第一次建立或加入群組時，這五項會全部打開，之後隨時可以關。加入前在這裡改過任何一項，或以前加入過群組，就照下面的開關。"}</p>
         {ROWS.map((r) => (
           <div key={r.key} className="share-row">
             <div>
