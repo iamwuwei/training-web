@@ -427,7 +427,8 @@ ul { padding: 0; list-style: none; }
 .thread-top.end { height: 1px; }
 .day-rule { display: flex; align-items: center; gap: 10px; margin: 12px 0 2px; font-size: 12px; color: var(--ink-3); }
 .day-rule span { flex: 1; height: 1px; background: var(--line); }
-.msg.coach { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 12px; padding: 12px 0; }
+/* `.coach` (the old coach block's rule) also selects `article.msg.coach` and brings its border-bottom into every Woo message: off here, so the thread has one line, the .day-rule (coach-sheet-polish) */
+.msg.coach { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 12px; padding: 12px 0; border-bottom: 0; }
 .msg.coach .meta { display: flex; align-items: baseline; gap: 6px; font-size: 14px; }
 .msg.coach .meta b { font-weight: 700; }
 .msg.coach .meta .grey { color: var(--ink-3); }
