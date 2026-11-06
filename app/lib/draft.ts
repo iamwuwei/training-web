@@ -112,10 +112,14 @@ export const ERROR_CALLS_EXHAUSTED = "這份用掉的次數到上限了";
 
 // ---- api codes → sentences (02 §9 送出被拒／採用被拒／失敗) ------------------------------------------------------------------------
 
-/** A rejected `POST /plan-drafts`. The api's 503 is "plan generation is off" (request() drops a 5xx body, the status is what is left). */
+/** The line for any 503 that is not the plan-generation switch (the lock was busy, the database was waking up, an unknown 503). */
+export const BUSY_TEXT = "現在比較忙，再按一次";
+const isOff = (e: ApiError) => e.status === 503 && e.code === "plan generation is off";
+
+/** A rejected `POST /plan-drafts`. Only the api's own `plan generation is off` is 「目前沒開放」; any other 503 is 「現在比較忙」. */
 export function submitErrorText(e: unknown): string {
   if (!(e instanceof ApiError)) return SEND_FAILED;
-  if (e.status === 503) return "這個功能目前沒開放";
+  if (e.status === 503) return isOff(e) ? "這個功能目前沒開放" : BUSY_TEXT;
   switch (e.message) {
     case "generating": return "Woo 正在排一份了，先看那份";
     case "daily limit": return "今天已經排了 3 次，明天再來";
@@ -145,7 +149,7 @@ export function fieldOfCode(code: string): keyof IntakeForm | null {
 /** A rejected adopt. `draft is …` is not a sentence: the page reads the draft again and draws that state. */
 export function adoptErrorText(e: unknown): string {
   if (e instanceof ApiError) {
-    if (e.status === 503) return "現在比較忙，再按一次";
+    if (e.status === 503) return BUSY_TEXT;
     if (e.message === "has active plan") return "你已經有一份進行中的課表，這份沒有採用";
   }
   return SEND_FAILED;
@@ -154,6 +158,7 @@ export const isDraftStateError = (e: unknown) => e instanceof ApiError && e.stat
 
 /** A rejected 繼續 (409 `calls exhausted` | `resume limit` | `draft is …`). */
 export function resumeErrorText(e: unknown): string {
+  if (e instanceof ApiError && e.status === 503) return BUSY_TEXT;
   return e instanceof ApiError && e.status === 409 ? DRAFT_TEXT.end.resumeDenied : SEND_FAILED;
 }
 

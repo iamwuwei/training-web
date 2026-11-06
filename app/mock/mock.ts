@@ -2143,7 +2143,7 @@ export async function mockPutShare(body: PutShareRequest): Promise<ShareResponse
 //   strava        false → GET /me has no Strava
 //   planFinished  true → the demo plan's race_date is yesterday and its sessions end there (今天: 課表已結束，辛苦了。)
 //   noRuns        true → GET /activities answers [] (the intake's second step: 最近 12 週沒有跑步紀錄)
-//   draftPost     "generating" (409 + latest is that pending draft) | "limit" 429 | "off" 503 | "active" 409 | "strava" 409 | "fail" 500
+//   draftPost     "generating" (409 + latest is that pending draft) | "limit" 429 | "off" 503 plan generation is off | "busy" 503 any other | "active" 409 | "strava" 409 | "fail" 500
 //                 | "invalid" (400 distance_m …: back to step 1)       without it: 202, and the new draft walks like `walk`
 //   adoptFail     "active" 409 | "busy" 503 | "state" (409 draft is expired, and the draft is expired from then on) | "fail" 500
 //   resumeFail    "exhausted" | "limit" | "state" (each 409)           without it: 202, the draft is pending-chunk
@@ -2155,7 +2155,7 @@ type DraftKind = "none" | "pending-profile" | "pending-skeleton" | "pending-chun
   | "ready-lastrace" | "failed" | "failed-early" | "failed-exhausted" | "failed-stalled" | "expired" | "discarded" | "adopted" | "notfound";
 interface DraftSwitches {
   draft?: DraftKind; latestFail?: 404 | 500; latestDelay?: number; actionDelay?: number; strava?: boolean; planFinished?: boolean; noRuns?: boolean;
-  draftPost?: "generating" | "limit" | "off" | "active" | "strava" | "fail" | "invalid"; adoptFail?: "active" | "busy" | "state" | "fail"; resumeFail?: "exhausted" | "limit" | "state";
+  draftPost?: "generating" | "limit" | "off" | "busy" | "active" | "strava" | "fail" | "invalid"; adoptFail?: "active" | "busy" | "state" | "fail"; resumeFail?: "exhausted" | "limit" | "state";
 }
 const dsw = (): DraftSwitches => (globalThis as unknown as { __mock?: DraftSwitches }).__mock ?? {};
 const SERVER_ERROR_TEXT = "伺服器錯誤，稍後再試";
@@ -2367,7 +2367,8 @@ export async function mockPostPlanDraft(body: PostPlanDraftRequest): Promise<Pla
     throw new ApiError(409, "generating");
   }
   if (sw === "limit") throw new ApiError(429, "daily limit");
-  if (sw === "off") throw new ApiError(503, SERVER_ERROR_TEXT);
+  if (sw === "off") throw new ApiError(503, SERVER_ERROR_TEXT, "plan generation is off");
+  if (sw === "busy") throw new ApiError(503, SERVER_ERROR_TEXT, "database starting, retry shortly");
   if (sw === "active") throw new ApiError(409, "has active plan");
   if (sw === "strava") throw new ApiError(409, "strava not connected");
   if (sw === "fail") throw new ApiError(500, SERVER_ERROR_TEXT);
@@ -2399,7 +2400,7 @@ export async function mockAdoptPlanDraft(id: string): Promise<AdoptPlanDraftResp
   if (c.kind === "adopted" && adoptedPlan) return { plan_id: MOCK_NEW_PLAN_ID };
   const sw = dsw().adoptFail;
   if (sw === "active") throw new ApiError(409, "has active plan");
-  if (sw === "busy") throw new ApiError(503, SERVER_ERROR_TEXT);
+  if (sw === "busy") throw new ApiError(503, SERVER_ERROR_TEXT, "busy");
   if (sw === "fail") throw new ApiError(500, SERVER_ERROR_TEXT);
   if (sw === "state") { c.kind = "expired"; throw new ApiError(409, "draft is expired"); }
   const d = draftOf(c);

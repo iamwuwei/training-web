@@ -59,12 +59,16 @@ const mock = () => import("../mock/mock");
 
 /** 401: API Gateway rejected the token. 403: token fine, but this account is not in the users table. */
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  /** `code`: the api's own fixed code, kept only for the 503s in `KNOWN_503` (the message stays the Chinese line, so no page prints an English code). */
+  constructor(public status: number, message: string, public code?: string) {
     super(message);
   }
 }
 
 const SERVER_ERROR = "伺服器錯誤，稍後再試";
+
+/** The three fixed codes the api sends with a 503: the plan-generation switch is off, an adopt that lost the lock, Aurora waking up. Any other 503 body is dropped like every 5xx body. */
+const KNOWN_503 = new Set(["plan generation is off", "busy", "database starting, retry shortly"]);
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = await getIdToken();
@@ -82,7 +86,13 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
   if (!res.ok) {
     // 5xx bodies can carry pg / SDK / model error text; the UI never shows those.
-    if (res.status >= 500) throw new ApiError(res.status, SERVER_ERROR);
+    if (res.status >= 500) {
+      let code: string | undefined;
+      if (res.status === 503) {
+        try { const e = ((await res.json()) as ErrorResponse).error; if (typeof e === "string" && KNOWN_503.has(e)) code = e; } catch { /* not JSON */ }
+      }
+      throw new ApiError(res.status, SERVER_ERROR, code);
+    }
     let message = res.statusText;
     try { message = ((await res.json()) as ErrorResponse).error ?? message; } catch { /* non-JSON error body */ }
     throw new ApiError(res.status, message);
