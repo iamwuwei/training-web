@@ -47,7 +47,7 @@ function Card({ k, value, unit, delta, tone, chart }: { k: string; value: string
       <div className="k">{k}</div>
       <div className="v"><b className="num">{value}</b>{unit ? <span className="unit">{unit}</span> : null}</div>
       <div className={`d ${tone}`}>{delta}</div>
-      {chart ?? <div className="ph" aria-hidden="true" />}
+      {chart}
     </div>
   );
 }

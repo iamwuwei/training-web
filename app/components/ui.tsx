@@ -56,7 +56,7 @@ export function Reminders({ items }: { items: string[] }) {
 }
 
 /**
- * `coachUnread`: Woo has posted since the thread was last opened; a dot on the 教練 tab until it is.
+ * `coachUnread`: Woo has posted since the thread was last opened; a dot on the 教練 tab until it is. (The coach page is a modal with no tab bar, so the tab is never the active one while the bar is drawn.)
  * `groupsUnread`: some group has 消息中心 events I have not seen (`groups_unread` of GET /plan); the same dot on the 群組 tab.
  */
 export function TabBar({ coachUnread = false, groupsUnread = false }: { coachUnread?: boolean; groupsUnread?: boolean }) {
@@ -74,12 +74,8 @@ export function TabBar({ coachUnread = false, groupsUnread = false }: { coachUnr
           )}
         </NavLink>
         <NavLink to="/coach">
-          {({ isActive }) => (
-            <>
-              <span className="icon"><ChatIcon />{coachUnread && !isActive ? <i className="unread" aria-hidden="true" /> : null}</span>
-              <span>{coachUnread && !isActive ? <span className="sr-only">有新訊息 · </span> : null}教練</span>
-            </>
-          )}
+          <span className="icon"><ChatIcon />{coachUnread ? <i className="unread" aria-hidden="true" /> : null}</span>
+          <span>{coachUnread ? <span className="sr-only">有新訊息 · </span> : null}教練</span>
         </NavLink>
       </nav>
     </div>

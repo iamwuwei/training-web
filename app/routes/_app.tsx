@@ -1,4 +1,4 @@
-import { Outlet, redirect, type ShouldRevalidateFunctionArgs } from "react-router";
+import { Outlet, redirect, useMatches, type ShouldRevalidateFunctionArgs } from "react-router";
 import type { Route } from "./+types/_app";
 import { TabBar } from "../components/ui";
 import { ApiError, getGroups, getPlan } from "../lib/api";
@@ -55,6 +55,8 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
 }
 
 export default function AppLayout({ loaderData }: Route.ComponentProps) {
+  // A page that says so (教練: `handle = { modal: true }`) is a modal: no tab bar, and the shell gets the class (coach-sheet-polish)
+  const modal = useMatches().some((m) => (m.handle as { modal?: boolean } | undefined)?.modal === true);
   if (loaderData.error) {
     const notRegistered = loaderData.error === "not_registered";
     return (
@@ -76,9 +78,9 @@ export default function AppLayout({ loaderData }: Route.ComponentProps) {
     );
   }
   return (
-    <div className="shell">
+    <div className={modal ? "shell modal" : "shell"}>
       <Outlet />
-      <TabBar coachUnread={(loaderData.data?.coach_unread ?? 0) > 0} groupsUnread={loaderData.groupsUnread > 0} />
+      {modal ? null : <TabBar coachUnread={(loaderData.data?.coach_unread ?? 0) > 0} groupsUnread={loaderData.groupsUnread > 0} />}
     </div>
   );
 }
