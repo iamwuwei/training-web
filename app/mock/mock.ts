@@ -89,7 +89,7 @@ function seedDetails(a: ApiActivity, own: Partial<Detail3> = {}) {
 }
 
 /** Mock-only switches for QA (set on window before the page needs them). */
-interface MockKnobs { __mockStage?: string | null; __mockNoReply?: boolean; __mockFailDetails?: boolean; __mockDetailsDelay?: number; __mockCoachPageSize?: number; __mockCoachDelay?: number; __mockOlderFail?: boolean; __mockNoCounts?: boolean }
+interface MockKnobs { __mockStage?: string | null; __mockNoReply?: boolean; __mockFailDetails?: boolean; __mockDetailsDelay?: number; __mockCoachPageSize?: number; __mockCoachDelay?: number; __mockOlderFail?: boolean; __mockNoCounts?: boolean; __mockWeeklyStale?: boolean; __mockWeekly400?: boolean; __mockWeeklyMissing?: boolean; __mockNoWeekly?: boolean; __mockWeeklyWide?: boolean }
 const knobs = () => globalThis as unknown as MockKnobs;
 
 /**
@@ -782,6 +782,8 @@ export function mockRereview(activityId: string): RereviewResponse {
 let weekly: ApiWeeklyReview[] | undefined;
 const WEEK2_ID = "w-2026-10-12";
 const WEEK3_ID = "w-2026-10-19";
+const WEEK4_ID = "w-2026-10-26";
+const WEEK1_ID = "w-2026-10-05";
 const WEEK3_TEXT_ASK = "本週 4 堂跑步完成 3 堂：10/20 Easy 6.03 km（7:11、心拍 143）、10/21 坡跑、10/23 Easy 6.14 km（7:08、心拍 142），兩次 Easy 都比 7:15 快 4〜7 秒，心拍在範圍內。10/25 的長跑確定之後我再談 11/1 的 18 km。";
 const WEEK3_TEXT_SKIPPED = "本週 4 堂跑步完成 3 堂：10/20 Easy 6.03 km（7:11、心拍 143）、10/21 坡跑、10/23 Easy 6.14 km（7:08、心拍 142）。10/25 的長跑你說沒跑，這週長跑量是 0，所以 11/1 的 18 km 不直接上：先回到 16 km，最後 4 km @ 6:45 看當天小腿狀況。兩次 Easy 都比 7:15 快 4〜7 秒，下週 Easy 以 7:15 為下限。";
 // coach-format (md.ts) samples. The explanation is the real question from Wei: a conclusion, three reasons as a list, two bold spans, a next step.
@@ -799,7 +801,18 @@ function weeklyData(): ApiWeeklyReview[] {
   const d = data();
   const long = d.sessions.find((s) => s.scheduled_date === "2026-10-18");
   const rec = d.sessions.find((s) => s.scheduled_date === "2026-10-16");
+  // newest first, like the api's `week_start desc`
   weekly = [{
+    id: WEEK4_ID,
+    week_start: "2026-10-26",
+    // weekly-review-entry: week 4, markdown (a 3-item list, one bold); its card is p-w4 (pending), on the message c-weekly-4
+    summary: "第 4 週 4 堂全部完成，進度剛好。\n\n- 10/27 Easy 5.02 km（7:20、心拍 146）\n- 10/28 坡跑 5 趟，每趟都在 6:00 內\n- 11/1 長跑 18.1 km（7:28、心拍 151）\n\n長跑後段心拍到 **158**，前半可以再慢一點；下週 11/12 的 Recovery 先少 1 km。",
+    model: null,
+    adjustments: [],
+    created_at: new Date("2026-11-02T04:00:00+09:00").toISOString(),
+    updated_at: null,
+    update_reason: null,
+  }, {
     id: WEEK2_ID,
     week_start: "2026-10-12",
     // markdown (coach-format 3.6, T16 shape: conclusion, a 3-item list, a closing paragraph with one bold); week 3 below stays plain text on purpose
@@ -823,10 +836,23 @@ function weeklyData(): ApiWeeklyReview[] {
     updated_at: null,
     update_reason: null,
   }];
-  return weekly!;
+  weekly.push({
+    id: WEEK1_ID,
+    week_start: "2026-10-05",
+    // weekly-review-entry: the first review (the plan's week 1 starts 10/8, inside its 7 days); its card p-w1 was applied
+    summary: "第 1 週 3 堂都跑完了，Easy 的心拍都在範圍內。10/11 的長跑 12 km 比預定輕鬆，下週照原計畫。",
+    model: null,
+    adjustments: [],
+    created_at: new Date("2026-10-12T04:00:00+09:00").toISOString(),
+    updated_at: null,
+    update_reason: null,
+  });
+  weekly.sort((a, b) => b.week_start.localeCompare(a.week_start));
+  return weekly;
 }
 export function mockWeekly(): WeeklyResponse {
   weeklyCalls.push(Date.now());
+  if (knobs().__mockNoWeekly) return { reviews: [] }; // weekly-review-entry: no review at all (no entry on 課表 or 今天)
   return { reviews: weeklyData().map((w) => ({ ...w, adjustments: w.adjustments.map((a) => ({ ...a })) })) };
 }
 export function mockPostAdjustment(weeklyId: string, index: number, body: PostAdjustmentRequest): PostAdjustmentResponse {
@@ -944,6 +970,26 @@ const proposals: ApiProposal[] = [
       change: "11/8 退到 20 km，11/6 和 11/10 各少 1 km，第 5 週 40 → 38 km，關卡 1 還是測得到。",
       risk: "11/6 腿還痠就把 Easy 改走路；11/8 最後 5 km 心拍過 168 就停，關卡 1 往後一週補測。",
     } }),
+  // weekly-review-entry: the cards of two weekly reviews (source weekly, on the review's own message). Week 4's is pending (11/12 Recovery 5 → 4 km, narrow card);
+  // week 1's was applied a week later (a note on 10/14 MP that the plan already carries, so no plan row changes)
+  card({ id: "p-w4", message_id: "c-weekly-4", source: "weekly",
+    // `window.__mockWeeklyWide = true`: the card also changes 11/19 (week 7), so it is the full-width kind (採用整張, 不用, 在課表上看 ›)
+    changes: [chg({ op: "change", session_id: "s-2026-11-12", field: "target_distance_m", old: 5000, new: 4000, label: "Recovery 5 km", date: "2026-11-12" }),
+      ...(knobs().__mockWeeklyWide ? [chg({ op: "change", session_id: "s-2026-11-19", field: "target_distance_m", old: 5000, new: 4000, label: "Recovery 5 km", date: "2026-11-19" })] : [])],
+    why: "長跑後段心拍到 158，下週的 Recovery 先收一點。",
+    basis: ["11/1 長跑後段心拍 158", "第 4 週 18.1 km"],
+    basis_text: "目標 4:45。11/1 的長跑 18.1 km，後 6 km 心拍從 148 爬到 158；那堂之後第 5 週有 38 km。原則：長跑後的第一週，恢復跑先減量，不動關卡課。",
+    impact: {
+      keep: "11/12 照 5 km 跑，長跑後腿還沒鬆就接 MP 隔天的恢復，容易累積。",
+      change: "11/12 改 4 km，其他不動；第 6 週少 1 km。",
+      risk: "沒有。11/12 腿狀況好就照原計畫跑，跟我說一聲。",
+    } }),
+  card({ id: "p-w1", message_id: "c-weekly-1", source: "weekly", status: "applied", decided_at: at("2026-10-12T09:30:00+09:00"),
+    changes: [chg({ op: "change", session_id: "s-2026-10-14", field: "note", old: null, new: "MP 段心拍不要超過 165", label: "MP 7 km", date: "2026-10-14", applied_session_id: "s-2026-10-14" })],
+    why: "第 1 週 Easy 的心拍都守住了，MP 課把心拍上限寫進備註。",
+    basis: ["第 1 週 Easy 心拍 140〜150", "10/11 長跑 12 km"],
+    basis_text: "目標 4:45。第 1 週三堂跑步心拍都在範圍內，10/11 長跑 12 km 比預定輕鬆。原則：進入 MP 課之前，先把心拍上限寫在備註。",
+    impact: { keep: "備註沒有心拍上限，MP 段容易跑過頭。", change: "10/14 MP 的備註寫上心拍不超過 165。", risk: "沒有。" } }),
   // 409: the plan changed under it
   card({ id: "p-stale", message_id: "c-rp-c2", status: "stale", stale_reason: "11/29 長跑 20 km 在 10/27 被週回顧改過（現在是 18 km）",
     changes: [
@@ -1179,12 +1225,19 @@ function walkStages(m: ApiCoachMessage, steps: [string, number][], doneAt: numbe
 }
 function threadData(): ApiCoachMessage[] {
   if (thread) return thread;
-  const w = weeklyData()[0];
-  const w3 = weeklyData()[1];
+  const w = weeklyData().find((x) => x.id === WEEK2_ID)!;
+  const w3 = weeklyData().find((x) => x.id === WEEK3_ID)!;
+  const w4 = weeklyData().find((x) => x.id === WEEK4_ID)!;
+  const w1 = weeklyData().find((x) => x.id === WEEK1_ID)!;
   const today = todayJst();
   const yAt = (hm: string) => new Date(`${addDays(today, -1)}T${hm}:00+09:00`).toISOString();
-  for (const p of proposals) p.created_at = p.id === "p-applied" ? yAt("21:01") : p.id === "p-stale" ? yAt("22:11") : p.id === "p-mk-stale" ? yAt("22:31") : todayAt("06:21");
+  for (const p of proposals) p.created_at = p.id === "p-w4" ? weeklyData()[0].created_at : p.id === "p-w1" ? weeklyData()[3].created_at : p.id === "p-applied" ? yAt("21:01") : p.id === "p-stale" ? yAt("22:11") : p.id === "p-mk-stale" ? yAt("22:31") : todayAt("06:21");
   thread = [
+    // weekly-review-entry: the messages of weeks 1 and 4 (their cards p-w1, p-w4 ride on them)
+    { ...BLANK, id: "c-weekly-1", role: "coach", kind: "weekly", text: w1.summary ?? "", weekly_review_id: w1.id, proposal: proposals.find((x) => x.id === "p-w1") ?? null, created_at: w1.created_at,
+      weekly: { week_start: w1.week_start, asks: [], updated: null, cancelled: [], makeups: [] } },
+    { ...BLANK, id: "c-weekly-4", role: "coach", kind: "weekly", text: w4.summary ?? "", weekly_review_id: w4.id, proposal: proposals.find((x) => x.id === "p-w4") ?? null, created_at: w4.created_at,
+      weekly: { week_start: w4.week_start, asks: [], updated: null, cancelled: [], makeups: [] } },
     { id: "c1", role: "coach", kind: "weekly", text: w.summary ?? "", activity_id: null, weekly_review_id: w.id, status: "sent", review: null, quote: null, error: null, created_at: at("2026-10-12T12:00:00Z"),
       // 10/16 Recovery was moved to 10/30 before this review was written: it counts in this week and the review says so
       weekly: { week_start: w.week_start, asks: [], updated: null, cancelled: [], makeups: [{ from: "2026-10-16", to: "2026-10-30", label: "Recovery 4 km", done: false }] } },
@@ -1354,12 +1407,14 @@ export function mockPostProposal(proposalId: string, action: "apply" | "dismiss"
   if (p.status !== "pending" && !(action === "dismiss" && p.status === "stale")) throw new ApiError(409, "already decided");
   const superseded: string[] = [];
   if (action === "apply") {
-    const why = planConflict(p);
+    // weekly-review-entry: `window.__mockWeeklyStale = true` turns a weekly card stale at the press (what another tab deciding first, or a changed plan, does)
+    const why = p.source === "weekly" && knobs().__mockWeeklyStale ? "11/12 Recovery 5 km 在這張卡之後被改過" : planConflict(p);
     if (why) {
       p.status = "stale";
       p.stale_reason = why;
       throw new ApiError(409, "plan_changed");
     }
+    if (p.source === "weekly" && knobs().__mockWeekly400) throw new ApiError(400, "two sessions on 2026-11-12"); // weekly-review-entry: the card stays pending; the card shows its fixed sentence
     const day = doubleBooked(p);
     if (day) throw new ApiError(400, `two sessions on ${day}`); // the card stays pending; the card shows its fixed sentence
     const parts = applyToPlan(p);
@@ -1616,7 +1671,7 @@ function coachPage({ limit = 10, before }: { limit?: number; before?: string }):
   const lim = k.__mockCoachPageSize ?? limit;
   coachCalls.push({ limit: lim, before: before ?? null, at: Date.now() });
   if (before && k.__mockOlderFail) throw new ApiError(500, "伺服器錯誤，稍後再試");
-  const all = [...threadData()].sort(byTime);
+  const all = [...threadData()].filter((m) => !(k.__mockWeeklyMissing && m.id === "c-weekly-1")).sort(byTime); // __mockWeeklyMissing: week 1's message is not in the thread
   let end = all.length;
   if (before) {
     const i = all.findIndex((m) => m.id === before);
