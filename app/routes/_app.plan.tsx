@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate, useRevalidator, useSearchParams } from 
 import { BackIcon } from "../components/icons";
 import { DayRow, WeekBars } from "../components/plan-week";
 import { SessionSheet } from "../components/session-sheet";
+import { WeeklyReviewSheet } from "../components/weekly-review-sheet";
 import { Avatar, Bar, CoachAvatar, TopBar } from "../components/ui";
 import { ApiError, postProposal } from "../lib/api";
 import { md, timeJst } from "../lib/date";
@@ -13,6 +14,8 @@ import { activityDate, buildPlanView, isRunSport, weekSubline, type Week } from 
 import { buildPreview, type Preview } from "../lib/preview";
 import { NoPlanEntry, usePlan } from "../lib/use-plan";
 import { useProposal, useReviewedWeeks } from "../lib/use-proposal";
+import { reviewForWeek, useWeeklyReviews } from "../lib/use-weekly";
+import { resetWeeklyCaches } from "../lib/use-weekly-message";
 import type { ApiActivity, ApiSession, ApiWeek, PlanResponse } from "../types/api";
 import { pageTitle } from "../lib/meta";
 
@@ -61,6 +64,10 @@ export default function Plan() {
   const revalidator = useRevalidator();
   const [picked, setPicked] = useState<number | null>(null);
   const [open, setOpen] = useState<ApiSession | null>(null);
+  // the weekly-review sheet (週回顧): the entry is in the header of a week that has one
+  const { reviews } = useWeeklyReviews();
+  const [reviewId, setReviewId] = useState<string | null>(null);
+  if (proposalId && reviewId) setReviewId(null); // 在課表上看 on a card in the sheet: the sheet is done, the preview takes over
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [noticeGone, setNoticeGone] = useState<string | null>(null);
@@ -93,6 +100,7 @@ export default function Plan() {
   const selected = picked ?? firstChanged ?? current;
   const idx = weeks.findIndex((w) => w.week_no === selected);
   const week = weeks[idx];
+  const entry = week && !preview && !week.isFuture ? reviewForWeek(week, reviews) : null;
   const go = (i: number) => (i >= 0 && i < weeks.length ? () => setPicked(weeks[i].week_no) : undefined);
   const changedList = preview ? [...preview.changedWeeks].sort((a, b) => a - b) : [];
   const weekAfter = (n: number) => `第 ${n} 週 ${kmPlan(weeks.find((w) => w.week_no === n)?.plan_m ?? 0)} km`;
@@ -104,6 +112,7 @@ export default function Plan() {
     setError(null);
     try {
       await postProposal(proposal.id, action);
+      resetWeeklyCaches(); // a weekly card decided here: what the weekly-review sheet kept about it is out of date
       if (action === "apply") {
         if (preview) setApplied({ id: proposal.id, data: preview.data });
         setPicked(null);
@@ -152,6 +161,7 @@ export default function Plan() {
                 {preview && preview.focusWas.has(week.week_no) ? (
                   <div className="sub">{md(week.week_start)}–{md(week.week_end)} · <span className="was"><s>{preview.focusWas.get(week.week_no)}</s></span><br /><span className="now">{week.focus}</span></div>
                 ) : <div className="sub">{md(week.week_start)}–{md(week.week_end)} · {weekSubline(week, view)}</div>}
+                {entry ? <button type="button" className="review-entry" onClick={() => setReviewId(entry.id)}><CoachAvatar size={20} />週回顧 ›</button> : null}
               </div>
               <button type="button" className="step" onClick={go(idx + 1)} disabled={!go(idx + 1)} aria-label="下一週">›</button>
             </div>
@@ -171,6 +181,7 @@ export default function Plan() {
         ) : null}
       </main>
       <SessionSheet session={open} view={view} onClose={() => setOpen(null)} onOpen={setOpen} />
+      <WeeklyReviewSheet review={reviews.find((r) => r.id === reviewId) ?? null} view={view} onClose={() => setReviewId(null)} />
     </>
   );
 }
