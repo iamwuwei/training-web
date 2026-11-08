@@ -89,7 +89,7 @@ function seedDetails(a: ApiActivity, own: Partial<Detail3> = {}) {
 }
 
 /** Mock-only switches for QA (set on window before the page needs them). */
-interface MockKnobs { __mockStage?: string | null; __mockNoReply?: boolean; __mockFailDetails?: boolean; __mockDetailsDelay?: number; __mockCoachPageSize?: number; __mockCoachDelay?: number; __mockOlderFail?: boolean; __mockNoCounts?: boolean; __mockWeeklyStale?: boolean; __mockWeekly400?: boolean; __mockWeeklyMissing?: boolean; __mockNoWeekly?: boolean; __mockWeeklyWide?: boolean }
+interface MockKnobs { __mockStage?: string | null; __mockNoReply?: boolean; __mockFailDetails?: boolean; __mockDetailsDelay?: number; __mockCoachPageSize?: number; __mockCoachDelay?: number; __mockOlderFail?: boolean; __mockNoCounts?: boolean; __mockWeeklyStale?: boolean; __mockWeekly400?: boolean; __mockWeeklyMissing?: boolean; __mockNoWeekly?: boolean; __mockWeeklyWide?: boolean; __mockWeeklyDelay?: number }
 const knobs = () => globalThis as unknown as MockKnobs;
 
 /**
@@ -436,7 +436,11 @@ const withoutMakeupFields = (sessions: ApiSession[]): ApiSession[] =>
     return o as ApiSession;
   });
 
+/** Every GET /plan the app made (timestamps), for QA (`window.__planCalls`): with `__weeklyCalls`, shows /weekly is asked next to /plan. */
+const planCalls: number[] = [];
+if (typeof window !== "undefined") (window as unknown as { __planCalls: number[] }).__planCalls = planCalls;
 export function mockPlan(): PlanResponse {
+  planCalls.push(Date.now());
   if (adoptedPlan) return { ...adoptedPlan, groups_unread: groupsUnreadTotal() }; // ai-plan-generation: a draft was adopted, that is my plan now
   if (has("nomyplan")) throw new ApiError(404, "no active plan"); // the api answers 404 to someone without an active plan
   refreshSegments();
@@ -850,8 +854,13 @@ function weeklyData(): ApiWeeklyReview[] {
   weekly.sort((a, b) => b.week_start.localeCompare(a.week_start));
   return weekly;
 }
-export function mockWeekly(): WeeklyResponse {
+export function mockWeekly(): WeeklyResponse | Promise<WeeklyResponse> {
   weeklyCalls.push(Date.now());
+  const delay = knobs().__mockWeeklyDelay; // weekly-review-entry: `window.__mockWeeklyDelay = ms` slows GET /weekly (the entries come in late)
+  if (delay) return new Promise((resolve) => setTimeout(() => resolve(weeklyAnswer()), delay));
+  return weeklyAnswer();
+}
+function weeklyAnswer(): WeeklyResponse {
   if (knobs().__mockNoWeekly) return { reviews: [] }; // weekly-review-entry: no review at all (no entry on 課表 or 今天)
   return { reviews: weeklyData().map((w) => ({ ...w, adjustments: w.adjustments.map((a) => ({ ...a })) })) };
 }
@@ -1231,7 +1240,7 @@ function threadData(): ApiCoachMessage[] {
   const w1 = weeklyData().find((x) => x.id === WEEK1_ID)!;
   const today = todayJst();
   const yAt = (hm: string) => new Date(`${addDays(today, -1)}T${hm}:00+09:00`).toISOString();
-  for (const p of proposals) p.created_at = p.id === "p-w4" ? weeklyData()[0].created_at : p.id === "p-w1" ? weeklyData()[3].created_at : p.id === "p-applied" ? yAt("21:01") : p.id === "p-stale" ? yAt("22:11") : p.id === "p-mk-stale" ? yAt("22:31") : todayAt("06:21");
+  for (const p of proposals) p.created_at = p.id === "p-w4" ? w4.created_at : p.id === "p-w1" ? w1.created_at : p.id === "p-applied" ? yAt("21:01") : p.id === "p-stale" ? yAt("22:11") : p.id === "p-mk-stale" ? yAt("22:31") : todayAt("06:21");
   thread = [
     // weekly-review-entry: the messages of weeks 1 and 4 (their cards p-w1, p-w4 ride on them)
     { ...BLANK, id: "c-weekly-1", role: "coach", kind: "weekly", text: w1.summary ?? "", weekly_review_id: w1.id, proposal: proposals.find((x) => x.id === "p-w1") ?? null, created_at: w1.created_at,

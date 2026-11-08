@@ -46,17 +46,29 @@ export async function refreshWeekly(): Promise<void> {
   }
 }
 
+let reading: Promise<void> | null = null;
+
 /**
- * The reviews of the active plan, newest first. `ready` is false until the first answer (or the kept one) is there; a failed read
- * leaves the last answer or an empty list (no entry, no error: the entries are only a shortcut).
+ * Start reading /weekly unless the kept answer is fresh (or a read is already on its way) and return that read. The `_app` loader
+ * calls this next to /plan, so the 週回顧 entries get their answer at about the same time as the page's data and are not a
+ * late arrival that pushes the page down; it is not waited for, a slow /weekly still comes in late. The pages call it too (a no-op then).
  */
-export function useWeeklyReviews(): { reviews: ApiWeeklyReview[]; ready: boolean } {
-  const [state, setState] = useState<{ reviews: ApiWeeklyReview[]; ready: boolean }>(() => (kept ? { reviews: kept.reviews, ready: true } : { reviews: [], ready: false }));
+export function ensureWeekly(): Promise<void> {
+  if (kept && !kept.dirty && Date.now() - kept.at < TTL_MS) return Promise.resolve();
+  if (!reading) reading = refreshWeekly().finally(() => { reading = null; });
+  return reading;
+}
+
+/**
+ * The reviews of the active plan, newest first. A failed read leaves the last answer or an empty list
+ * (no entry, no error: the entries are only a shortcut).
+ */
+export function useWeeklyReviews(): { reviews: ApiWeeklyReview[] } {
+  const [reviews, setReviews] = useState<ApiWeeklyReview[]>(() => kept?.reviews ?? []);
   useEffect(() => {
-    const l = (reviews: ApiWeeklyReview[]) => setState({ reviews, ready: true });
-    listeners.add(l);
-    if (!kept || kept.dirty || Date.now() - kept.at >= TTL_MS) void refreshWeekly();
-    return () => { listeners.delete(l); };
+    listeners.add(setReviews);
+    void ensureWeekly();
+    return () => { listeners.delete(setReviews); };
   }, []);
-  return state;
+  return { reviews };
 }

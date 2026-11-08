@@ -38,7 +38,7 @@ export function resetWeeklyCaches() {
 }
 
 /** The weekly message for a review if it was read in the last minute, else undefined. */
-export function peekWeeklyMessage(review: Pick<ApiWeeklyReview, "id">): ApiCoachMessage | undefined {
+function peekWeeklyMessage(review: Pick<ApiWeeklyReview, "id">): ApiCoachMessage | undefined {
   return store && Date.now() - store.at <= TTL_MS ? store.weekly.get(review.id) : undefined;
 }
 
