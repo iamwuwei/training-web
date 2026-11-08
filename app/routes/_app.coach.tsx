@@ -96,11 +96,11 @@ const nowMs = () => Date.now();
 interface PlanRejudge { date: string; label: string; sessionId: string }
 
 /**
- * The card whose confirmation line this message is, or null: the api's confirmation (postProposalApplied) is a Woo chat line that starts 「改好了」,
- * written within 5 s of the card's decided_at (the fixed lines that can land in the same 5 s, 「次數用完」 and 「這次分析沒成功」, do not start so).
+ * The card whose confirmation line this message is, or null. The api's confirmation (postProposalApplied) is a Woo chat line with no activity,
+ * written within 5 s of the card's decided_at; the fixed lines that can land in the same 5 s (「次數用完」, 「這次分析沒成功」) carry an activity_id.
  */
 function confirmedCard(m: ApiCoachMessage, applied: ApiProposal[]): ApiProposal | null {
-  if (m.role !== "coach" || m.kind !== "chat" || m.proposal || m.constraint || !m.text.startsWith("改好了")) return null;
+  if (m.role !== "coach" || m.kind !== "chat" || m.proposal || m.constraint || m.activity_id != null) return null;
   const at = Date.parse(m.created_at);
   return applied.find((p) => Math.abs(Date.parse(p.decided_at ?? "") - at) < 5000) ?? null;
 }
