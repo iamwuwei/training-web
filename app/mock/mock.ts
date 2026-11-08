@@ -134,9 +134,11 @@ const reviewLimited = () => ccr().reviewLimit === true;
  *   "limit"     the day's re-judge quota is used up: the plan changes, the confirmation says it was not queued, no wait line
  *   "notqueued" the re-judge could not be queued (not the quota): the api's failed row and its line 「這次分析沒成功…」, then the same confirmation
  *   "slow"      the new verdict never arrives (the 3-minute sentence; use a fake clock)
+ *   "interval"  like card, but 11/4 is labelled 間歇 (a label the web has no name for: its session name differs from the api's; the wait line must still end)
+ *   "failafter" like card, but the re-judge fails after the confirmation: ~4 s later the api's failed row and its line 「這次分析沒成功…」 (no verdict)
  */
-type CorrectPlanMode = "card" | "note" | "mixed" | "three" | "stale" | "rejected" | "limit" | "notqueued" | "slow";
-const CCP_MODES: readonly string[] = ["card", "note", "mixed", "three", "stale", "rejected", "limit", "notqueued", "slow"];
+type CorrectPlanMode = "card" | "note" | "mixed" | "three" | "stale" | "rejected" | "limit" | "notqueued" | "slow" | "interval" | "failafter";
+const CCP_MODES: readonly string[] = ["card", "note", "mixed", "three", "stale", "rejected", "limit", "notqueued", "slow", "interval", "failafter"];
 const ccp = (): CorrectPlanMode | null => {
   const v = (globalThis as unknown as { __mock?: { correctPlan?: unknown } }).__mock?.correctPlan;
   return v === true ? "card" : typeof v === "string" && CCP_MODES.includes(v) ? (v as CorrectPlanMode) : null;
@@ -211,6 +213,7 @@ function build(): PlanResponse {
   drop("s-2026-11-03");
   makeUpSession(sessions, weeks, byId("s-2026-10-18"), "2026-11-03", new Set([2]));
   sessions.sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date));
+  if (ccp() === "interval") byId("s-2026-11-04").label = "間歇"; // coach-correct-plan: an AI-made plan's label
 
   const byDate = new Map(sessions.map((s) => [s.scheduled_date, s]));
   const activities: ApiActivity[] = (seed.results ?? []).map((r) => {
@@ -657,6 +660,9 @@ function postMismatchAsk(a: ApiActivity, s: ApiSession, reason: string, from: "c
   t.push({ ...BLANK, id: `c${t.length + 1}`, role: "coach", kind: "ask", text: `${reason}。真的要算成 ${md(s.scheduled_date)} 的 ${shortName(s).split(" ")[0]} 嗎？`, activity_id: a.id, ask: { state: "open", kind: "mismatch", from, activity_id: a.id, session_id: s.id, reason }, created_at: new Date().toISOString() });
 }
 
+/** The api's `sessionLabel` (label ?? type, then the distance): the title the worker writes on a verdict message. The demo uses it in the correct-plan scenarios, where the label can be one the web has no name for. */
+const sessionTitle = (s: Pick<ApiSession, "label" | "type" | "target_distance_m">) => `${s.label ?? s.type}${s.target_distance_m ? ` ${Math.round(s.target_distance_m / 100) / 10} km` : ""}`;
+
 /** The demo verdict (the worker's review of the activity + Woo's line in the thread). */
 function judge(a: ApiActivity, s: ApiSession | null, segments = 1) {
   if (reviewLimited()) { limitReview(a); return; }
@@ -665,7 +671,7 @@ function judge(a: ApiActivity, s: ApiSession | null, segments = 1) {
   a.review = { verdict: "達成", comment, reminders: [reminder], source: "claude", model: null, adjust_hint: null, failed: false, error: null, created_at: new Date().toISOString(), corrected_at: null };
   const t = threadData();
   supersedeEarlier(a);
-  t.push({ ...BLANK, id: `c${t.length + 1}`, role: "coach", kind: "review", text: comment, activity_id: a.id, review: { label: s ? shortName(s) : "未排課", verdict: "達成", reminder, date: s?.scheduled_date ?? todayJst(), updated: null, superseded: false }, created_at: new Date().toISOString() });
+  t.push({ ...BLANK, id: `c${t.length + 1}`, role: "coach", kind: "review", text: comment, activity_id: a.id, review: { label: s ? (ccp() ? sessionTitle(s) : shortName(s)) : "未排課", verdict: "達成", reminder, date: s?.scheduled_date ?? todayJst(), updated: null, superseded: false }, created_at: new Date().toISOString() });
 }
 
 /** Every redo marks the session's earlier verdict messages in the thread as replaced (the api's supersedeReviewMessages): they stay, dimmed. Call before pushing the new one. */
@@ -1247,42 +1253,43 @@ function threadData(): ApiCoachMessage[] {
 /** coach-correct-plan: 11/4's verdict, Wei's two questions and Woo's answers (the texts are the design's, 02 §3.3), then the card (or what the mode asks for). */
 const CCP_REASON = "6×90 秒上坡實跑 6.1 km，8 km 是估計值";
 function correctPlanThread(mode: CorrectPlanMode): ApiCoachMessage[] {
+  const N = mode === "interval" ? "間歇" : "坡跑"; // `interval`: the session's label is one the web has no name for (an AI-made plan: 間歇, 節奏)
   const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString();
   const corr = (sessionId: string, date: string, label: string, field: "target_distance_m" | "note", old: string | number | null, now: string | number, reason: string) =>
     chg({ op: "change", session_id: sessionId, field, old, new: now, label, date, reason, correction: true });
   const hill = (field: "target_distance_m" | "note" = "target_distance_m") =>
-    field === "note" ? corr("s-2026-11-04", "2026-11-04", "坡跑 8 km", "note", null, "上坡用 6:00 以內的強度，6 趟約 6 km", CCP_REASON) : corr("s-2026-11-04", "2026-11-04", "坡跑 8 km", "target_distance_m", 8000, 6000, CCP_REASON);
+    field === "note" ? corr("s-2026-11-04", "2026-11-04", `${N} 8 km`, "note", null, "上坡用 6:00 以內的強度，6 趟約 6 km", CCP_REASON) : corr("s-2026-11-04", "2026-11-04", `${N} 8 km`, "target_distance_m", 8000, 6000, CCP_REASON);
   const mk = (id: string, changes: ApiProposalChange[], over: Partial<ApiProposal> & Pick<ApiProposal, "impact" | "basis" | "basis_text">): ApiProposal => {
     const p = card({ id, message_id: `${id}-m`, changes, created_at: ago(8), ...over });
     proposals.push(p);
     return p;
   };
   const hillImpact = {
-    keep: "報告頁和判定標題繼續寫「坡跑 8 km」，跟你跑的 6.1 km 對不上；第 5 週的計畫多算 2 km。",
+    keep: `報告頁和判定標題繼續寫「${N} 8 km」，跟你跑的 6.1 km 對不上；第 5 週的計畫多算 2 km。`,
     change: "11/4 改成 6 km（估計值），那堂的判定重看一次；第 5 週計畫少 2 km。",
     risk: "沒有：實跑紀錄、配速、心得都不動，只有判定照新的數字重寫。",
   };
-  const hillBasis = { basis: ["11/4 實跑 6.1 km", "課表 8 km（估計）", "6×90 秒上坡"], basis_text: "11/4 坡跑：2 km Easy + 6×90 秒上坡 + 2 km Easy，目標距離 8 km 是匯入課表時估的。你這趟 6.1 km，上坡 6 趟都在 6:00 以內。" };
-  const A1 = "8 km 不是我算的，是課表上那堂的目標距離。11/4 在課表上是這樣寫的：\n\n- 11/4 週三 坡跑：2 km Easy + 6×90 秒上坡 + 2 km Easy，目標距離 8 km（估計）\n\n坡跑用趟數和秒數寫，距離是匯入課表時估的，判定不拿它扣分。你這趟 6.1 km、6 趟上坡都在 6:00 以內，判定是達成；報告頁和判定標題寫的「坡跑 8 km」就是這個估計值。\n\n要改成接近實際的 6 km，我可以開一張更正卡：只改課表上的距離，你的紀錄不動。";
-  const A2 = "可以。11/4 的目標距離改成 6 km，內容和其他欄位不動。你按採用後，那堂的判定我照 6 km 重看一次，報告頁和這裡的標題會變成「坡跑 6 km」。";
+  const hillBasis = { basis: ["11/4 實跑 6.1 km", "課表 8 km（估計）", "6×90 秒上坡"], basis_text: `11/4 ${N}：2 km Easy + 6×90 秒上坡 + 2 km Easy，目標距離 8 km 是匯入課表時估的。你這趟 6.1 km，上坡 6 趟都在 6:00 以內。` };
+  const A1 = `8 km 不是我算的，是課表上那堂的目標距離。11/4 在課表上是這樣寫的：\n\n- 11/4 週三 ${N}：2 km Easy + 6×90 秒上坡 + 2 km Easy，目標距離 8 km（估計）\n\n${N}用趟數和秒數寫，距離是匯入課表時估的，判定不拿它扣分。你這趟 6.1 km、6 趟上坡都在 6:00 以內，判定是達成；報告頁和判定標題寫的「${N} 8 km」就是這個估計值。\n\n要改成接近實際的 6 km，我可以開一張更正卡：只改課表上的距離，你的紀錄不動。`;
+  const A2 = `可以。11/4 的目標距離改成 6 km，內容和其他欄位不動。你按採用後，那堂的判定我照 6 km 重看一次，報告頁和這裡的標題會變成「${N} 6 km」。`;
   const m = (id: string, role: "athlete" | "coach", text: string, min: number, extra: Partial<ApiCoachMessage> = {}): ApiCoachMessage => ({ ...BLANK, id, role, kind: "chat", text, created_at: ago(min), ...extra });
   const out: ApiCoachMessage[] = [
     { ...BLANK, id: "c-ccp-v", role: "coach", kind: "review", text: "6 趟上坡都在 6:00 以內，平均 5:41；前後兩段 Easy 7:20 上下，心拍 142。", activity_id: "a-2026-11-04",
-      review: { label: "坡跑 8 km", verdict: "達成", reminder: "下次坡跑第 6 趟一樣守 6:00", date: "2026-11-04", updated: null, superseded: false }, created_at: at("2026-11-04T19:40:00+09:00") },
-    m("c-ccp-q1", "athlete", "週三坡跑你是怎麼估算 8 公里的？我照著跑也只有 6 公里", 12),
+      review: { label: `${N} 8 km`, verdict: "達成", reminder: `下次${N}第 6 趟一樣守 6:00`, date: "2026-11-04", updated: null, superseded: false }, created_at: at("2026-11-04T19:40:00+09:00") },
+    m("c-ccp-q1", "athlete", `週三${N}你是怎麼估算 8 公里的？我照著跑也只有 6 公里`, 12),
     m("c-ccp-a1", "coach", A1, 11),
   ];
   if (mode === "rejected") {
     out.push(m("c-ccp-q3", "athlete", "可以把 11/4 改成休息嗎", 9),
       m("c-ccp-a3", "coach", "這個不行。11/4 已經綁了你那趟 6.1 km，改成休息等於把那趟從課表上拿掉，週跑量和判定都會對不上。已完成的課我只能更正目標距離和備註。想記下那天腿很沉，我可以寫進 11/4 的備註。", 8),
-      m("c-ccp-q4", "athlete", "那把 11/4 的坡跑移到週五", 6),
+      m("c-ccp-q4", "athlete", `那把 11/4 的${N}移到週五`, 6),
       m("c-ccp-a4", "coach", "移到週五的話，那趟 6.1 km 就跟日期對不上了，我先不動日期。", 5, { proposal_rejected: true }));
     return out;
   }
   if (mode === "mixed") {
     const p = mk("p-ccp-mixed", [hill(), chg({ op: "change", session_id: "s-2026-11-11", field: "target_distance_m", old: 10000, new: 9000, label: "MP 10 km", date: "2026-11-11", reason: "前後各 1 km Easy 縮短，MP 段照舊。" })],
       { impact: { keep: "11/4 的標題跟實跑對不上；11/11 照 10 km 排，週跑量偏多。", change: "11/4 改成 6 km 並重判一次；11/11 縮成 9 km。", risk: "11/11 的 MP 段（7 km）不變，只少前後的 Easy。" }, ...hillBasis });
-    out.push(m("c-ccp-q2", "athlete", "下次 MP 也縮短一點，坡跑照實際的寫", 9), m("c-ccp-a2", "coach", "11/4 更正成 6 km；11/11 的 MP 前後 Easy 少 1 km：", 8, { proposal: p }));
+    out.push(m("c-ccp-q2", "athlete", `下次 MP 也縮短一點，${N}照實際的寫`, 9), m("c-ccp-a2", "coach", "11/4 更正成 6 km；11/11 的 MP 前後 Easy 少 1 km：", 8, { proposal: p }));
     return out;
   }
   if (mode === "three") {
@@ -1295,13 +1302,13 @@ function correctPlanThread(mode: CorrectPlanMode): ApiCoachMessage[] {
     out.push(m("c-ccp-q2", "athlete", "11/1 跟 11/5 的距離也一樣不準吧，一起改", 9), m("c-ccp-a2", "coach", "三堂都照實跑改成這樣：", 8, { proposal: p }));
     return out;
   }
-  out.push(m("c-ccp-q2", "athlete", mode === "note" ? "距離改 6 km，備註也把上坡的做法寫清楚" : "你可以把坡跑 8km 課表改正確嗎", 9));
+  out.push(m("c-ccp-q2", "athlete", mode === "note" ? "距離改 6 km，備註也把上坡的做法寫清楚" : `你可以把${N} 8km 課表改正確嗎`, 9));
   if (mode === "note") {
     const p = mk("p-ccp-note", [hill(), hill("note")], { impact: { keep: "備註沒寫上坡怎麼跑。", change: "距離 6 km、備註寫清楚；判定重看一次（同一堂兩列只重判一次）。", risk: "沒有。" }, ...hillBasis });
     out.push(m("c-ccp-a2", "coach", "距離改 6 km，備註寫清楚上坡的實際做法：", 8, { proposal: p }));
     return out;
   }
-  const p = mk("p-ccp", [hill()], { impact: hillImpact, ...hillBasis, ...(mode === "stale" ? { status: "stale" as const, stale_reason: "11/4 坡跑 8 km 已不是已完成的課" } : {}) });
+  const p = mk("p-ccp", [hill()], { impact: hillImpact, ...hillBasis, ...(mode === "stale" ? { status: "stale" as const, stale_reason: `11/4 ${N} 8 km 已不是已完成的課` } : {}) });
   out.push(m("c-ccp-a2", "coach", mode === "stale" ? "可以。11/4 的目標距離改成 6 km，內容和其他欄位不動……" : A2, 8, { proposal: p }));
   return out;
 }
@@ -1418,6 +1425,17 @@ function rejudgeCorrected(p: ApiProposal) {
     return;
   }
   for (const id of ids) for (const g of groupOfSession(id)) if (g.review?.source === "claude") g.review = null;
+  if (ccp() === "failafter") {
+    // the worker's model call fails: no verdict; a failed row and the api's line (with the activity) arrive after the confirmation
+    ids.forEach((id, i) => setTimeout(() => {
+      const g = groupOfSession(id)[0];
+      if (!g || g.review) return;
+      const t = threadData();
+      g.review = { verdict: null, comment: null, reminders: [], source: "claude", model: null, adjust_hint: null, failed: true, error: "這次分析沒成功，再試一次", created_at: new Date().toISOString(), corrected_at: null };
+      t.push({ ...BLANK, id: `c${t.length + 1}`, role: "coach", kind: "chat", text: "這次分析沒成功，報告頁可以按「重新分析」。", activity_id: g.id, created_at: new Date().toISOString() });
+    }, 4000 + i * 2500));
+    return;
+  }
   if (ccp() !== "slow") ids.forEach((id, i) => setTimeout(() => regroupMock(id), i * 2500));
 }
 
