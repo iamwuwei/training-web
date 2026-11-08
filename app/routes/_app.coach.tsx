@@ -160,6 +160,22 @@ function mergeThread(cache: Map<string, ApiCoachMessage>, latest: ApiCoachMessag
   return [...upsert(cache, latest).values()].sort(byTime);
 }
 
+/**
+ * Bring a message into view between the top bar and the composer: a message that fits is centred there, a taller one starts right under the
+ * top bar (its top is what the athlete reads first; centring would push it above the screen). Instant, whatever the motion setting.
+ */
+function scrollToMessage(id: string): number | null {
+  const el = document.getElementById(`msg-${id}`);
+  if (!el) return null;
+  const top = document.querySelector(".coach-head")?.getBoundingClientRect().bottom ?? 0;
+  const bottom = document.querySelector(".composer")?.getBoundingClientRect().top ?? window.innerHeight;
+  const room = bottom - top;
+  const r = el.getBoundingClientRect();
+  const want = r.height <= room ? top + (room - r.height) / 2 : top;
+  window.scrollBy({ top: r.top - want, behavior: "instant" });
+  return window.scrollY;
+}
+
 function DayRule({ date }: { date: string }) {
   return <div className="day-rule"><span />{mdDow(date)}<span /></div>;
 }
@@ -424,7 +440,12 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
     if (!jump || jump.done || loadingOlder) return;
     if (messages.some((m) => m.id === jump.id)) {
       jumpRef.current.landed = true;
-      requestAnimationFrame(() => document.getElementById(`msg-${jump.id}`)?.scrollIntoView({ block: "center" }));
+      // The layout above the message can still change a moment after the older pages are in (the "載入更早" row folds away): look once more
+      // after it has settled, and only if the athlete has not scrolled since.
+      requestAnimationFrame(() => {
+        const y = scrollToMessage(jump.id);
+        if (y != null) window.setTimeout(() => { if (Math.abs(window.scrollY - y) < 1) scrollToMessage(jump.id); }, 300);
+      });
       setFlash(jump.id);
       window.clearTimeout(flashTimer.current);
       flashTimer.current = window.setTimeout(() => setFlash(null), 2000);

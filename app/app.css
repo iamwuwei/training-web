@@ -1387,3 +1387,7 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 .msg.coach.target .body { margin: -6px -10px; padding: 6px 10px; border-radius: var(--r-m); animation: target-ring 2s var(--ease-out) both; }
 @keyframes target-ring { 0%, 40% { box-shadow: 0 0 0 2px var(--ink-3); } 100% { box-shadow: 0 0 0 2px transparent; } }
 @media (prefers-reduced-motion: reduce) { .msg.coach.target .body { animation: none; box-shadow: 0 0 0 2px var(--ink-3); } }
+/* the full-width (several weeks) card hangs 52 px to the left in the thread, over the avatar column; the sheet has no such column */
+.review-sheet .proposal-card.multi { margin-left: 0; }
+/* 到對話裡回 › in the sheet: 44 px touch height without moving the text (same method as `.group-foot a`) */
+.review-sheet .said a { position: relative; z-index: 1; display: inline-flex; align-items: center; min-height: 44px; margin: -13px 0; } /* z-index: the next .said line would otherwise sit over its lower 13 px */
