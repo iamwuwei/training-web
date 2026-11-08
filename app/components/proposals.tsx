@@ -175,11 +175,21 @@ function removedText(c: ApiProposalChange, s: ReturnType<typeof changeSession>):
   return c.label ?? "這堂課";
 }
 
-function ChangeRow({ row, sessions }: { row: Row; sessions: ApiSession[] }) {
+/** coach-correct-plan: the fixed line under a correction row (the session is already done; only its estimated distance / note change, the verdict is redone). Only while the card is pending. */
+function correctionNote(changes: ApiProposalChange[]): string {
+  const fields = new Set(changes.filter((c) => c.correction).map((c) => c.field));
+  if (fields.has("target_distance_m") && fields.has("note")) return "這堂已經跑完，只改課表上的距離和備註；完成紀錄不動，判定會重看一次。";
+  if (fields.has("note")) return "這堂已經跑完，只改課表上的備註；完成紀錄不動，判定會照新備註重看一次。";
+  return "這堂已經跑完，只改課表上的距離；完成紀錄不動，判定會照新距離重看一次。";
+}
+
+function ChangeRow({ row, sessions, pending }: { row: Row; sessions: ApiSession[]; pending: boolean }) {
   const first = row.changes[0];
   const s = changeSession(first, sessions);
   const date = changeDate(first); // a 補課 is titled with the day it was missed
   const makeup = row.op === "change" && row.changes.some((c) => c.makeup);
+  // coach-correct-plan: a change to a session that is already done (its estimated distance or note). An api from before it sends no flag.
+  const correction = row.op === "change" && !makeup && row.changes.some((c) => c.correction === true);
   const title = row.op === "add" ? date && mdDow(date) : [date ? mdDow(date) : null, first.label ?? (s && "target_distance_m" in s ? shortName(s) : null)].filter(Boolean).join(" · ") || "課表上的一堂課";
   const flags = row.changes.flatMap((c) => c.flags ?? []);
   const reasons = row.changes.map((c) => c.reason).filter(Boolean);
@@ -188,12 +198,13 @@ function ChangeRow({ row, sessions }: { row: Row; sessions: ApiSession[] }) {
       <div className="who">
         <Avatar session={s} />
         <div className="txt">
-          <div className="t">{title}{row.op !== "change" ? <span className="op">{row.op === "add" ? "新增" : "刪除"}</span> : makeup ? <span className="op">補課</span> : null}</div>
+          <div className="t">{title}{row.op !== "change" ? <span className="op">{row.op === "add" ? "新增" : "刪除"}</span> : makeup ? <span className="op">補課</span> : correction ? <span className="op">更正</span> : null}</div>
           {row.op === "add" ? <div className="change">{addedText(first)}</div>
             : row.op === "remove" ? <div className="change"><s>{removedText(first, s)}</s></div>
             : row.changes.map((c, i) => <ChangeLine key={i} c={c} />)}
           {flags.map((f, i) => <div key={i} className="flag">{f}</div>)}
           {reasons.map((r, i) => <div key={i} className="reason">{r}</div>)}
+          {correction && pending ? <div className="corr-note">{correctionNote(row.changes)}</div> : null}
         </div>
       </div>
     </div>
@@ -297,10 +308,10 @@ export function ProposalCard({ proposal, status: st, sessions, weeks, chosen, on
         {weekDescs(proposal.weeks?.find((w) => w.week_no === n), plan).map((d) => (
           <div key={d.k} className="wk-focus">{d.k}：{d.was ? <><s>{d.was}</s> → </> : null}<b>{d.now}</b></div>
         ))}
-        <div className="rows">{inWeek.map((r, i) => <ChangeRow key={i} row={r} sessions={sessions} />)}</div>
+        <div className="rows">{inWeek.map((r, i) => <ChangeRow key={i} row={r} sessions={sessions} pending={pending} />)}</div>
       </div>
     );
-  }) : rows.map((r, i) => <ChangeRow key={i} row={r} sessions={sessions} />);
+  }) : rows.map((r, i) => <ChangeRow key={i} row={r} sessions={sessions} pending={pending} />);
 
   const body = (
     <>
