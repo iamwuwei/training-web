@@ -1,8 +1,9 @@
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, redirect, useLocation, useNavigate, useRevalidator, useSearchParams } from "react-router";
 import type { Route } from "./+types/_app.coach";
 import { CloseIcon, SendIcon } from "../components/icons";
-import { CoachProposals, ConstraintCard, ProposalCard } from "../components/proposals";
+import { ConstraintCard, ProposalCard } from "../components/proposals";
+import { Rejected, WeeklyReviewBody } from "../components/weekly-review";
 import { CoachAvatar, VerdictTag, verdictBadge } from "../components/ui";
 import { ApiError, getActivities, getCoach, getWeekly, postCheckinPick, postCheckinReset, postCoachMessage, postWeeklyAsk, putCoachSeen } from "../lib/api";
 import { hasSession } from "../lib/auth";
@@ -12,8 +13,8 @@ import { km, pace } from "../lib/format";
 import { MdText } from "../components/md-text";
 import { WooStatus } from "../components/woo-status";
 import { useReviewPolling } from "../lib/use-review-polling";
-import { movedCountsIn, type PlanView } from "../lib/plan";
 import { usePlan } from "../lib/use-plan";
+import { JUMP_MAX_PAGES, JUMP_PAGE, resetWeeklyCaches } from "../lib/use-weekly-message";
 import type { ApiActivity, ApiCoachMessage, ApiProposal, ApiSession, ApiWeeklyAsk, ApiWeeklyReview } from "../types/api";
 import { pageTitle } from "../lib/meta";
 
@@ -22,6 +23,8 @@ import { pageTitle } from "../lib/meta";
 // conversation. The athlete writes at the bottom; replies are polled for.
 
 const MAX_CHARS = 500;
+/** What `?message=` may be (the api's ids are uuids, the demo's are short words); it is only ever compared with the ids of loaded messages. */
+const MESSAGE_ID = /^[A-Za-z0-9_-]{1,64}$/;
 /** Messages per page: the first visit loads the newest 10, reaching the top loads 10 older ones. */
 const PAGE = 10;
 const RPE_WORDS = ["", "很輕鬆", "輕鬆", "輕鬆", "適中", "適中", "適中", "有點累", "累", "很累", "極限"];
@@ -55,11 +58,6 @@ export const handle = { modal: true } as const;
 
 export function meta({ matches }: Route.MetaArgs): Route.MetaDescriptors {
   return pageTitle("教練 Woo", matches);
-}
-
-/** Woo's cards failed the api's check: only his text stays. */
-function Rejected() {
-  return <p className="cancelled">Woo 的提案沒過格式檢查，再問他一次</p>;
 }
 
 /** Why Woo could not redo a verdict he agreed to redo: fixed words, the api only sends the enum. 做不到的原因不同，後面接的話不同：次數用完、手動判定、正在重判時按「重新分析」不會有用，所以不叫他去按。 */
@@ -162,13 +160,33 @@ function mergeThread(cache: Map<string, ApiCoachMessage>, latest: ApiCoachMessag
   return [...upsert(cache, latest).values()].sort(byTime);
 }
 
+/**
+ * Bring a message into view between the top bar and the composer: a message that fits is centred there, a taller one starts right under the
+ * top bar (its top is what the athlete reads first; centring would push it above the screen). Instant, whatever the motion setting.
+ */
+function scrollToMessage(id: string): number | null {
+  const el = document.getElementById(`msg-${id}`);
+  if (!el) return null;
+  const top = document.querySelector(".coach-head")?.getBoundingClientRect().bottom ?? 0;
+  const bottom = document.querySelector(".composer")?.getBoundingClientRect().top ?? window.innerHeight;
+  const room = bottom - top;
+  const r = el.getBoundingClientRect();
+  const want = r.height <= room ? top + (room - r.height) / 2 : top;
+  window.scrollBy({ top: r.top - want, behavior: "instant" });
+  return window.scrollY;
+}
+
 function DayRule({ date }: { date: string }) {
   return <div className="day-rule"><span />{mdDow(date)}<span /></div>;
 }
 
+/** The message `/coach?message=<id>` jumped to, for its two seconds of ring. */
+const FlashContext = createContext<string | null>(null);
+
 function CoachMessage({ m, children, badge, className }: { m: ApiCoachMessage; children: React.ReactNode; badge?: "check" | "warn" | null; className?: string }) {
+  const flash = useContext(FlashContext) === m.id;
   return (
-    <article className={className ? `msg coach ${className}` : "msg coach"}>
+    <article id={`msg-${m.id}`} className={`msg coach${className ? ` ${className}` : ""}${flash ? " target" : ""}`}>
       <CoachAvatar badge={badge} />
       <div className="body">
         <div className="meta"><b>Woo</b><span className="grey">· {timeJst(m.created_at)}</span></div>
@@ -180,7 +198,7 @@ function CoachMessage({ m, children, badge, className }: { m: ApiCoachMessage; c
 
 function AthleteMessage({ m, onRetry, onReset, busy }: { m: ApiCoachMessage; onRetry?: () => void; onReset?: () => void; busy?: boolean }) {
   return (
-    <div className="msg me">
+    <div id={`msg-${m.id}`} className="msg me">
       <div className={`bubble${m.kind === "pick" ? " pick" : ""}`}>
         {m.quote ? <div className="quote">{m.quote}</div> : null}
         {m.kind === "pick" && m.text !== "都不是" && m.text !== "不是，另外算" ? <i className="strava-dot" aria-hidden="true" /> : null}
@@ -230,40 +248,6 @@ function CheckinChips({ m, busy, elsewhere, onPick }: { m: ApiCoachMessage; busy
   );
 }
 
-/**
- * The weekly review's question about a key session with no record: the question itself in
- * a quote block (the api builds it; the review text only says what it can see), the two
- * answers under it, then what the review is waiting for. After 沒跑 the review is rewritten
- * in place — `rerun` is that wait ("Woo 在重寫…"), or that we gave up polling for it.
- */
-function WeeklyAskBlock({ ask, busy, rerun, stage, madeUp, onAnswer }: { ask: ApiWeeklyAsk; busy: boolean; rerun: "pending" | "gave-up" | null; stage: string | null; /** A 補課 closed this question ("已改期，補到 10/30 週五"), not the athlete's 沒跑. */ madeUp: string | null; onAnswer: (answer: "synced" | "skipped") => void }) {
-  return (
-    <div className="ask">
-      <div className="ask-block"><div className="q">{ask.question}</div></div>
-      {ask.state === "open" ? (
-        <div className="chips-row" role="group" aria-label={`${md(ask.date)} 的${ask.label}有沒有跑`}>
-          <button type="button" className="chip" disabled={busy} onClick={() => onAnswer("synced")}>還沒同步</button>
-          <button type="button" className="chip" disabled={busy} onClick={() => onAnswer("skipped")}>沒跑</button>
-        </div>
-      ) : (
-        <div className="said">{madeUp && ask.state === "skipped" ? madeUp : `你說：${ask.state === "synced" ? "還沒同步" : "沒跑"}`}</div>
-      )}
-      {rerun === "pending" ? <div className="said"><WooStatus stage={stage} fallback="Woo 在重寫這週的回顧" /></div>
-        : rerun === "gave-up" ? <div className="said">回顧還在重寫，稍後再回來看</div>
-        : ask.state !== "skipped" ? <div className="said">{ask.label} 確定之後我再給下週的建議。</div>
-        : null}
-    </div>
-  );
-}
-
-/** The weekly question for a session a 補課 has since moved: "已改期，補到 10/30 週五" (· 算第 N 週 when it counts in another week). */
-function madeUpText(ask: ApiWeeklyAsk, view: PlanView | null): string | null {
-  const s = view?.data.sessions.find((x) => x.id === ask.session_id);
-  if (!view || !s?.moved_to_date) return null;
-  const n = movedCountsIn(view, s);
-  return `已改期，補到 ${mdDow(s.moved_to_date)}${n != null && n !== s.week_no ? ` · 算第 ${n} 週` : ""}`;
-}
-
 function quoteLine(a: ApiActivity): string {
   const run = !a.sport_type || ["Run", "TrailRun", "VirtualRun"].includes(a.sport_type);
   return [`${md(toJstDate(a.start_time))} ${km(a.distance_m)} km`, run ? `${pace(a.avg_pace_sec_km)}/km` : null, a.avg_hr != null ? `心拍 ${a.avg_hr}` : null, a.review?.verdict ?? null].filter(Boolean).join(" · ");
@@ -294,6 +278,13 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
   const [hasMore, setHasMore] = useState(loaderData.has_more);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [olderError, setOlderError] = useState(false);
+
+  // /coach?message=<id> (the weekly-review sheet's 在對話裡看): load older pages until that message is in, scroll it to the middle, ring it for 2 seconds.
+  // An id that does not look like one, or is not found within JUMP_MAX_PAGES pages, is ignored: the thread opens on its newest page as always.
+  const messageParam = searchParams.get("message");
+  const [jump, setJump] = useState<{ id: string; pages: number; done: boolean } | null>(() => (messageParam && MESSAGE_ID.test(messageParam) ? { id: messageParam, pages: 0, done: false } : null));
+  const [flash, setFlash] = useState<string | null>(null);
+  const jumpActive = !!jump && !jump.done;
 
   // The reply is on its way while the newest athlete message is still pending
   // (a chat reply, Woo's question after a pick, or the verdict after an answer).
@@ -336,6 +327,8 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
   // Polls for a reply do not need /weekly again (see clientLoader); a review being rewritten does.
   useEffect(() => { reuseWeekly = (waiting || expectPending || correctionPending || planRejudgePending) && !rerunPending; }, [waiting, expectPending, correctionPending, planRejudgePending, rerunPending]);
   useEffect(() => () => { reuseWeekly = false; lastWeekly = null; }, []);
+  // What the sheets on 課表／今天 kept about the weekly reviews is out of date once the thread was used (a card decided, a question answered).
+  useEffect(() => () => resetWeeklyCaches(), []);
   const typing = waiting || expectPending;
 
   // Woo's open "how did it feel?" (the last message) turns the composer into the answer
@@ -376,21 +369,32 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
 
   // To the bottom when the newest message changes, the wait row comes or goes, or the composer grows.
   // Not when older messages are prepended (the newest id stays) and not when a stage text changes.
+  // Not while a jump to `?message=` is on its way, and once it has landed not for the composer growing (only a new message or the wait row pulls the view down again).
   const newestId = messages[messages.length - 1]?.id;
-  useEffect(() => { window.scrollTo({ top: document.documentElement.scrollHeight }); }, [newestId, typing, composerH]);
+  const jumpRef = useRef<{ jump: typeof jump; landed: boolean }>({ jump, landed: false });
+  useEffect(() => { jumpRef.current.jump = jump; });
+  const lastBottom = useRef({ newestId, typing });
+  useEffect(() => {
+    const moved = lastBottom.current.newestId !== newestId || lastBottom.current.typing !== typing;
+    lastBottom.current = { newestId, typing };
+    const j = jumpRef.current;
+    if (j.jump && !j.jump.done) return;
+    if (j.landed && !moved) return;
+    window.scrollTo({ top: document.documentElement.scrollHeight });
+  }, [newestId, typing, composerH]);
 
   // Older pages: the sentinel at the top of the list asks for the 10 before the oldest message we have.
   const topRef = useRef<HTMLDivElement>(null);
   const loadingRef = useRef(false);
   const anchorRef = useRef<{ h: number; y: number } | null>(null);
   const loadOlderRef = useRef<() => Promise<void>>(async () => {});
-  async function loadOlder() {
+  async function loadOlder(limit?: number) { // (a default value `= PAGE` here breaks the route-chunk splitter of the build)
     if (loadingRef.current || !hasMore || messages.length === 0) return;
     loadingRef.current = true;
     setLoadingOlder(true);
     setOlderError(false);
     try {
-      const r = await getCoach({ before: messages[0].id, limit: PAGE });
+      const r = await getCoach({ before: messages[0].id, limit: limit ?? PAGE });
       // what the athlete is looking at stays where it is: remember the page height, fix the scroll after the older ones are in
       anchorRef.current = { h: document.documentElement.scrollHeight, y: window.scrollY };
       setCache((c) => upsert(c, r.messages));
@@ -413,7 +417,7 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
   // After a failure it waits until the sentinel has left the screen and come back, so it never loops.
   useEffect(() => {
     const el = topRef.current;
-    if (!el || !hasMore || loadingOlder) return;
+    if (!el || !hasMore || loadingOlder || jumpActive) return;
     let armed = !olderError;
     let timer = 0;
     const io = new IntersectionObserver((entries) => {
@@ -427,7 +431,34 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
     }, { rootMargin: "200px 0px 0px 0px" });
     io.observe(el);
     return () => { window.clearTimeout(timer); io.disconnect(); };
-  }, [hasMore, loadingOlder, olderError]);
+  }, [hasMore, loadingOlder, olderError, jumpActive]);
+
+  const flashTimer = useRef(0);
+  useEffect(() => () => window.clearTimeout(flashTimer.current), []);
+  /* oxlint-disable react/set-state-in-effect -- the jump is a loop with the thread: each page that arrives is looked at here, and the next step (another page, the scroll and the ring, giving up) is set from what is found */
+  useEffect(() => {
+    if (!jump || jump.done || loadingOlder) return;
+    if (messages.some((m) => m.id === jump.id)) {
+      jumpRef.current.landed = true;
+      // The layout above the message can still change a moment after the older pages are in (the "載入更早" row folds away): look once more
+      // after it has settled, and only if the athlete has not scrolled since.
+      requestAnimationFrame(() => {
+        const y = scrollToMessage(jump.id);
+        if (y != null) window.setTimeout(() => { if (Math.abs(window.scrollY - y) < 1) scrollToMessage(jump.id); }, 300);
+      });
+      setFlash(jump.id);
+      window.clearTimeout(flashTimer.current);
+      flashTimer.current = window.setTimeout(() => setFlash(null), 2000);
+      setJump({ ...jump, done: true });
+    } else if (hasMore && jump.pages < JUMP_MAX_PAGES && !olderError) {
+      setJump({ ...jump, pages: jump.pages + 1 });
+      void loadOlder(JUMP_PAGE);
+    } else {
+      setJump({ ...jump, done: true });
+      requestAnimationFrame(() => window.scrollTo({ top: document.documentElement.scrollHeight })); // not found: the thread as it always opens
+    }
+  }, [jump, messages, hasMore, loadingOlder, olderError]); // oxlint-disable-line react-hooks/exhaustive-deps -- loadOlder is the latest closure of this render
+  /* oxlint-enable react/set-state-in-effect */
 
   // The weekly review rewritten after 沒跑 may sit on an older page, which polling (newest page only) does not
   // reach: while it is being rewritten, fetch the stretch just before the newest page along with each poll.
@@ -590,7 +621,7 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
   }
 
   return (
-    <>
+    <FlashContext.Provider value={flash}>
       <header className="topbar coach-head">
         <button type="button" className="back" aria-label="關閉" onClick={close}><CloseIcon /></button>
         <CoachAvatar />
@@ -613,18 +644,13 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
             node = <AthleteMessage m={m} busy={busy} onReset={resettable ? () => void reset() : undefined} onRetry={m.kind === "chat" && !m.rpe ? () => void send(m.text, m.activity_id ?? undefined) : undefined} />;
           } else if (m.kind === "weekly") {
             const w = reviews.find((r) => r.id === m.weekly_review_id) ?? null;
-            const wm = m.weekly;
             const rewriting = rerunPending && rerun?.id === m.id;
             node = (
-              <CoachMessage m={m} badge={wm?.updated ? "check" : null}>
-                {wm?.updated ? <div className="updated"><span aria-hidden="true">⟳</span> 已更新 · {wm.updated.reason}</div> : null}
-                <MdText text={m.text} />
-                {wm?.makeups?.length ? <div className="makeups">{wm.makeups.map((x, i) => <div key={i}>這週有補課：{md(x.from)} 的 {x.label} 補到 {md(x.to)}（{x.done ? "已完成" : "待跑"}）</div>)}</div> : null}
-                {wm?.asks.map((ask) => <WeeklyAskBlock key={ask.session_id} ask={ask} busy={busy} madeUp={madeUpText(ask, view)} rerun={rewriting && ask.state === "skipped" ? (timedOut ? "gave-up" : "pending") : null} stage={m.stage} onAnswer={(answer) => void answerWeeklyAsk(m, ask, answer)} />)}
-                {w ? <CoachProposals review={w} sessions={sessions} embedded onChanged={() => void revalidator.revalidate()} /> : null}
-                {m.proposal || m.constraint ? cards([m]) : null}
-                {m.proposal_rejected ? <Rejected /> : null}
-                {wm?.cancelled.length ? <p className="cancelled">{wm.cancelled.map((c) => `原本「${c}」的建議已取消`).join("；")}</p> : null}
+              <CoachMessage m={m} badge={m.weekly?.updated ? "check" : null}>
+                <WeeklyReviewBody m={m} review={w} view={view} sessions={sessions} weeks={planWeeks} busy={busy}
+                  rerun={rewriting ? (timedOut ? "gave-up" : "pending") : null}
+                  cards={{ statusOf, onStatus: (id, status) => setDecisions((d) => ({ ...d, [id]: status })), onChanged: () => void revalidator.revalidate(), onRepropose: repropose }}
+                  onAnswerAsk={(ask, answer) => void answerWeeklyAsk(m, ask, answer)} />
               </CoachMessage>
             );
           } else if (m.kind === "ask" && m.ask?.kind === "mismatch") {
@@ -722,6 +748,6 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
         </div>
         {error ? <p className="hint" style={{ color: "var(--v-bad)" }}>{error}</p> : null}
       </form>
-    </>
+    </FlashContext.Provider>
   );
 }

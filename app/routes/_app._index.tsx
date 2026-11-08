@@ -5,6 +5,7 @@ import { GearIcon, MountainIcon } from "../components/icons";
 import { PlanPost } from "../components/posts";
 import { Progress } from "../components/progress";
 import { SessionSheet } from "../components/session-sheet";
+import { WeeklyReviewSheet } from "../components/weekly-review-sheet";
 import { StrengthDay } from "../components/strength-day";
 import { Avatar, Bar, CoachAvatar, SectionH, TopBar, VerdictTag } from "../components/ui";
 import { md, mdDow, relativeDay, timeJst } from "../lib/date";
@@ -16,6 +17,7 @@ import { activityDate, hrOver, isLoggable, isRunSport, lastReminderFor, paceFast
 import { DRAFT_TEXT, useLatestDraft } from "../lib/draft";
 import { NoPlanEntry, usePlan } from "../lib/use-plan";
 import { useReviewPolling } from "../lib/use-review-polling";
+import { useWeeklyReviews, weekNoOfReview } from "../lib/use-weekly";
 import type { ApiActivity, ApiSession } from "../types/api";
 import { pageTitle } from "../lib/meta";
 
@@ -221,6 +223,8 @@ export default function Today() {
   const analysing = !!(todayAct && !todayAct.review) && !view?.data.coach_checkin_open;
   const { timedOut } = useReviewPolling(analysing);
   const [open, setOpen] = useState<ApiSession | null>(null);
+  const { reviews } = useWeeklyReviews();
+  const [reviewId, setReviewId] = useState<string | null>(null);
   if (!view) return <NoPlanEntry title="今天" />;
   const { todayDay, todayActivities, upcoming, currentWeek, daysToRace, data, today } = view;
 
@@ -231,6 +235,10 @@ export default function Today() {
   const extras = todayActivities.filter((a) => !a.session_id && a.id !== shownInPost);
   const next = upcoming[0] ?? null;
   const nextPrep = next ? lastReminderFor(view, next.session) : null;
+  // the newest weekly review: 上週回顧 when it is last week's, else its week's number (only while the plan is running: there is a 本週 and the race is not over)
+  const latest = reviews[0] ?? null;
+  const latestNo = latest ? weekNoOfReview(latest, data.weeks) : null;
+  const reviewLabel = latestNo == null ? "週回顧 ›" : currentWeek && latestNo === currentWeek.week_no - 1 ? "上週回顧 ›" : `第 ${latestNo} 週回顧 ›`;
 
   return (
     <>
@@ -253,6 +261,7 @@ export default function Today() {
             </Link>
           ) : null}
         </div>
+        {currentWeek && latest && daysToRace >= 0 ? <button type="button" className="review-entry today" onClick={() => setReviewId(latest.id)}><CoachAvatar size={20} />{reviewLabel}</button> : null}
 
         <SectionH
           action={<button type="button" className="chip" onClick={() => void revalidator.revalidate()} disabled={revalidator.state === "loading"}>{revalidator.state === "loading" ? "更新中…" : "重新整理"}</button>}
@@ -290,6 +299,7 @@ export default function Today() {
         <Progress view={view} />
       </main>
       <SessionSheet session={open} view={view} onClose={() => setOpen(null)} />
+      <WeeklyReviewSheet review={reviews.find((r) => r.id === reviewId) ?? null} view={view} onClose={() => setReviewId(null)} />
     </>
   );
 }

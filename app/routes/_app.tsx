@@ -2,6 +2,7 @@ import { Outlet, redirect, useMatches, type ShouldRevalidateFunctionArgs } from 
 import type { Route } from "./+types/_app";
 import { TabBar } from "../components/ui";
 import { ApiError, getGroups, getPlan } from "../lib/api";
+import { ensureWeekly } from "../lib/use-weekly";
 import { AuthError, completeLogin, getUser, hasSession, logout, saveReturnTo, takeReturnTo, type SessionUser } from "../lib/auth";
 import type { PlanResponse } from "../types/api";
 
@@ -39,6 +40,7 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   }
 
   const user = getUser();
+  void ensureWeekly(); // the 週回顧 entries (課表, 今天) read /weekly: asked next to /plan so both come in together (not waited for; no plan or a failure just means no entry)
   try {
     const data = await getPlan();
     return { data, user, error: null as string | null, groupsUnread: data.groups_unread ?? 0 };
