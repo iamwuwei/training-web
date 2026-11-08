@@ -780,7 +780,7 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 .proposal-card .actions { display: flex; gap: 8px; margin-top: 2px; }
 .proposal-card > .decided { position: absolute; top: 12px; right: 12px; font-size: 12px; font-weight: 600; color: var(--ink-3); }
 .proposal-card > .decided.applied { color: var(--accent-ink); }
-.proposal-card.applied .proposal:first-child .t, .proposal-card.dismissed .proposal:first-child .t { padding-right: 56px; }
+.proposal-card > .decided + .proposal .t { padding-right: 56px; }
 
 /* ---- Woo replans the whole plan: multi-week proposal cards, A／B, 記下來, the 影響 / 依據 blocks ---- */
 .collapse { display: grid; grid-template-rows: 0fr; opacity: 0; visibility: hidden; transition: grid-template-rows var(--d-3) var(--ease-move), opacity var(--d-2) var(--ease-out), margin-top var(--d-3) var(--ease-move), visibility 0s var(--d-3); }
@@ -801,6 +801,7 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 .proposal.removed .change, .proposal.removed .change s { color: var(--ink-3); font-weight: 400; }
 .proposal .flag { margin-top: 3px; font-size: 13px; font-weight: 700; line-height: 1.45; color: var(--v-warn); }
 .proposal .reason { margin-top: 2px; font-size: 13px; line-height: 1.5; color: var(--ink-2); }
+.proposal .corr-note { margin-top: 2px; font-size: 12px; line-height: 1.5; color: var(--ink-3); }
 .proposal-card .conflict { padding-top: 10px; font-size: 13px; font-weight: 700; line-height: 1.45; color: var(--v-warn); }
 .proposal-card .conflict .why-stale { margin-top: 2px; font-weight: 400; color: var(--ink-2); }
 .proposal-card > .decided.stale { color: var(--v-warn); }

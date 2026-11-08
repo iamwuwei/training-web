@@ -14,7 +14,7 @@ import { WooStatus } from "../components/woo-status";
 import { useReviewPolling } from "../lib/use-review-polling";
 import { movedCountsIn, type PlanView } from "../lib/plan";
 import { usePlan } from "../lib/use-plan";
-import type { ApiActivity, ApiCoachMessage, ApiProposal, ApiWeeklyAsk, ApiWeeklyReview } from "../types/api";
+import type { ApiActivity, ApiCoachMessage, ApiProposal, ApiSession, ApiWeeklyAsk, ApiWeeklyReview } from "../types/api";
 import { pageTitle } from "../lib/meta";
 
 // Woo's thread: weekly reviews (with their proposals), each run's verdict, his
@@ -85,6 +85,67 @@ function CorrectionLine({ m, timedOut }: { m: ApiCoachMessage; timedOut: boolean
   if (c.state === "failed") return <div className="said">重判沒成功，<Link to={`/activities/${c.activity_id}`}>到報告頁按「重新分析」›</Link></div>;
   if (c.state === "rejected") return <p className="cancelled">{rejectedText(c.why)}</p>;
   return null;
+}
+
+/** A confirmation line older than this is not waited for any more (the new verdict is on the report page by then). */
+const CORRECTION_QUEUED_STALE_MS = 10 * 60_000;
+
+/** The clock for the 10-minute rule; a function of its own like `todayJst`, the render only asks it. */
+const nowMs = () => Date.now();
+
+interface PlanRejudge { date: string; label: string; sessionId: string }
+
+/**
+ * The card whose confirmation line this message is, or null. The api's confirmation (postProposalApplied) is a Woo chat line with no activity,
+ * written within 5 s of the card's decided_at; the fixed lines that can land in the same 5 s (「次數用完」, 「這次分析沒成功」) carry an activity_id.
+ */
+function confirmedCard(m: ApiCoachMessage, applied: ApiProposal[]): ApiProposal | null {
+  if (m.role !== "coach" || m.kind !== "chat" || m.proposal || m.constraint || m.activity_id != null) return null;
+  const at = Date.parse(m.created_at);
+  return applied.find((p) => Math.abs(Date.parse(p.decided_at ?? "") - at) < 5000) ?? null;
+}
+
+/** The session's title as the api writes it in a verdict message (`sessionLabel`: label ?? type, then the distance); only for the wait line's words. */
+const apiTitle = (s: Pick<ApiSession, "label" | "type" | "target_distance_m">) => `${s.label ?? s.type}${s.target_distance_m ? ` ${Math.round(s.target_distance_m / 100) / 10} km` : ""}`;
+
+/**
+ * coach-correct-plan: for each confirmation line of a card that corrected completed sessions, the sessions Woo has not finished re-judging
+ * (message id → [{date, label, sessionId}], card order). Only the thread and the plan are looked at, no new api field: the confirmation is
+ * `confirmedCard` (and not the "沒有排到重判" one), newer than 10 minutes; a session is finished when a Woo verdict or chat line newer than the
+ * confirmation carries an activity that now sits in that session (the activity follows the corrected session to its new row, so the new verdict and the
+ * worker's later 「這次分析沒成功」 both match; a title would not: the api's and the web's session names differ for labels like 間歇／節奏).
+ */
+function planRejudgeWaits(messages: ApiCoachMessage[], sessions: ApiSession[], activities: ApiActivity[], now: number): Map<string, PlanRejudge[]> {
+  const out = new Map<string, PlanRejudge[]>();
+  const applied = messages.flatMap((x) => (x.proposal?.status === "applied" && x.proposal.decided_at ? [x.proposal] : []));
+  const sessionOf = new Map(activities.map((a) => [a.id, a.session_id]));
+  for (const m of messages) {
+    const card = confirmedCard(m, applied);
+    if (!card || m.text.includes("沒有排到重判")) continue;
+    const at = Date.parse(m.created_at);
+    if (now - at > CORRECTION_QUEUED_STALE_MS) continue;
+    const seen = new Set<string>();
+    const targets: PlanRejudge[] = [];
+    for (const c of card.changes) {
+      const id = c.applied_session_id;
+      if (c.correction !== true || !c.date || !id || seen.has(id)) continue;
+      seen.add(id);
+      const s = sessions.find((x) => x.id === id);
+      targets.push({ date: c.date, label: s ? apiTitle(s) : c.label ?? "", sessionId: id });
+    }
+    const done = new Set(messages.filter((x) => x.role === "coach" && (x.kind === "review" || x.kind === "chat") && x.activity_id != null && Date.parse(x.created_at) > at).map((x) => sessionOf.get(x.activity_id as string)));
+    const left = targets.filter((t) => !done.has(t.sessionId));
+    if (left.length) out.set(m.id, left);
+  }
+  return out;
+}
+
+/** Under the confirmation line of a card that corrected completed sessions: who Woo is re-judging (one session: its name; several: how many and which days), or the 3-minute line. */
+function PlanRejudgeLine({ left, timedOut }: { left: PlanRejudge[]; timedOut: boolean }) {
+  if (timedOut) return <div className="said">重判比較慢，稍後再回來看；報告頁也會更新</div>;
+  const t = left[0];
+  const text = left.length === 1 ? `Woo 在重判 ${md(t.date)} 的${/^[A-Za-z0-9]/.test(t.label) ? " " : ""}${t.label}` : `Woo 在重判 ${left.length} 堂（${left.map((x) => md(x.date)).join("、")}）`;
+  return <div className="said"><WooStatus stage={null} fallback={text} /></div>;
 }
 
 const byTime = (a: ApiCoachMessage, b: ApiCoachMessage) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id);
@@ -261,15 +322,19 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
   // Woo agreed to redo a verdict and the new one is not in yet (his reply says state queued): the same polling, the wait line sits under his reply.
   const correctionPending = messages.some((m) => m.role === "coach" && m.correction?.state === "queued");
 
+  // A card that corrected completed sessions was applied and their new verdicts are not in yet: the same polling, the wait line sits under Woo's confirmation (coach-correct-plan).
+  const planWaits = planRejudgeWaits(messages, view?.data.sessions ?? [], view ? [...view.data.activities, ...view.data.unassigned] : [], nowMs());
+  const planRejudgePending = planWaits.size > 0;
+
   // Something is on its way (a reply, the verdict, a rewritten review): look every 2 s so the stage text keeps up.
-  const polling = waiting || rerunPending || expectPending || correctionPending;
+  const polling = waiting || rerunPending || expectPending || correctionPending || planRejudgePending;
   const { timedOut, restart } = useReviewPolling(polling, true);
   // The reply that says "我重判一次" can itself have taken a while: the 3 minutes of "重判比較慢" count from the reply, not from the send.
   const restartRef = useRef(restart);
   useEffect(() => { restartRef.current = restart; });
-  useEffect(() => { if (correctionPending) restartRef.current(); }, [correctionPending]);
+  useEffect(() => { if (correctionPending || planRejudgePending) restartRef.current(); }, [correctionPending, planRejudgePending]);
   // Polls for a reply do not need /weekly again (see clientLoader); a review being rewritten does.
-  useEffect(() => { reuseWeekly = (waiting || expectPending || correctionPending) && !rerunPending; }, [waiting, expectPending, correctionPending, rerunPending]);
+  useEffect(() => { reuseWeekly = (waiting || expectPending || correctionPending || planRejudgePending) && !rerunPending; }, [waiting, expectPending, correctionPending, planRejudgePending, rerunPending]);
   useEffect(() => () => { reuseWeekly = false; lastWeekly = null; }, []);
   const typing = waiting || expectPending;
 
@@ -494,7 +559,7 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
   const groups = new Map<string, ApiCoachMessage[]>();
   for (const m of messages) if (m.proposal?.group_id) groups.set(m.proposal.group_id, [...(groups.get(m.proposal.group_id) ?? []), m]);
 
-  const appliedAt = messages.flatMap((x) => (x.proposal?.status === "applied" && x.proposal.decided_at ? [Date.parse(x.proposal.decided_at)] : []));
+  const appliedCards = messages.flatMap((x) => (x.proposal?.status === "applied" && x.proposal.decided_at ? [x.proposal] : []));
 
   function cards(members: ApiCoachMessage[]) {
     const reload = () => void revalidator.revalidate();
@@ -614,8 +679,8 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
             );
           } else {
             // Woo's line written as a card was applied (within a few seconds of it) is his confirmation: the avatar gets the check.
-            const confirms = m.kind === "chat" && appliedAt.some((t) => Math.abs(t - Date.parse(m.created_at)) < 5000);
-            node = <CoachMessage m={m} badge={confirms ? "check" : null}><MdText text={m.text} />{m.proposal_rejected ? <Rejected /> : null}<CorrectionLine m={m} timedOut={timedOut} /></CoachMessage>;
+            const confirms = confirmedCard(m, appliedCards) != null;
+            node = <CoachMessage m={m} badge={confirms ? "check" : null}><MdText text={m.text} />{m.proposal_rejected ? <Rejected /> : null}<CorrectionLine m={m} timedOut={timedOut} />{planWaits.has(m.id) ? <PlanRejudgeLine left={planWaits.get(m.id) ?? []} timedOut={timedOut} /> : null}</CoachMessage>;
           }
           return <Fragment key={m.id}>{rule}{node}</Fragment>;
         })}
