@@ -7,7 +7,7 @@ import { combine, groupBySession, type Combined } from "./combine";
 import { dayDiff } from "./date";
 import { labelStyle } from "./labels";
 import { activityDate, isRunSport, type PlanView } from "./plan";
-import { comparablePace, focusStats, fullSplits, planFor, sessionBand, type Band } from "./segments";
+import { comparablePace, fullSplits, sessionBand, type Band } from "./segments";
 
 export interface TrendPoint {
   /** The session's primary activity (its date and id); a session with several recordings is one point, its numbers the recordings added up. */
@@ -54,7 +54,6 @@ export function kindSeries(session: ApiSession, all: ApiActivity[], sessions: Ap
   return { points, aerobic, lo, hi };
 }
 
-const MAX_POINTS = 10;
 const BASELINE_DAYS = 28;
 const MARATHON_M = 42_195;
 /** Easy / Recovery only — by name, so 走跑 (also kind "easy") never counts as aerobic efficiency. */
@@ -64,8 +63,6 @@ const isAerobic = (s: ApiSession) => AEROBIC.has(labelStyle(s).name) && s.target
 export type Tone = "good" | "flat" | "worse";
 
 export interface AerobicTrend {
-  /** Last 10 points, oldest first; the chart. */
-  points: TrendPoint[];
   /** The HR band the paces were measured in (from the latest Easy session that has one). */
   lo: number | null;
   hi: number | null;
@@ -102,17 +99,15 @@ export function aerobicTrend(view: PlanView): AerobicTrend {
     ?? [...view.data.sessions].reverse().find(isAerobic);
   const lo = band?.target_hr_min ?? null, hi = band?.target_hr_max ?? null;
   const latest = series[series.length - 1] ?? null;
-  if (series.length < 2 || !latest) return { points: series, lo, hi, delta: null, weeks: 0, latest };
+  if (series.length < 2 || !latest) return { lo, hi, delta: null, weeks: 0, latest };
   // Baseline: the newest point at least 28 days old, else the first point.
   const old = series.filter((p) => dayDiff(activityDate(p.a), view.today) >= BASELINE_DAYS);
   const base = old[old.length - 1] ?? series[0];
   const weeks = Math.max(1, Math.round(dayDiff(activityDate(base.a), activityDate(latest.a)) / 7));
-  return { points: series.slice(-MAX_POINTS), lo, hi, delta: latest.v - base.v, weeks, latest };
+  return { lo, hi, delta: latest.v - base.v, weeks, latest };
 }
 
 export interface LongTrend {
-  /** Last 10 long runs, oldest first; v = distance in metres. */
-  points: TrendPoint[];
   /** Longest so far, metres; null without any. */
   max_m: number | null;
   /** 42.195 km − longest, metres. */
@@ -126,17 +121,13 @@ export function longTrend(view: PlanView): LongTrend {
     .map(({ a, c }) => ({ a, v: c.distance_m }))
     .filter((p) => p.v > 0)
     .sort(byTime);
-  if (!series.length) return { points: [], max_m: null, remain_m: null };
+  if (!series.length) return { max_m: null, remain_m: null };
   const max_m = Math.max(...series.map((p) => p.v));
-  return { points: series.slice(-MAX_POINTS), max_m, remain_m: Math.max(0, MARATHON_M - max_m) };
+  return { max_m, remain_m: Math.max(0, MARATHON_M - max_m) };
 }
 
 export interface MpTrend {
-  /** Last 10 MP sessions, oldest first; v = MP-block pace. */
-  points: TrendPoint[];
   latest: TrendPoint | null;
-  /** Highest per-km average HR in the latest MP block. */
-  hrTop: number | null;
   /** The latest session's MP band. */
   band: Band | null;
   /** Latest pace against the band: 0 inside, +N seconds slower than the top, −N faster than the bottom. */
@@ -154,12 +145,11 @@ export function mpTrend(view: PlanView): MpTrend {
     .filter((x): x is TrendPoint => !!x)
     .sort(byTime);
   const latest = series[series.length - 1] ?? null;
-  if (!latest) return { points: [], latest: null, hrTop: null, band: null, off: null };
-  const { s, c } = runs.find((r) => r.a.id === latest.a.id)!;
+  if (!latest) return { latest: null, band: null, off: null };
+  const { s } = runs.find((r) => r.a.id === latest.a.id)!;
   const band = sessionBand(s);
-  const hrTop = focusStats(planFor(s), c.splits)?.hrTop ?? c.max_hr ?? null;
   const off = band ? (latest.v > band.hi ? latest.v - band.hi : latest.v < band.lo ? latest.v - band.lo : 0) : null;
-  return { points: series.slice(-MAX_POINTS), latest, hrTop, band, off };
+  return { latest, band, off };
 }
 
 export interface Totals {
