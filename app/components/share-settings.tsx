@@ -51,9 +51,10 @@ export function ShareSettingsSection({ initial, inGroups, open, onToggle }: { in
   return (
     <Fold id="share" title="隱私" summary={shareSummary(share, inGroups)} open={open} onToggle={onToggle}>
       <div className="share">
-        <p className="share-intro">{inGroups ? "同一個群組的人看得到你打開的項目；你在的每個群組都一樣。" : "你還沒有加入群組。第一次建立或加入群組時，這五項會全部打開，之後隨時可以關。加入前在這裡改過任何一項，或以前加入過群組，就照下面的開關。"}</p>
+        <p className="sf">{inGroups ? "同一個群組的人看得到你打開的項目；你在的每個群組都一樣。" : "你還沒有加入群組。第一次建立或加入群組時，這五項會全部打開，之後隨時可以關。加入前在這裡改過任何一項，或以前加入過群組，就照下面的開關。"}</p>
+        <div className="grp">
         {ROWS.map((r) => (
-          <div key={r.key} className="share-row">
+          <div key={r.key} className="row tall">
             <div>
               <div className="t" id={`share-${r.key}`}>{r.name}</div>
               <div className="s">{r.desc}</div>
@@ -64,8 +65,9 @@ export function ShareSettingsSection({ initial, inGroups, open, onToggle }: { in
             <button type="button" role="switch" className="switch" aria-checked={share[r.key]} aria-labelledby={`share-${r.key}`} disabled={!!busy[r.key]} onClick={() => void toggle(r.key)} />
           </div>
         ))}
-        <p className="share-note">切換就存好：關掉之後，群組裡的人下一次打開就看不到了（包含以前的）；打開也一樣馬上生效。</p>
-        <div className="share-never"><b>永遠不會給別人看：</b>跟 Woo 的對話、週回顧、記住的限制與傷痛、你寫的心得和 RPE、Strava 的原始資料、裝備與天氣、email、你在哪些其他群組。打開「我的課表內容」「Woo 的判定」後，課表備註和 Woo 的評論別人看得到，裡面可能提到傷痛或行程。</div>
+        </div>
+        <p className="sf">切換就存好：關掉之後，群組裡的人下一次打開就看不到了（包含以前的）；打開也一樣馬上生效。</p>
+        <p className="sf never"><b>永遠不會給別人看：</b>跟 Woo 的對話、週回顧、記住的限制與傷痛、你寫的心得和 RPE、Strava 的原始資料、裝備與天氣、email、你在哪些其他群組。打開「我的課表內容」「Woo 的判定」後，課表備註和 Woo 的評論別人看得到，裡面可能提到傷痛或行程。</p>
       </div>
     </Fold>
   );

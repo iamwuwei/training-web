@@ -149,7 +149,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
         {share.state === "error" ? (
           <Fold id="share" title="隱私" summary="讀不到" open={shareOpen} onToggle={() => setShareOpen((o) => !o)}>
             <div className="share">
-              <p className="share-intro" role="alert">讀不到分享設定。</p>
+              <p className="sf" role="alert">讀不到分享設定。</p>
               <button type="button" className="chip" style={{ marginTop: 8 }} onClick={() => void revalidator.revalidate()}>再試一次</button>
             </div>
           </Fold>
