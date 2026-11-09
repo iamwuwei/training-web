@@ -8,7 +8,7 @@ import { SectionH } from "./ui";
 
 function Metric({ k, value, unit, delta, tone }: { k: string; value: string; unit?: string; delta: string; tone: Tone }) {
   return (
-    <div className="metric">
+    <div className="metric" role="group" aria-label={`${k} ${value}${unit ?? ""}，${delta}`}>
       <div className="k">{k}</div>
       <div className="v"><b className="num">{value}</b>{unit ? <span className="unit">{unit}</span> : null}</div>
       <div className={`d ${tone}`}>{delta}</div>

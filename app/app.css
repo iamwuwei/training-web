@@ -1398,7 +1398,12 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
   .extras .row > span:first-child { display: none; }
   .extras .n { flex-direction: column; align-items: flex-start; gap: 0; white-space: normal; }
   .extra-row { grid-template-columns: minmax(0, 1fr) 112px; }
-  .metrics, .totals { column-gap: 6px; }
+  .metrics, .totals { column-gap: 8px; }
+  /* 累積／完成／連續達標: number over its unit line, so three-digit km and "· 55%" still fit in 248 px (and in 256 once main is 16) */
+  .totals .v { flex-direction: column; align-items: flex-start; gap: 2px; }
+  /* 進步 three metrics: with the longest realistic delta lines the nowrap columns left 0〜2 px between them; the delta line may wrap (instead of touching or clipping) */
+  .metrics { grid-template-columns: repeat(3, minmax(0, auto)); }
+  .metric .d { white-space: normal; }
 }
 
 /* ---- weekly-review-entry (v4.3): the 週回顧 entries on 課表 and 今天, the sheet, the ring on the message `/coach?message=` jumps to ---- */
