@@ -6,6 +6,17 @@
 /** The coach modal slides in from the bottom. `false` makes it fade in and out instead (200 / 150 ms): the one-line way back (01b §5.6). */
 export const MODAL_SLIDE = true;
 
+/**
+ * The left-edge swipe in a Home Screen app (standalone): the settings pages' `.edge` strip (`PushStack`) and the other pages' `EdgeBack` (02 §10.6, 01b §17-2).
+ * `false` takes both away completely (no strip element is drawn, nothing listens); the back buttons, the browser's own back and every transition stay as they are.
+ * It is for the case 02 §10.6 names: iOS having a left-edge back gesture of its own in standalone, which would run on top of ours. Both are off in a browser tab anyway.
+ * `false` also stops `PushStack` from playing its pop (and a browser forward) for a back nobody marked in standalone: that is the system's swipe, which has just animated it
+ * (a back of ours, the 「‹ 設定」 button, still plays: it is marked with `markOwnBack`).
+ * To try it: set it to `false`, `VITE_MOCK=1 npm run build`, and in a standalone simulation (`matchMedia("(display-mode: standalone)")` true) there is no `.edge`
+ * and no `.edge-back` in the DOM, while the 「‹ 設定」 button and the browser's back still go back (03 PR 8 has the script, `tools/edge-flag-test.mjs`). Set it back to `true`.
+ */
+export const EDGE_GESTURES = true;
+
 export type Axis = "x" | "y";
 export interface Slide {
   /** Resolves when the animation ended (or was stopped). */

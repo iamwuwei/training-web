@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { useNavigationType } from "react-router";
-import { fadeTo, holdAt, isStandalone, move, reducedMotion, translateXNow } from "../lib/motion";
+import { EDGE_GESTURES, fadeTo, holdAt, isStandalone, move, reducedMotion, translateXNow } from "../lib/motion";
 import { takeOwnBack } from "../lib/nav";
 import { BackPill, NavBar } from "./nav-bar";
 
@@ -11,7 +11,7 @@ import { BackPill, NavBar } from "./nav-bar";
 // pop:  the same backwards (350 ms). While a page moves `.busy` takes the pointer away from both layers (02 §2.10: two pages in motion can not be pressed), so a touch can not
 //       interrupt; a back that gets in anyway (the browser's own button, a key, a script) starts from where the page is, not from the end.
 // edge swipe (standalone only, a 20 px strip at the left edge): follows the finger; past half the width, or flicked (> 0.5 px/ms), it completes, else it springs back.
-// A pop that is the browser's own (Safari's swipe back already animated it) is swapped without animation, except in standalone where nothing else animates (`takeOwnBack`).
+// A pop that is the browser's own (Safari's swipe back already animated it) is swapped without animation, except in standalone where nothing else animates (`takeOwnBack`) — and except when `EDGE_GESTURES` is off, which says the system has a swipe of its own there.
 // Reduced motion: no movement, a 120 ms fade, no edge strip.
 
 interface Kept { node: ReactNode; title: string | null; key: string }
@@ -87,7 +87,7 @@ export function PushStack({ base, sub, subKey, title, backLabel, onBack }: {
       goUnder(baseY.current);
       window.scrollTo(0, 0);
       // our own pushes animate; so does a forward in standalone; a redirect (replace) and a browser forward in a tab do not
-      const animate = !!top && (navTypeRef.current === "PUSH" || (navTypeRef.current === "POP" && isStandalone()));
+      const animate = !!top && (navTypeRef.current === "PUSH" || (navTypeRef.current === "POP" && isStandalone() && EDGE_GESTURES)); // a forward the browser made: in standalone nothing else animates it (not when the system has its own swipe: `EDGE_GESTURES` off)
       const done = () => { busy(false); top?.querySelector<HTMLElement>("h1")?.focus({ preventScroll: true }); };
       if (!animate || !top) { done(); return; }
       busy(true);
@@ -105,7 +105,7 @@ export function PushStack({ base, sub, subKey, title, backLabel, onBack }: {
       // ---- pop
       const top = topEl.current;
       const topY = window.scrollY; // where the pushed page was scrolled: it stays on screen where it is while it leaves (as the scroll of its own box, so its sticky bar keeps working)
-      const animate = takeOwnBack() || isStandalone();
+      const animate = takeOwnBack() || (isStandalone() && EDGE_GESTURES); // standalone: nothing else animates a back the system made, unless the system has a swipe of its own (`EDGE_GESTURES` off): then it has just played
       const byEdge = doneByEdge.current;
       doneByEdge.current = false;
       base.classList.remove("under");
@@ -205,7 +205,7 @@ export function PushStack({ base, sub, subKey, title, backLabel, onBack }: {
       </div>
       {node ? (
         <div ref={topEl} className="pg top">
-          {isStandalone() && !reducedMotion() && subKey ? (
+          {EDGE_GESTURES && isStandalone() && !reducedMotion() && subKey ? (
             <div className="edge" onPointerDown={onEdgeDown} onPointerMove={onEdgeMove} onPointerUp={(e) => onEdgeUp(e, false)} onPointerCancel={(e) => onEdgeUp(e, true)} />
           ) : null}
           <div className="pg-inner">
