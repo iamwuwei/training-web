@@ -72,7 +72,7 @@ function DetailsForm({ activity, busy, setBusy, onClose, onSaved }: { activity: 
   return (
     <>
       {room ? <span className="ds-room" /> : null}
-      <h2 className="sheet-title">裝備與天氣</h2>
+      <h2 className="sheet-title st">裝備與天氣</h2>
       <p className="ds-sub">只改這一趟；Strava 那邊不會變。</p>
       {FIELDS.map((f) => {
         const v = vals[f.key];

@@ -34,7 +34,7 @@ function Body({ title, text, action, busyLabel, tone, onCancel, onConfirm }: { t
   }
   return (
     <>
-      <h2 className="sheet-title">{title}</h2>
+      <h2 className="sheet-title st">{title}</h2>
       <p className="gc-text">{text}</p>
       {failed ? <p className="err" role="alert">{SEND_FAILED}</p> : null}
       <div className="actions-row">

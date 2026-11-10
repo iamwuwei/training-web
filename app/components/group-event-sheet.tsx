@@ -85,7 +85,7 @@ export function GroupEventSheet({ groupId, event, onClose }: { groupId: string; 
     <BottomSheet open={!!e} onClose={() => onClose(gone)} label="動態詳情" className="event-sheet">
       {e && e.session ? (
         <>
-          <div className="es-head">
+          <div className="es-head st">
             {/* the event carries only its label ("Long 18 km"), not the session's type: the colour comes from the label, and a label the app does not know gets the Easy blue on purpose */}
             <Avatar session={{ label: typeOf(e.session.label), type: "easy" }} />
             <div>

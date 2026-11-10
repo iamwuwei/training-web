@@ -58,6 +58,10 @@ function firstSentence(t: string | null): string | null {
   return m ? m[0] : t;
 }
 
+/** U+00A0: a number and its unit never part at a line end (「輕鬆跑 8 km」 wraps as 「輕鬆跑／8 km」, not 「輕鬆跑 8／km」). */
+const NB = "\u00a0";
+const glueUnits = (t: string) => t.replace(/(\d)\s+(km|項|堂|週|天|分|秒|bpm)(?![A-Za-z])/g, `$1${NB}$2`);
+
 const DOW = ["日", "一", "二", "三", "四", "五", "六"];
 
 export function DayRow({ day, view, weekNo, isToday, onOpen, routine, was, preview, readonly }: { day: Day; view: PlanView; weekNo: number; isToday: boolean; onOpen: (s: ApiSession) => void; routine: ApiRoutine | null; was?: string; preview?: boolean; readonly?: ReadOnly }) {
@@ -73,13 +77,13 @@ export function DayRow({ day, view, weekNo, isToday, onOpen, routine, was, previ
   else if (a && day.combined) {
     const c = day.combined; const run = isRunSport(c.sport_type);
     lines = [
-      run || c.distance_m > 0 ? <Fragment key="a"><b className="num">{km(c.distance_m)}</b><span className="u"> km</span></Fragment> : <b key="a" className="num">{duration(c.moving_time_sec)}</b>,
-      run && c.avg_pace_sec_km ? <Fragment key="b"><b className="num">{pace(c.avg_pace_sec_km)}</b><span className="u"> /km</span></Fragment> : c.avg_hr != null ? <Fragment key="b"><b className="num">{c.avg_hr}</b><span className="u"> bpm</span></Fragment> : null,
+      run || c.distance_m > 0 ? <Fragment key="a"><b className="num">{km(c.distance_m)}</b><span className="u">{NB}km</span></Fragment> : <b key="a" className="num">{duration(c.moving_time_sec)}</b>,
+      run && c.avg_pace_sec_km ? <Fragment key="b"><b className="num">{pace(c.avg_pace_sec_km)}</b><span className="u">{NB}/km</span></Fragment> : c.avg_hr != null ? <Fragment key="b"><b className="num">{c.avg_hr}</b><span className="u">{NB}bpm</span></Fragment> : null,
     ];
     dot = verdictKind(a.review?.verdict) ?? "none";
   } else if (routine?.completed_at) {
     const n = routine.items.filter((i) => i.done).length;
-    lines = [<Fragment key="a"><b className="num">{n}/{routine.items.length}</b><span className="u"> 項</span></Fragment>, routine.rpe ? <Fragment key="b"><span className="u">RPE </span><b className="num">{routine.rpe}</b></Fragment> : null];
+    lines = [<Fragment key="a"><b className="num">{n}/{routine.items.length}</b><span className="u">{NB}項</span></Fragment>, routine.rpe ? <Fragment key="b"><span className="u">RPE{NB}</span><b className="num">{routine.rpe}</b></Fragment> : null];
     dot = "good";
   } else if (status === "skipped") { lines = [<span key="s" className="grey">跳過</span>]; dot = "skip"; }
   else if (!rest && s.target) { lines = targetLines(s.target).map((t) => <span key={t} className="grey">{t}</span>); }
@@ -97,7 +101,7 @@ export function DayRow({ day, view, weekNo, isToday, onOpen, routine, was, previ
     <>
       <div className="d"><span className="dow">{DOW[date.getUTCDay()]}</span><span className="num dom">{date.getUTCDate()}</span></div>
       <Avatar session={s} sport={a?.sport_type} />
-      <div className="n"><div className={`t${rest && !strength ? " rest" : ""}`}>{rowName(s)}</div>{!was && sub ? <div className={`sub${s.moved_to_date || s.moved_from_date ? " wrap" : ""}`}>{sub}</div> : null}</div>
+      <div className="n"><div className={`t${rest && !strength ? " rest" : ""}`}>{glueUnits(rowName(s))}</div>{!was && sub ? <div className={`sub${s.moved_to_date || s.moved_from_date ? " wrap" : ""}`}>{sub}</div> : null}</div>
       <div className="r"><span className="stack">{lines.filter(Boolean).map((l, i) => <span key={i} className="l">{l}</span>)}</span>{dot ? <i className={`dot ${dot}`} /> : null}</div>
       {was ? <div className="was">{was}</div> : null}
     </>

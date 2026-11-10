@@ -53,7 +53,7 @@ export function SessionSheet({ session, view, onClose, onOpen, readOnly }: { ses
     <BottomSheet open={!!s} onClose={onClose} label="課表細節" className={readOnly ? "event-sheet" : undefined}>
       {s ? (
         <>
-          <div className={`ss-head${s.moved_to_date ? " moved" : ""}`}>
+          <div className={`ss-head st${s.moved_to_date ? " moved" : ""}`}>
             <Avatar session={s} />
             <div>
               <div className="t">{rowName(s)}</div>

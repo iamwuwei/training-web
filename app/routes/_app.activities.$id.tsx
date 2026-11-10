@@ -277,7 +277,7 @@ function ActivitiesBody({ onClose, c, s, all, view }: { onClose: () => void; c: 
 
   return (
     <>
-      <h2 className="sheet-title">{md(s.scheduled_date)} 的 {shortName(s)}</h2>
+      <h2 className="sheet-title st">{md(s.scheduled_date)} 的 {shortName(s)}</h2>
       <div className="group-h"><h3>這堂的紀錄 · {c.count} 筆</h3>{c.count > 1 ? <span className="sub">合計 {km(c.distance_m)} km</span> : null}</div>
       {c.group.map((x, i) => (
         <div key={x.id} className="acts-row">
