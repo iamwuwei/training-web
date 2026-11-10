@@ -14,6 +14,9 @@ export const links: Route.LinksFunction = () => [
     href: "https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap",
   },
   { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
+  // Add to Home Screen (01b §9): the manifest (Chrome, Android) and the 180 px icon iOS takes
+  { rel: "manifest", href: "/manifest.webmanifest" },
+  { rel: "apple-touch-icon", sizes: "180x180", href: "/icons/apple-touch-icon.png" },
 ];
 
 export const meta: Route.MetaFunction = () => [
@@ -28,9 +31,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta name="referrer" content="strict-origin-when-cross-origin" />
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-        <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
-        <meta name="theme-color" content="#0f1013" media="(prefers-color-scheme: dark)" />
+        {/* the page's own background (--bg): the bar of the browser and the status bar of the Home Screen app match the page (02 §2.2) */}
+        <meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)" />
+        <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-title" content="訓練" />
+        {/* `default`, not `black-translucent`: that one makes the status bar text white for good, unreadable on the light page (01b §17-10) */}
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <Meta />
         <Links />
