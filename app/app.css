@@ -1472,11 +1472,6 @@ button.next-row { width: 100%; text-align: left; }
 
 /* 320 px column widths (v4) */
 @media (max-width: 359px) {
-  /* the grouped card (inner 256 at 320) gave the course name 72 px, 20 less than v4 had; tighter gaps and padding give it back (≥ 90) */
-  .dayrow { grid-template-columns: 26px 28px minmax(0, 1fr) 92px; gap: 8px; padding: 0 12px; }
-  .dayrow.changed { padding: 0 12px 0 9px; }
-  .dayrow + .dayrow { background-position: 46px 0; background-size: calc(100% - 46px) .5px; }
-  .dayrow .avatar { width: 28px; height: 28px; }
   .dayrow .r .l .num { font-size: 16px; }
   .extras .xrow { grid-template-columns: 30px minmax(0, 1fr) 56px 60px; }
   .extras .xrow > span:first-child { display: none; }
@@ -1494,6 +1489,15 @@ button.next-row { width: 100%; text-align: left; }
   .metrics { grid-template-columns: repeat(3, minmax(0, auto)); }
   .metric .d { white-space: normal; }
 }
+
+/* 課表七天 at 375 and below: the grouped card (16 + 16 padding) takes 20 px from the course name that v4 had (92 px at 320, 124 at 360); gaps 8 and padding 12 give it back (94 at 320, 122 at 360) */
+@media (max-width: 375px) {
+  .dayrow { grid-template-columns: 26px 28px minmax(0, 1fr) 104px; gap: 8px; padding: 0 12px; }
+  .dayrow.changed { padding: 0 12px 0 9px; }
+  .dayrow + .dayrow { background-position: 46px 0; background-size: calc(100% - 46px) .5px; }
+  .dayrow .avatar { width: 28px; height: 28px; }
+}
+@media (max-width: 359px) { .dayrow { grid-template-columns: 26px 28px minmax(0, 1fr) 92px; } }
 
 /* 累積／完成／連續達標: number over its unit line, so three-digit km and "· 55%" still fit (248 px at 320, 256 once main is 16; a long row also overran at 360 and 375) */
 @media (max-width: 379px) {
