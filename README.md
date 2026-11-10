@@ -30,7 +30,7 @@ npm run preview
 
 ### App icon（加到主畫面的圖示）
 
-`public/icons/` 的四張 PNG（`apple-touch-icon` 180、192、512、512 maskable）由 `public/favicon.svg` 在 `#f2f2f7` 上畫出來，**不要手改**：換圖時換掉 `favicon.svg`，然後 `npm run icons`（`scripts/make-icons.mjs`；沒有任何相依，只需要本機有 Chrome／Chromium，找不到時用環境變數 `CHROME` 指路徑），把四張 PNG 一起 commit。iOS 在「加入主畫面」那一刻就存了一份圖示，之後換圖要刪掉再加一次才會更新。目前的圖是暫代（`favicon.svg` 還是範本的圖）。
+`public/favicon.svg` 就是 app icon（1024 × 1024、珊瑚 `#f0553a` 滿版方形底、白色「訓」，設計在文件 repo `work/apple-native-redesign/v5/assets/icon.svg`，02 §9.1）。`public/icons/` 的四張 PNG（`apple-touch-icon` 180、192、512、512 maskable，都是 RGB 無透明）是它畫出來的，**不要手改**：換圖時換掉 `favicon.svg`，然後 `npm run icons`（`scripts/make-icons.mjs`；沒有任何相依，只需要本機有 Chrome／Chromium，找不到時用環境變數 `CHROME` 指路徑），把 `favicon.svg` 和四張 PNG 一起 commit。主體要留在中心直徑 80% 的圓裡（maskable 安全區）。iOS 在「加入主畫面」那一刻就存了一份圖示，之後換圖要刪掉主畫面上的圖示、再從 Safari 重新加入才會更新。
 
 ### 環境變數
 

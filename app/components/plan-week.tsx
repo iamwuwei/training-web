@@ -1,13 +1,29 @@
-import { Fragment } from "react";
+import { Fragment, useLayoutEffect, useRef, type ReactNode } from "react";
 import { PushLink } from "./push-link";
 import { mdDow, md } from "../lib/date";
 import { duration, km, kmPlan, pace } from "../lib/format";
 import { isStrengthDay, rowName, verdictKind } from "../lib/labels";
+import { changeIn } from "../lib/motion";
 import { isRunSport, movedCountsIn, targetLines, type Day, type PlanView, type Week } from "../lib/plan";
 import type { ApiRoutine, ApiSession } from "../types/api";
 import { Avatar } from "./ui";
 
 // The week bars and the day rows of the plan page. The 群組 plan page (someone else's plan) draws the same two with `readonly`.
+
+/**
+ * What changes with the week (the seven days, the note, the other activities), under the week card that stays: when `weekNo` changes it comes in from the side the week
+ * is on (a later week from the right, an earlier from the left; 02 §10.3 M-week). The card's own numbers just change.
+ */
+export function WeekBody({ weekNo, children }: { weekNo: number; children: ReactNode }) {
+  const el = useRef<HTMLDivElement>(null);
+  const prev = useRef(weekNo);
+  useLayoutEffect(() => {
+    const was = prev.current;
+    prev.current = weekNo;
+    if (was !== weekNo && el.current) void changeIn(el.current, weekNo > was ? 1 : -1);
+  }, [weekNo]);
+  return <div ref={el} className="week-body">{children}</div>;
+}
 
 /** What of another member's plan the page may draw: his `runs` switch (the actual numbers, the link to the report) and `reviews` (the verdict dot). */
 export interface ReadOnly { runs: boolean; reviews: boolean }

@@ -14,7 +14,7 @@ export interface Slide {
   cancelToCurrent(): void;
 }
 
-const FALLBACK = { d1: 150, d2: 200, d3: 300, d4: 400, drm: 120, spring: "cubic-bezier(0.32, 0.72, 0, 1)", bounce: "cubic-bezier(0.34, 1.4, 0.64, 1)", exit: "cubic-bezier(0.32, 0, 0.67, 0)" };
+const FALLBACK = { d1: 150, d2: 200, d3: 300, d4: 400, drm: 120, rise: 8, spring: "cubic-bezier(0.32, 0.72, 0, 1)", bounce: "cubic-bezier(0.34, 1.4, 0.64, 1)", exit: "cubic-bezier(0.32, 0, 0.67, 0)" };
 let cache: typeof FALLBACK | null = null;
 function tok() {
   if (cache) return cache;
@@ -28,7 +28,7 @@ function tok() {
     return /[\d.]s$/.test(raw) ? v * 1000 : v;
   };
   const str = (name: string, fb: string) => cs.getPropertyValue(name).trim() || fb;
-  cache = { d1: ms("--d-1", FALLBACK.d1), d2: ms("--d-2", FALLBACK.d2), d3: ms("--d-3", FALLBACK.d3), d4: ms("--d-4", FALLBACK.d4), drm: ms("--d-rm", FALLBACK.drm), spring: str("--spring", FALLBACK.spring), bounce: str("--bounce", FALLBACK.bounce), exit: str("--ease-exit", FALLBACK.exit) };
+  cache = { d1: ms("--d-1", FALLBACK.d1), d2: ms("--d-2", FALLBACK.d2), d3: ms("--d-3", FALLBACK.d3), d4: ms("--d-4", FALLBACK.d4), drm: ms("--d-rm", FALLBACK.drm), rise: parseFloat(cs.getPropertyValue("--rise")) || FALLBACK.rise, spring: str("--spring", FALLBACK.spring), bounce: str("--bounce", FALLBACK.bounce), exit: str("--ease-exit", FALLBACK.exit) };
   return cache;
 }
 /** Asked every time, never cached: the person may change the setting while the app is open. */
@@ -138,6 +138,16 @@ export function move(el: HTMLElement, to: string, opts: MoveOpts): Slide {
   const t = tok();
   const from = opts.from ?? currentTransform(el);
   return play(el, [{ transform: from }, { transform: to }], opts.duration, opts.ease === "exit" ? t.exit : t.spring, opts.glass, opts.end ?? "keep");
+}
+
+/**
+ * The content of a page that has changed under a bar that stays (the plan page's week: M-week, 02 §10.3): it comes in from `dir` (1: from the right, -1: from the left)
+ * by `--rise` (8 px) and fades in, 200 ms `--ease-out`. Reduced motion: only the fade, 120 ms. A change while it is running starts again from the new place.
+ */
+export function changeIn(el: HTMLElement, dir: 1 | -1): Slide {
+  const t = tok();
+  if (reducedMotion()) return play(el, [{ opacity: 0 }, { opacity: 1 }], t.drm, "linear", undefined, "clear");
+  return play(el, [{ opacity: 0, transform: `translateX(${dir * t.rise}px)` }, { opacity: 1, transform: "none" }], t.d2, "cubic-bezier(0.25, 0.8, 0.25, 1)", undefined, "clear");
 }
 
 /** Opacity from where it is to `opacity`. */
