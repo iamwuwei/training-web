@@ -130,6 +130,7 @@ ul { padding: 0; list-style: none; }
 .gbtn { position: relative; flex: none; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 22px; color: var(--ink); }
 .gbtn svg { width: 22px; height: 22px; }
 .gbtn.backpill { width: auto; padding: 0 14px 0 8px; gap: 2px; font-size: 17px; white-space: nowrap; }
+.gbtn:focus-visible { border-radius: 22px; outline-offset: -2px; } /* keep the round shape (the global focus rule says 6px) and draw the ring inside, so a bar at the top of a window with no safe area does not cut it */
 .gbtn[aria-disabled="true"] { opacity: 0.7; }
 .gbtn.refresh:disabled { opacity: 0.6; }
 .gbtn.refresh[aria-busy="true"] svg { animation: group-spin 0.8s linear infinite; }
@@ -151,6 +152,7 @@ ul { padding: 0; list-style: none; }
 .tabbar .lens { position: absolute; left: 0; top: 0; width: 25%; height: 100%; border-radius: 28px; background: var(--lens); box-shadow: inset 0 1px 0 var(--lens-hi), var(--lens-shadow); transition: transform var(--d-4) var(--spring); pointer-events: none; }
 .tabbar a { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; color: var(--ink); font-size: 11px; font-weight: 500; }
 .tabbar a svg { width: 24px; height: 24px; stroke-width: 1.8; }
+.tabbar a:focus-visible { border-radius: 28px; outline-offset: -2px; }
 .tabbar a[aria-current] { font-weight: 700; }
 .tabbar a[aria-current] svg { stroke-width: 2.4; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
