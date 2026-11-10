@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Route } from "./+types/_app.plan";
-import { Link, useLocation, useNavigate, useRevalidator, useSearchParams } from "react-router";
+import { useLocation, useNavigate, useRevalidator, useSearchParams } from "react-router";
 import { DayRow, WeekBars } from "../components/plan-week";
 import { SessionSheet } from "../components/session-sheet";
 import { WeeklyReviewSheet } from "../components/weekly-review-sheet";
 import { BackPill, NavBar } from "../components/nav-bar";
+import { PushLink } from "../components/push-link";
 import { Avatar, Bar, CoachAvatar } from "../components/ui";
 import { ApiError, postProposal } from "../lib/api";
 import { md, timeJst } from "../lib/date";
@@ -38,13 +39,13 @@ function ExtraRows({ week, unassigned }: { week: Week; unassigned: ApiActivity[]
       {rows.map((a) => {
         const run = isRunSport(a.sport_type);
         return (
-          <Link key={a.id} to={`/activities/${a.id}`} className="xrow">
+          <PushLink key={a.id} to={`/activities/${a.id}`} className="xrow">
             <span aria-hidden="true" />
             <Avatar session={null} sport={a.sport_type} />
             <span className="n"><span className="t">{sportName(a.sport_type)}</span><span className="when">{md(activityDate(a))} {timeJst(a.start_time)}</span></span>
             <span className="r">{run || a.distance_m > 0 ? <><b className="num">{km(a.distance_m)}</b> km</> : <><b className="num">{Math.round(a.moving_time_sec / 60)}</b> 分</>}</span>
             <span className="r">{run && a.avg_pace_sec_km ? <><b className="num">{pace(a.avg_pace_sec_km)}</b> /km</> : a.avg_hr != null ? <><b className="num">{a.avg_hr}</b> bpm</> : null}</span>
-          </Link>
+          </PushLink>
         );
       })}
       </div>

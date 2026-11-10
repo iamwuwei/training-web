@@ -11,6 +11,7 @@ import {
   type FormErrors, type IntakeForm,
 } from "../lib/draft";
 import { mdDowPlain, mdPlain } from "../lib/groups";
+import { setNavDir } from "../lib/nav";
 import { duration, pace } from "../lib/format";
 import { localProfile, type LocalProfile } from "../lib/profile";
 import type { PlanIntake } from "../types/api";
@@ -201,7 +202,7 @@ export default function NewPlan() {
 
   const back = step === 2
     ? <BackPill label="表單" ariaLabel="回表單" onClick={() => setStep(1)} />
-    : <BackPill label="返回" onClick={() => void (cameFromApp ? navigate(-1) : navigate("/"))} />;
+    : <BackPill label="返回" onClick={() => { setNavDir("pop"); void (cameFromApp ? navigate(-1) : navigate("/", { viewTransition: true })); }} />;
 
   return (
     <>

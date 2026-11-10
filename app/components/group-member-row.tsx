@@ -1,4 +1,4 @@
-import { Link } from "react-router";
+import { PushLink } from "./push-link";
 import { km, kmPlan } from "../lib/format";
 import { mdPlain, memberRowKind } from "../lib/groups";
 import type { ApiGroup, ApiGroupMember } from "../types/api";
@@ -22,7 +22,7 @@ export function GroupMemberRow({ group, member: m, today }: { group: Pick<ApiGro
   const note = kind === "range_no_week" ? "本週沒排課" : kind === "ahead" ? "課表還沒排到這場" : kind === "finished" ? "這場已經比完了" : kind === "no_plan" ? "還沒有課表" : planEnds;
   const pctText = total ? ` · 整體 ${total.pct}%` : "";
   return (
-    <Link to={`/groups/${group.id}/plans?m=${encodeURIComponent(m.id)}`} className="group-member">
+    <PushLink to={`/groups/${group.id}/plans?m=${encodeURIComponent(m.id)}`} className="group-member">
       <div className="avatar member" aria-hidden="true">{m.display_name.slice(0, 1)}</div>
       <div className="body">
         <div className="l1">
@@ -43,6 +43,6 @@ export function GroupMemberRow({ group, member: m, today }: { group: Pick<ApiGro
         {(kind === "ahead" || kind === "finished" || kind === "no_plan") && p ? <div className="l3">本週 {p.runs.week_runs} 趟 · 最長 {longest(p.runs.longest_m)}</div> : null}
         {note ? <div className="l4">{note}</div> : null}
       </div>
-    </Link>
+    </PushLink>
   );
 }

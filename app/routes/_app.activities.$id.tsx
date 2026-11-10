@@ -11,6 +11,7 @@ import { BackPill, NavBar } from "../components/nav-bar";
 import { Avatar, CoachAvatar, Reminders, verdictBadge } from "../components/ui";
 import { ApiError, getActivities, putSession, rereview } from "../lib/api";
 import { hasSession } from "../lib/auth";
+import { setNavDir } from "../lib/nav";
 import { assignErrorText, combine, groupOf, inOtherMultiSession, MAX_PER_SESSION, primaryOf, type Combined } from "../lib/combine";
 import { dayDiff, md, mdDow, timeJst } from "../lib/date";
 import { duration, int, km, kmPlan, pace } from "../lib/format";
@@ -401,7 +402,7 @@ export default function Report({ loaderData }: Route.ComponentProps) {
 
   return (
     <>
-      <NavBar kind="inline" title="報告" left={<BackPill label="返回" onClick={() => (cameFromApp ? void navigate(-1) : void navigate("/plan"))} />} />
+      <NavBar kind="inline" title="報告" left={<BackPill label="返回" onClick={() => { setNavDir("pop"); void (cameFromApp ? navigate(-1) : navigate("/plan", { viewTransition: true })); }} />} />
       <main>
         <article className="post report-head">
           <Avatar session={s} sport={a.sport_type} />

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useRevalidator } from "react-router";
 import type { Route } from "./+types/_app.groups._index";
+import { PushLink } from "../components/push-link";
 import { GroupAddSheet } from "../components/group-add-sheet";
 import { GroupCreateSheet } from "../components/group-create-sheet";
 import { LoadFailed } from "../components/group-parts";
@@ -27,7 +28,7 @@ export function meta({ matches }: Route.MetaArgs): Route.MetaDescriptors {
 function GroupRow({ g, today }: { g: ApiGroup; today: string }) {
   const cd = countdown(g.race_date, today);
   return (
-    <Link to={`/groups/${g.id}`} className="group-row">
+    <PushLink to={`/groups/${g.id}`} className="group-row">
       <div className="txt">
         <div className="l1">
           <span className="nm">{g.name}</span>
@@ -40,7 +41,7 @@ function GroupRow({ g, today }: { g: ApiGroup; today: string }) {
         {cd.kind === "days" ? <><span className="num">{cd.n}</span><span className="unit">天</span></> : cd.kind === "today" ? "比賽日" : "已完賽"}
       </div>
       <ChevronIcon aria-hidden="true" />
-    </Link>
+    </PushLink>
   );
 }
 

@@ -1,5 +1,5 @@
 import { Fragment } from "react";
-import { Link } from "react-router";
+import { PushLink } from "./push-link";
 import { mdDow, md } from "../lib/date";
 import { duration, km, kmPlan, pace } from "../lib/format";
 import { isStrengthDay, rowName, verdictKind } from "../lib/labels";
@@ -107,7 +107,7 @@ export function DayRow({ day, view, weekNo, isToday, onOpen, routine, was, previ
     </>
   );
   const cls = `dayrow${isToday ? " today" : ""}${status === "skipped" ? " skipped" : ""}${status === "moved" ? " moved" : ""}${was ? " changed" : ""}`;
-  if (a && !readonly) return <Link to={`/activities/${a.id}`} className={cls}>{inner}</Link>; // someone else's row never links to a report
+  if (a && !readonly) return <PushLink to={`/activities/${a.id}`} className={cls}>{inner}</PushLink>; // someone else's row never links to a report
   if (preview || (rest && !s.note && !s.brief)) return <div className={cls}>{inner}</div>; // a preview row carries its "原本" line instead of a sheet
   return <button type="button" className={cls} onClick={() => onOpen(s)}>{inner}</button>;
 }

@@ -5,6 +5,7 @@ import { GroupEventRow } from "../components/group-event-row";
 import { GroupEventSheet } from "../components/group-event-sheet";
 import { GroupMemberRow } from "../components/group-member-row";
 import { GroupBack, GroupNotFound, LoadFailed, TopTitle } from "../components/group-parts";
+import { PushLink } from "../components/push-link";
 import { ChevronIcon, GearIcon, RefreshIcon } from "../components/icons";
 import { GlassButton, NavBar } from "../components/nav-bar";
 import { SectionH } from "../components/ui";
@@ -53,7 +54,7 @@ export default function GroupPage({ loaderData }: Route.ComponentProps) {
         right={
           <>
             <GlassButton className="refresh" label={loading ? "更新中" : "重新整理"} busy={loading} disabled={loading} onClick={() => void revalidator.revalidate()}><RefreshIcon /></GlassButton>
-            <GlassButton to={`/groups/${g.id}/settings`} label="群組設定"><GearIcon /></GlassButton>
+            <GlassButton to={`/groups/${g.id}/settings`} push label="群組設定"><GearIcon /></GlassButton>
           </>
         }
       />
@@ -74,7 +75,7 @@ export default function GroupPage({ loaderData }: Route.ComponentProps) {
         <SectionH>夥伴</SectionH>
         <div className="group-members">{members.map((m) => <GroupMemberRow key={m.id} group={g} member={m} today={today} />)}</div>
 
-        <SectionH action={<Link to={`/groups/${g.id}/events`} className="more">{g.unread > 0 ? <span className="ucount" role="img" aria-label={`${g.unread} 則新動態`}>{g.unread}</span> : null}全部動態 ›</Link>}>消息中心</SectionH>
+        <SectionH action={<PushLink to={`/groups/${g.id}/events`} className="more">{g.unread > 0 ? <span className="ucount" role="img" aria-label={`${g.unread} 則新動態`}>{g.unread}</span> : null}全部動態 ›</PushLink>}>消息中心</SectionH>
         {events.length ? (
           <div className="events">{events.map((e) => <GroupEventRow key={e.id} event={e} today={today} isNew={isNew.get(e.id) ?? false} onOpen={setOpen} />)}</div>
         ) : (
@@ -82,8 +83,8 @@ export default function GroupPage({ loaderData }: Route.ComponentProps) {
         )}
 
         <div style={{ marginTop: 8 }}>
-          <Link to={`/groups/${g.id}/plans`} className="group-link"><span>看大家的課表</span><span className="r"><ChevronIcon aria-hidden="true" /></span></Link>
-          <Link to={`/groups/${g.id}/members`} className="group-link"><span>成員</span><span className="r">{g.member_count} / {g.max_members}<ChevronIcon aria-hidden="true" /></span></Link>
+          <PushLink to={`/groups/${g.id}/plans`} className="group-link"><span>看大家的課表</span><span className="r"><ChevronIcon aria-hidden="true" /></span></PushLink>
+          <PushLink to={`/groups/${g.id}/members`} className="group-link"><span>成員</span><span className="r">{g.member_count} / {g.max_members}<ChevronIcon aria-hidden="true" /></span></PushLink>
         </div>
         <p className="group-foot"><Link to="/settings/privacy">分享在設定裡決定 ›</Link></p>
       </main>

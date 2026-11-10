@@ -3,6 +3,7 @@ import { Link, useRevalidator } from "react-router";
 import type { Route } from "./+types/_app._index";
 import { ChevronIcon, GearIcon, MountainIcon } from "../components/icons";
 import { PlanPost } from "../components/posts";
+import { PushLink } from "../components/push-link";
 import { Progress } from "../components/progress";
 import { SessionSheet } from "../components/session-sheet";
 import { WeeklyReviewSheet } from "../components/weekly-review-sheet";
@@ -38,7 +39,7 @@ function firstSentence(text: string | null | undefined): string | null {
 }
 
 function WooLine({ text, to }: { text: string; to?: string }) {
-  return <div className="wooline"><CoachAvatar size={20} /><span>{text}{to ? <> <Link to={to}>看報告</Link></> : null}</span></div>;
+  return <div className="wooline"><CoachAvatar size={20} /><span>{text}{to ? <> <PushLink to={to}>看報告</PushLink></> : null}</span></div>;
 }
 
 /** The first sentence of a note and the rest, split on the first full stop. */
@@ -123,7 +124,7 @@ function TodayPost({ day, view, slow, onOpen }: { day: Day; view: PlanView; slow
     const r = activity.review;
     const line = r?.reminders[0] ? `→ ${r.reminders[0]}` : firstSentence(r?.comment);
     return (
-      <Link to={`/activities/${activity.id}`} className="blk link">
+      <PushLink to={`/activities/${activity.id}`} className="blk link">
         <div className="post open today-post">
           <Avatar session={session} />
           <div className="body">
@@ -137,7 +138,7 @@ function TodayPost({ day, view, slow, onOpen }: { day: Day; view: PlanView; slow
           </div>
         </div>
         <ChevronIcon small className="chev" />
-      </Link>
+      </PushLink>
     );
   }
 
@@ -193,10 +194,10 @@ function PlanNext() {
   const to = draft && (draft.status === "pending" || draft.status === "ready" || draft.status === "failed") ? `/plan/draft/${draft.id}` : "/plan/new";
   return (
     <div className="plan-next">
-      {draft?.status === "pending" ? <Link to={to}><CoachAvatar size={20} />{T.pending}</Link>
-        : draft?.status === "ready" ? <Link to={to}><CoachAvatar size={20} badge="check" />{T.ready}</Link>
-        : draft?.status === "failed" ? <Link to={to}>{T.failed}</Link>
-        : <Link to={to}>{T.next}</Link>}
+      {draft?.status === "pending" ? <PushLink to={to}><CoachAvatar size={20} />{T.pending}</PushLink>
+        : draft?.status === "ready" ? <PushLink to={to}><CoachAvatar size={20} badge="check" />{T.ready}</PushLink>
+        : draft?.status === "failed" ? <PushLink to={to}>{T.failed}</PushLink>
+        : <PushLink to={to}>{T.next}</PushLink>}
     </div>
   );
 }
@@ -208,13 +209,13 @@ function ExtraRow({ a, view }: { a: ApiActivity; view: PlanView }) {
   const { assign, busy, error } = useAssign(view.todayDay?.activities ?? []);
   return (
     <div className="extra-row">
-      <Link to={`/activities/${a.id}`} className="who">
+      <PushLink to={`/activities/${a.id}`} className="who">
         <Avatar session={null} sport={a.sport_type} />
         <span className="txt">
           <span className="t">{sportName(a.sport_type)} {a.distance_m > 0 ? `${km(a.distance_m)} km` : duration(a.moving_time_sec)}</span>
           <span className="s">{[timeJst(a.start_time), run ? `${pace(a.avg_pace_sec_km)} /km` : null].filter(Boolean).join(" · ")}</span>
         </span>
-      </Link>
+      </PushLink>
       {appendTo ? <button type="button" className="chip" onClick={() => void assign(a, appendTo.id, true)} disabled={busy}>{busy ? "…" : "也算今天的課"}</button>
         : target ? <button type="button" className="chip" onClick={() => void assign(a, target.id)} disabled={busy}>{busy ? "…" : `算成 ${target.scheduled_date === activityDate(a) ? "今天" : md(target.scheduled_date)} 的課`}</button> : null}
       {error ? <p className="err" role="alert">{error}</p> : null}

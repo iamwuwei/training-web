@@ -50,7 +50,7 @@
   --glass-shadow: 0 8px 28px rgba(20, 22, 40, 0.16), 0 1px 3px rgba(20, 22, 40, 0.08);
   --lens: rgba(0, 0, 0, 0.07); --lens-hi: rgba(255, 255, 255, 0.9); --lens-shadow: 0 1px 6px rgba(20, 22, 40, 0.10);
   --sheet-bg: rgba(242, 242, 247, 0.96); --sheet-solid: #f2f2f7; --sheet-shadow: 0 -10px 40px rgba(20, 22, 40, 0.18); /* --sheet-solid: the opaque face while a sheet moves (02 v5.0.3) */
-  --push-dim: rgba(0, 0, 0, 0.10); --push-shadow: -8px 0 24px rgba(20, 22, 40, 0.12);
+  --push-dim: rgba(0, 0, 0, 0.10); --push-bright: .9; --push-shadow: -8px 0 24px rgba(20, 22, 40, 0.12);
 
   /* layout (used from PR 2 on); --sa-* wrap env() so QA can override them */
   --nav-h: 44px;                         /* the row of buttons and the small title; a top bar is --nav-top + this */
@@ -432,7 +432,7 @@ a.blk.link { display: block; }
     --glass-shadow: 0 8px 28px rgba(0, 0, 0, 0.55), 0 1px 3px rgba(0, 0, 0, 0.4);
     --lens: rgba(255, 255, 255, 0.12); --lens-hi: rgba(255, 255, 255, 0.25); --lens-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
     --sheet-bg: rgba(28, 28, 30, 0.94); --sheet-solid: #1a1a1c; --sheet-shadow: 0 -10px 40px rgba(0, 0, 0, 0.6);
-    --push-dim: rgba(0, 0, 0, 0.45); --push-shadow: -8px 0 24px rgba(0, 0, 0, 0.6);
+    --push-dim: rgba(0, 0, 0, 0.45); --push-bright: .55; --push-shadow: -8px 0 24px rgba(0, 0, 0, 0.6);
     color-scheme: dark;
   }
   .avatar.rest { color: var(--ink-3); }
@@ -1512,6 +1512,30 @@ button.next-row { width: 100%; text-align: left; }
 /* the left-edge strip (standalone only): 20 px wide, under the bar, the length of the page; the browser does not take the gesture */
 .edge { position: absolute; z-index: 3; left: 0; top: calc(var(--nav-h) + var(--nav-top)); bottom: 0; width: 20px; touch-action: none; }
 .navbar .ttl:focus { outline: none; }
+
+/* ---- push / pop of the other pages by View Transition (01b §5.4; Safari 18+, Chrome; without `document.startViewTransition` the page just changes) ----
+   The link or the back button says which way (`html[data-nav]`, lib/nav.ts). A transition nobody marked (the browser's own back or forward: Safari has just played its swipe) has no animation.
+   The tab bar is a group of its own (the same in both pictures: it stays), so only the page slides. `--push-bright` is the dim of `.dim` as a brightness (1 - the dim's alpha). */
+.tabbar { view-transition-name: tabbar; }
+html:not([data-nav])::view-transition-group(*), html:not([data-nav])::view-transition-old(*), html:not([data-nav])::view-transition-new(*) { animation: none; }
+html[data-nav]::view-transition-old(root), html[data-nav]::view-transition-new(root) { mix-blend-mode: normal; animation-duration: var(--d-4); animation-timing-function: var(--spring); animation-fill-mode: both; }
+html[data-nav="push"]::view-transition-new(root) { animation-name: vt-in-right; box-shadow: var(--push-shadow); z-index: 2; }
+html[data-nav="push"]::view-transition-old(root) { animation-name: vt-out-left; z-index: 1; }
+html[data-nav="pop"]::view-transition-new(root) { animation-name: vt-in-left; animation-duration: 350ms; z-index: 1; }
+html[data-nav="pop"]::view-transition-old(root) { animation-name: vt-out-right; animation-duration: 350ms; z-index: 2; box-shadow: var(--push-shadow); }
+@keyframes vt-in-right { from { transform: translateX(100%); } to { transform: none; } }
+@keyframes vt-out-left { from { transform: none; filter: brightness(1); } to { transform: translateX(-30%); filter: brightness(var(--push-bright)); } }
+@keyframes vt-in-left { from { transform: translateX(-30%); filter: brightness(var(--push-bright)); } to { transform: none; filter: brightness(1); } }
+@keyframes vt-out-right { from { transform: none; } to { transform: translateX(100%); } }
+@keyframes vt-fade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  html[data-nav]::view-transition-old(root) { animation: none; box-shadow: none; }
+  html[data-nav]::view-transition-new(root) { animation: vt-fade var(--d-rm) linear both; box-shadow: none; }
+}
+/* the left-edge strip of the pages above (components/edge-back.tsx): 20 px under the bar; while it is pulled a 4 px line at the edge shows it was taken */
+.edge-back { position: fixed; z-index: 3; left: 0; top: calc(var(--nav-h) + var(--nav-top)); bottom: 0; width: 20px; touch-action: none; }
+.edge-back::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--ink-3); opacity: 0; transition: opacity var(--d-1) var(--ease-out); }
+.edge-back.active::after { opacity: 1; }
 
 .join-card .privacy-risk, .group-create .privacy-risk { margin-top: 4px; font-size: 13px; line-height: 1.6; color: var(--v-warn); }
 .group-create .privacy { margin-top: 16px; font-size: 13px; line-height: 1.6; color: var(--ink-2); }

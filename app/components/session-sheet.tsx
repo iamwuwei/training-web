@@ -1,4 +1,4 @@
-import { Link } from "react-router";
+import { PushLink } from "./push-link";
 import type { ApiActivity, ApiSession } from "../types/api";
 import { combine, groupBySession, type Combined } from "../lib/combine";
 import { md, mdDow } from "../lib/date";
@@ -103,7 +103,7 @@ export function SessionSheet({ session, view, onClose, onOpen, readOnly }: { ses
           {last ? (
             <>
               <h2 className="section-h">上次這類課</h2>
-              <Link to={`/activities/${last.a.id}`} className="ss-last" onClick={onClose}>
+              <PushLink to={`/activities/${last.a.id}`} className="ss-last" onClick={onClose}>
                 <Avatar session={last.s} />
                 <span className="txt">
                   <span className="l1"><b>{mdDow(activityDate(last.a))}</b> <span>{shortName(last.s)}</span></span>
@@ -114,7 +114,7 @@ export function SessionSheet({ session, view, onClose, onOpen, readOnly }: { ses
                 </span>
                 <VerdictTag verdict={last.a.review?.verdict} />
                 <ChevronIcon small className="chev" />
-              </Link>
+              </PushLink>
             </>
           ) : null}
           {readOnly ? <p className="sheet-foot">這是 {readOnly.name} 的課表，只能看。</p> : null}
