@@ -7,6 +7,7 @@ import { TabBar } from "../components/ui";
 import { ApiError, getGroups, getPlan } from "../lib/api";
 import { clearMotion, enterModal } from "../lib/motion";
 import { useNavDirClear } from "../lib/nav";
+import { usePageFocus } from "../lib/use-page-focus";
 import { ensureWeekly } from "../lib/use-weekly";
 import { AuthError, completeLogin, getUser, hasSession, logout, saveReturnTo, takeReturnTo, type SessionUser } from "../lib/auth";
 import type { PlanResponse } from "../types/api";
@@ -63,6 +64,7 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
 
 export default function AppLayout({ loaderData }: Route.ComponentProps) {
   useNavDirClear(useLocation().key);
+  usePageFocus();
   // A page that says so (教練: `handle = { modal: true }`) is a modal: no tab bar, and the shell gets the class (coach-sheet-polish)
   const modal = useMatches().some((m) => (m.handle as { modal?: boolean } | undefined)?.modal === true);
   // The modal slides up over the page (01b §5.6; `MODAL_SLIDE` in lib/motion.ts turns it into a fade). Its bar and its composer are glass that moves with it: solid until it has stopped.

@@ -1,5 +1,6 @@
 import { Link, type LinkProps } from "react-router";
 import { setNavDir } from "../lib/nav";
+import { rememberPushFocus } from "../lib/use-page-focus";
 
 /**
  * A link into a page that is pushed over this one (a report, a group's page, the plan form, a draft): it goes with a View Transition, sliding in from the right
@@ -9,6 +10,6 @@ export function PushLink({ onClick, ...props }: LinkProps) {
   return <Link {...props} viewTransition onClick={(e) => {
     onClick?.(e);
     // a ⌘／Ctrl／Shift／Alt click or a middle click is the browser's (a new tab): this page does not move, so nothing is marked
-    if (!e.defaultPrevented && e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) setNavDir("push");
+    if (!e.defaultPrevented && e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) { setNavDir("push"); rememberPushFocus(e.currentTarget); }
   }} />;
 }
