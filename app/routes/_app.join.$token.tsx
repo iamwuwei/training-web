@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, redirect, useNavigate, useRevalidator } from "react-router";
 import type { Route } from "./+types/_app.join.$token";
-import { TopBar } from "../components/ui";
+import { NavBar } from "../components/nav-bar";
 import { ApiError, getInvite, postInviteAccept } from "../lib/api";
 import { hasSession, saveReturnTo } from "../lib/auth";
 import { todayJst } from "../lib/date";
@@ -88,7 +88,7 @@ export default function Join({ loaderData }: Route.ComponentProps) {
     const to = state === "already_member" && g ? { href: `/groups/${g.id}`, text: "去這個群組 ›" } : state === "group_limit" ? { href: "/groups", text: "去群組清單 ›" } : { href: "/", text: "回今天 ›" };
     return (
       <>
-        <TopBar title="加入群組" />
+        <NavBar kind="inline" title="加入群組" />
         <main>
           <div className="join-msg">
             <p className="t">{MESSAGES[state]}</p>
@@ -104,7 +104,7 @@ export default function Join({ loaderData }: Route.ComponentProps) {
   const cd = countdown(g.race_date, todayJst());
   return (
     <>
-      <TopBar title="加入群組" />
+      <NavBar kind="inline" title="加入群組" />
       <main>
         <div className="join-card">
           <div className="by">{g.invited_by} 邀你加入</div>

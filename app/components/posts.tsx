@@ -1,4 +1,4 @@
-import { Link } from "react-router";
+import { PushLink } from "./push-link";
 import type { ApiActivity, ApiSession } from "../types/api";
 import { mdDow } from "../lib/date";
 import { duration, km, kmPlan, paceRange, pace } from "../lib/format";
@@ -49,7 +49,7 @@ export function ActivityPost({ activity, session, showReminders, weekNo }: {
   const r = activity.review;
   const memo = activity.memo ?? activity.description;
   return (
-    <Link to={`/activities/${activity.id}`} className="post link">
+    <PushLink to={`/activities/${activity.id}`} className="post open">
       <Avatar session={session} sport={activity.sport_type} />
       <div className="body">
         <div className="meta">
@@ -67,6 +67,6 @@ export function ActivityPost({ activity, session, showReminders, weekNo }: {
           <span><b className="num">{duration(activity.moving_time_sec)}</b></span>
         </div>
       </div>
-    </Link>
+    </PushLink>
   );
 }

@@ -1,13 +1,12 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router";
-import { BackIcon } from "./icons";
-import { TopBar } from "./ui";
+import { BackPill, NavBar } from "./nav-bar";
 
 /** 找不到這個群組: unknown, disbanded, or not a member any more — the api answers all three the same, so does the page. */
 export function GroupNotFound() {
   return (
     <>
-      <TopBar title="群組" />
+      <NavBar kind="inline" title="群組" />
       <main>
         <div className="group-404">
           <p className="t">找不到這個群組</p>
@@ -19,12 +18,12 @@ export function GroupNotFound() {
   );
 }
 
-/** Icon-only back link of a 群組 page (the same 44 px target as the report's). */
-export function GroupBack({ to, label }: { to: string; label: string }) {
-  return <Link to={to} className="back" aria-label={label}><BackIcon /></Link>;
+/** The back pill of a 群組 page: "‹ 群組" (`label`, the page it goes back to); `ariaLabel` is what a screen reader hears. */
+export function GroupBack({ to, label, ariaLabel }: { to: string; label: string; ariaLabel: string }) {
+  return <BackPill to={to} label={label} ariaLabel={ariaLabel} />;
 }
 
-/** Title of a 群組 page's TopBar: one line, cut with … when the group's name is long. */
+/** Title of a 群組 page's nav bar: one line, cut with … when the group's name is long. */
 export function TopTitle({ children }: { children: ReactNode }) {
   return <span className="t">{children}</span>;
 }

@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import type { Route } from "./+types/_app.plan_.new";
-import { BackIcon } from "../components/icons";
-import { CoachAvatar, SectionH, TopBar } from "../components/ui";
+import { BackPill, NavBar } from "../components/nav-bar";
+import { CoachAvatar, SectionH } from "../components/ui";
 import { ApiError, getActivities, getLatestPlanDraft, postPlanDraft } from "../lib/api";
 import { addDays, todayJst } from "../lib/date";
 import {
@@ -11,6 +11,7 @@ import {
   type FormErrors, type IntakeForm,
 } from "../lib/draft";
 import { mdDowPlain, mdPlain } from "../lib/groups";
+import { hasPrevious, setNavDir } from "../lib/nav";
 import { duration, pace } from "../lib/format";
 import { localProfile, type LocalProfile } from "../lib/profile";
 import type { PlanIntake } from "../types/api";
@@ -143,7 +144,7 @@ function SummaryStep({ form, today, onBack, onDone }: { form: IntakeForm; today:
         <p className="err" role="alert">
           {submitErrorText(rejected.error)}
           {link === "draft" && rejected.draftId ? <> <Link to={`/plan/draft/${rejected.draftId}`}>看那份 ›</Link></> : null}
-          {link === "settings" ? <> <Link to="/settings">去設定 ›</Link></> : null}
+          {link === "settings" ? <> <Link to="/settings/strava">去設定 ›</Link></> : null}
         </p>
       ) : null}
       <div className="actions-row">
@@ -158,7 +159,6 @@ function SummaryStep({ form, today, onBack, onDone }: { form: IntakeForm; today:
 export default function NewPlan() {
   const today = todayJst();
   const navigate = useNavigate();
-  const location = useLocation();
   const [params] = useSearchParams();
   const [init] = useState(() => {
     const kept = loadIntake(); // answers kept by 改答案再排／重新開始 come first, then the address, then the defaults
@@ -168,7 +168,6 @@ export default function NewPlan() {
   const [form, setForm] = useState<IntakeForm>(init.form);
   const [step, setStep] = useState<1 | 2>(1);
   const [errors, setErrors] = useState<FormErrors>({});
-  const cameFromApp = location.key !== "default";
   useEffect(() => { clearIntake(); }, []); // read once: the answers are not kept for a later visit
   useEffect(() => { window.scrollTo(0, 0); }, [step]);
 
@@ -200,12 +199,12 @@ export default function NewPlan() {
   const err = (k: keyof IntakeForm) => errors[k];
 
   const back = step === 2
-    ? <button type="button" className="back" aria-label="回表單" onClick={() => setStep(1)}><BackIcon /></button>
-    : <button type="button" className="back" aria-label="返回" onClick={() => void (cameFromApp ? navigate(-1) : navigate("/"))}><BackIcon /></button>;
+    ? <BackPill label="表單" ariaLabel="回表單" onClick={() => setStep(1)} />
+    : <BackPill label="返回" onClick={() => { setNavDir("pop"); void (hasPrevious() ? navigate(-1) : navigate("/", { viewTransition: true })); }} />;
 
   return (
     <>
-      <TopBar title={step === 1 ? F.title : T.summary.title} back={back} />
+      <NavBar kind="inline" title={step === 1 ? F.title : T.summary.title} left={back} />
       <main className="intake">
         {step === 1 && init.carried ? <p className="group-note" role="status">{F.carried}</p> : null}
         {step === 2 ? (

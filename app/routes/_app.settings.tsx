@@ -1,16 +1,15 @@
-import { useState } from "react";
-import { redirect, useLocation, useRevalidator } from "react-router";
+import { useEffect, useRef, useState } from "react";
+import { redirect, useLocation, useMatches, useNavigate, useOutlet, useRevalidator } from "react-router";
 import type { Route } from "./+types/_app.settings";
-import { Fold } from "../components/fold";
-import { ShareSettingsSection } from "../components/share-settings";
-import { SectionH, TopBar } from "../components/ui";
-import { ApiError, disconnectStrava, getGroups, getMe, getShare, postConstraint } from "../lib/api";
-import { hasSession, logout } from "../lib/auth";
-import { config, useMock } from "../lib/config";
-import { periodMeta } from "../lib/constraints";
-import { md, todayJst, toJstDate } from "../lib/date";
-import { usePlan } from "../lib/use-plan";
+import { BackPill, NavBar } from "../components/nav-bar";
+import { PushStack } from "../components/push-stack";
+import { SettingsMain } from "../components/settings-main";
+import { ApiError, getGroups, getMe, getShare } from "../lib/api";
+import { hasSession } from "../lib/auth";
+import { hasPrevious, markOwnBack } from "../lib/nav";
 import { pageTitle } from "../lib/meta";
+import type { SettingsContext } from "../lib/settings-context";
+import type { ShareSettings } from "../types/api";
 
 export async function clientLoader() {
   if (!hasSession()) throw redirect("/login");
@@ -30,139 +29,72 @@ export async function clientLoader() {
   }
 }
 
+/** The pushed pages (route id → the bar's title). The pages draw their content and name their own browser title (`meta`). */
+const SUB_TITLES: Record<string, string> = {
+  "routes/_app.settings.privacy": "隱私",
+  "routes/_app.settings.strava": "Strava",
+};
+
 export function meta({ matches }: Route.MetaArgs): Route.MetaDescriptors {
   return pageTitle("設定", matches);
 }
 
 /**
- * Woo 記住的限制: what he was told to remember (accepted from his 記下來 cards), one per row, with
- * a 刪除 that takes effect at once. No manual add: limits come from the conversation only.
- * Expired ones stay listed (marked 已過期) until deleted; Woo ignores them either way.
+ * 設定 and the pages pushed over it (01b §5.1, §5.2). The settings page stays mounted under whichever page is pushed (`PushStack`), so coming back finds it as it was.
+ * The share switches are one state here (the 隱私 row on the settings page counts the ones that are on while the page that changes them is open).
  */
-function Constraints() {
-  const list = usePlan()?.data.constraints ?? [];
+export default function SettingsLayout({ loaderData }: Route.ComponentProps) {
+  const matches = useMatches();
+  const subId = matches.map((m) => m.id).find((id) => id in SUB_TITLES) ?? null;
+  const { state } = useLocation() as { key: string; state: { fromSettings?: boolean } | null };
+  const navigate = useNavigate();
   const revalidator = useRevalidator();
-  const [gone, setGone] = useState<string[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const today = todayJst();
-  const rows = list.filter((c) => c.status === "active");
 
-  async function remove(id: string) {
-    setError(null);
-    try {
-      await postConstraint(id, "dismiss");
-      setGone((g) => [...g, id]);
-      window.setTimeout(() => void revalidator.revalidate(), 250);
-    } catch (e) {
-      // 409: already gone (another device) — reload and the row is too.
-      if (e instanceof ApiError && e.status === 409) void revalidator.revalidate();
-      else setError(e instanceof ApiError ? e.message : "刪除失敗，再試一次");
-    }
-  }
+  const loaded = loaderData.share.state === "ok" ? loaderData.share.share : null;
+  const [changed, setChanged] = useState<ShareSettings | null>(null);
+  const share = changed ?? loaded;
+  const ctx: SettingsContext = {
+    me: loaderData.me,
+    shareState: loaderData.share.state,
+    share,
+    inGroups: loaderData.inGroups,
+    updateShare: (f) => setChanged((prev) => { const base = prev ?? loaded; return base ? f(base) : prev; }),
+    reload: () => revalidator.revalidate(),
+  };
 
-  return (
-    <section className="constraints" aria-label="Woo 記住的限制">
-      <SectionH>Woo 記住的限制</SectionH>
-      {rows.length === 0 ? <p className="empty-line">還沒有。跟 Woo 說「週三不能跑」之類的，他會問要不要記下。</p> : null}
-      {rows.map((c) => {
-        const meta = periodMeta(c, today);
-        return (
-          <div key={c.id} className={`constraint-wrap${gone.includes(c.id) ? " gone" : ""}`} inert={gone.includes(c.id)}>
-            <div className="constraint">
-              <div className="txt">
-                <div className="t">{c.text}</div>
-                <div className={`meta${meta.expired ? " expired" : ""}`}>{meta.text} · 來自 {md(toJstDate(c.created_at))} 的對話</div>
-              </div>
-              <button type="button" className="del" aria-label={`刪除：${c.text}`} onClick={() => void remove(c.id)}>刪除</button>
-            </div>
-          </div>
-        );
-      })}
-      {error ? <p className="err" role="alert" style={{ marginTop: 8, fontSize: 13, color: "var(--v-bad)" }}>{error}</p> : null}
-      {rows.length ? <p className="note-line">排課提案不會違反這些。過期的自動不算，不用刪；刪了 Woo 就當沒說過。</p> : null}
-    </section>
-  );
-}
+  const outlet = useOutlet(ctx);
 
-export default function Settings({ loaderData }: Route.ComponentProps) {
-  const { user, strava, strava_connect_url } = loaderData.me;
-  const { share, inGroups } = loaderData;
-  const loginVia = useMock ? "示範資料" : config.cognitoIdp === "SignInWithApple" ? "Apple" : "Cognito";
-  const revalidator = useRevalidator();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  // Folded unless the url asks for it (#share, #strava) or there is nothing else to do here (no Strava yet). Not stored anywhere.
-  const { hash } = useLocation();
-  const [stravaOpen, setStravaOpen] = useState(() => hash === "#strava" || !strava);
-  const [shareOpen, setShareOpen] = useState(() => hash === "#share");
+  // One back at a time: a second press before the first one has landed would go back past the settings page.
+  const backing = useRef(false);
+  useEffect(() => { backing.current = false; }, [subId]);
+  // A page pushed from here goes one step back; one reached from elsewhere (今天's 去設定, a shared link, an old #anchor) goes to the settings page itself.
+  const onBack = () => {
+    if (backing.current) return;
+    backing.current = true;
+    markOwnBack();
+    if (state?.fromSettings) void navigate(-1);
+    else void navigate("/settings", { replace: true });
+  };
 
-  async function unlink() {
-    if (!window.confirm("解除 Strava 連結？之後的跑步不會再自動匯入，已匯入的紀錄會保留。")) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await disconnectStrava();
-      await revalidator.revalidate();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "解除失敗");
-    } finally {
-      setBusy(false);
-    }
-  }
+  // 今天 is the page before this one when there is one. `key` alone does not say (a `replace` from a pushed page, or an old #anchor, gives a new key at the start of the history): the router's own index does.
+  const goToday = () => void (hasPrevious() ? navigate(-1) : navigate("/", { replace: true }));
 
   return (
     <>
-      <TopBar title="設定" />
-      <main>
-        <SectionH>帳號</SectionH>
-        <div className="setting"><span className="k">名字</span><span className="v">{user.display_name}</span></div>
-        <div className="setting"><span className="k">Email</span><span className="v">{user.email ?? "–"}</span></div>
-        <div className="setting"><span className="k">登入方式</span><span className="v grey">{loginVia}</span></div>
-
-        <Fold id="strava" title="Strava" summary={<span className={`status${strava ? " on" : ""}`}>{strava ? "已連結" : "尚未連結"}</span>} open={stravaOpen} onToggle={() => setStravaOpen((o) => !o)}>
-          <div className="setting">
-            <span className="k">狀態</span>
-            <span className="v">
-              {strava
-                ? <span className="status on">已連結 · athlete {strava.athlete_id}</span>
-                : <span className="status">尚未連結</span>}
-            </span>
-          </div>
-          {strava ? (
-            <div className="setting"><span className="k">權限</span><span className="v grey">{strava.scope}</span></div>
-          ) : null}
-          <a className={`btn${strava ? "" : " primary"}`} href={strava_connect_url} target="_blank" rel="noopener">
-            {strava ? "重新連結 Strava" : "連結 Strava"}
-          </a>
-          {strava ? (
-            <button type="button" className="btn danger" onClick={() => void unlink()} disabled={busy}>
-              {busy ? "解除中…" : "解除 Strava 連結"}
-            </button>
-          ) : null}
-          {error ? <p className="err" role="alert" style={{ marginTop: 8, fontSize: 13, color: "var(--v-bad)" }}>{error}</p> : null}
-          <p className="note" style={{ textAlign: "left" }}>
-            連結後 Strava 的每次跑步會自動配對課表。{strava ? "重新連結會換新的授權；解除連結會向 Strava 撤銷授權，已匯入的紀錄保留。" : "會開 Strava 的授權頁，同意後回到這裡重新整理。"}
-          </p>
-        </Fold>
-
-        {share.state === "ok" ? <ShareSettingsSection initial={share.share} inGroups={inGroups} open={shareOpen} onToggle={() => setShareOpen((o) => !o)} /> : null}
-        {share.state === "error" ? (
-          <Fold id="share" title="隱私" summary="讀不到" open={shareOpen} onToggle={() => setShareOpen((o) => !o)}>
-            <div className="share">
-              <p className="share-intro" role="alert">讀不到分享設定。</p>
-              <button type="button" className="chip" style={{ marginTop: 8 }} onClick={() => void revalidator.revalidate()}>再試一次</button>
-            </div>
-          </Fold>
-        ) : null}
-
-        <Constraints />
-
-        <SectionH>關於</SectionH>
-        <div className="setting"><span className="k">資料來源</span><span className="v grey">{useMock ? "內建示範資料" : config.apiUrl.replace(/^https?:\/\//, "")}</span></div>
-        <div className="setting"><span className="k">使用者 ID</span><span className="v grey" style={{ fontSize: 12 }}>{user.id}</span></div>
-
-        <button type="button" className="btn danger" onClick={logout} style={{ marginTop: 28 }}>登出</button>
-      </main>
+      {subId ? null : outlet /* the index: nothing to draw, unless the url carries an old #anchor and it sends us on */}
+      <PushStack
+        base={
+          <>
+            <NavBar kind="inline" title="設定" left={<BackPill label="今天" ariaLabel="返回今天" onClick={goToday} />} />
+            <SettingsMain ctx={ctx} />
+          </>
+        }
+        sub={subId ? outlet : null}
+        subKey={subId}
+        title={subId ? SUB_TITLES[subId] : null}
+        backLabel="設定"
+        onBack={onBack}
+      />
     </>
   );
 }

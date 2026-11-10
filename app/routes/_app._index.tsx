@@ -1,13 +1,16 @@
 import { useState } from "react";
 import { Link, useRevalidator } from "react-router";
 import type { Route } from "./+types/_app._index";
-import { GearIcon, MountainIcon } from "../components/icons";
+import { ChevronIcon, GearIcon, MountainIcon } from "../components/icons";
 import { PlanPost } from "../components/posts";
+import { PushLink } from "../components/push-link";
 import { Progress } from "../components/progress";
 import { SessionSheet } from "../components/session-sheet";
 import { WeeklyReviewSheet } from "../components/weekly-review-sheet";
 import { StrengthDay } from "../components/strength-day";
-import { Avatar, Bar, CoachAvatar, SectionH, TopBar, VerdictTag } from "../components/ui";
+import { GlassButton, NavBar } from "../components/nav-bar";
+import { Ring } from "../components/ring";
+import { Avatar, CoachAvatar, SectionH, VerdictTag } from "../components/ui";
 import { md, mdDow, relativeDay, timeJst } from "../lib/date";
 import { duration, int, km, kmPlan, pace } from "../lib/format";
 import { isStrengthDay, shortName, sportName } from "../lib/labels";
@@ -36,7 +39,7 @@ function firstSentence(text: string | null | undefined): string | null {
 }
 
 function WooLine({ text, to }: { text: string; to?: string }) {
-  return <div className="wooline"><CoachAvatar size={20} /><span>{text}{to ? <> <Link to={to}>看報告</Link></> : null}</span></div>;
+  return <div className="wooline"><CoachAvatar size={20} /><span>{text}{to ? <> <PushLink to={to}>看報告</PushLink></> : null}</span></div>;
 }
 
 /** The first sentence of a note and the rest, split on the first full stop. */
@@ -59,7 +62,7 @@ function RestDay({ session }: { session: ApiSession }) {
   // Woo's one line leads; the note itself sits behind 為什麼.
   const note = session.brief ? { first: session.brief, rest: raw?.trim() ?? "" } : splitNote(raw);
   return (
-    <div className={`rest-day${strength ? " strength" : ""}`}>
+    <div className="blk"><div className={`rest-day${strength ? " strength" : ""}`}>
       {strength ? <Avatar session={session} /> : (
         <svg width="120" height="64" viewBox="0 0 120 64" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" aria-hidden="true">
           <path d="M4 58 L40 12 L52 26 L62 18 L96 58 Z" /><path d="M34 22 L40 28 L46 22 L52 26" />
@@ -73,7 +76,7 @@ function RestDay({ session }: { session: ApiSession }) {
           {note.rest ? (open ? <> {note.rest}</> : <> <button type="button" className="more" onClick={() => setOpen(true)} aria-expanded={false}>為什麼 ›</button></>) : null}
         </p>
       ) : null}
-    </div>
+    </div></div>
   );
 }
 
@@ -121,18 +124,21 @@ function TodayPost({ day, view, slow, onOpen }: { day: Day; view: PlanView; slow
     const r = activity.review;
     const line = r?.reminders[0] ? `→ ${r.reminders[0]}` : firstSentence(r?.comment);
     return (
-      <Link to={`/activities/${activity.id}`} className="post link today-post">
-        <Avatar session={session} />
-        <div className="body">
-          <div className="head">
-            <b>{shortName(session)}</b>
-            {combined.count > 1 ? <span className="segs">{combined.count} 筆紀錄</span> : null}
-            {r?.verdict ? <VerdictTag verdict={r.verdict} /> : r?.failed ? <span className="pending failed">分析失敗，點進去重試</span> : view.data.coach_checkin_open ? <span className="pending">{view.data.coach_ask_kind === "mismatch" ? "Woo 在問這趟是不是" : view.data.coach_ask_kind === "feel" ? "Woo 在等你回感受" : "Woo 在等你回"}</span> : <span className="pending">{slow ? "分析比較久，點進去看" : "教練分析中…"}</span>}
+      <PushLink to={`/activities/${activity.id}`} className="blk link">
+        <div className="post open today-post">
+          <Avatar session={session} />
+          <div className="body">
+            <div className="head">
+              <b>{shortName(session)}</b>
+              {combined.count > 1 ? <span className="segs">{combined.count} 筆紀錄</span> : null}
+              {r?.verdict ? <VerdictTag verdict={r.verdict} /> : r?.failed ? <span className="pending failed">分析失敗，點進去重試</span> : view.data.coach_checkin_open ? <span className="pending">{view.data.coach_ask_kind === "mismatch" ? "Woo 在問這趟是不是" : view.data.coach_ask_kind === "feel" ? "Woo 在等你回感受" : "Woo 在等你回"}</span> : <span className="pending">{slow ? "分析比較久，點進去看" : "教練分析中…"}</span>}
+            </div>
+            <Stats a={combined} day={day} big />
+            {line ? <div className="wooline"><CoachAvatar size={20} /><span>{line}</span></div> : null}
           </div>
-          <Stats a={combined} day={day} big />
-          {line ? <div className="wooline"><CoachAvatar size={20} /><span>{line}</span></div> : null}
         </div>
-      </Link>
+        <ChevronIcon small className="chev" />
+      </PushLink>
     );
   }
 
@@ -140,10 +146,10 @@ function TodayPost({ day, view, slow, onOpen }: { day: Day; view: PlanView; slow
   if (isStrengthDay(session)) {
     const title = `今天肌力日${session.label === "肌力" && session.content && !/^肌力$/.test(session.content) ? ` · ${session.content}` : ""}`;
     return (
-      <>
+      <div className="blk">
         <StrengthDay session={session} routine={view.routineBySession.get(session.id) ?? null} title={title} />
         {view.data.coach_checkin_open ? <Link to="/coach" className="btn primary woo"><span className="w" aria-hidden="true">W</span>Woo 在問這趟練得怎麼樣</Link> : null}
-      </>
+      </div>
     );
   }
 
@@ -152,25 +158,27 @@ function TodayPost({ day, view, slow, onOpen }: { day: Day; view: PlanView; slow
   const prep = lastReminderFor(view, session);
   return (
     <div className="today-open">
-      <button type="button" className="open-plan" onClick={() => onOpen(session)}><PlanPost session={session} big /></button>
-      {prep && !first ? <WooLine text={prep} /> : null}
-      {first ? (
-        <>
-          <p className="synced">
-            <i aria-hidden="true" />Strava：{sportName(first.sport_type)}
-            {first.distance_m > 0 ? <> <b className="num">{km(first.distance_m)}</b> km</> : null}
-            {isRunSport(first.sport_type) ? <> · <b className="num">{pace(first.avg_pace_sec_km)}</b> /km</> : null}
-          </p>
-          {view.data.coach_checkin_open ? (
-            <Link to="/coach" className="btn primary woo"><span className="w" aria-hidden="true">W</span>Woo 在問這趟練得怎麼樣</Link>
-          ) : (
-            <button type="button" className="btn primary" onClick={() => void assign(first, session.id)} disabled={busy}>{busy ? "送出中…" : "這趟就是今天的課"}</button>
-          )}
-          {error ? <p className="hint" style={{ color: "var(--v-bad)" }}>{error}</p> : null}
-        </>
-      ) : (
-        <p className="hint">跑完後 Strava 會自動同步到這裡</p>
-      )}
+      <button type="button" className="open-plan blk link" onClick={() => onOpen(session)}><PlanPost session={session} big /><ChevronIcon small className="chev" /></button>
+      <div className="blk">
+        {prep && !first ? <WooLine text={prep} /> : null}
+        {first ? (
+          <>
+            <p className="synced">
+              <i aria-hidden="true" />Strava：{sportName(first.sport_type)}
+              {first.distance_m > 0 ? <> <b className="num">{km(first.distance_m)}</b> km</> : null}
+              {isRunSport(first.sport_type) ? <> · <b className="num">{pace(first.avg_pace_sec_km)}</b> /km</> : null}
+            </p>
+            {view.data.coach_checkin_open ? (
+              <Link to="/coach" className="btn primary woo"><span className="w" aria-hidden="true">W</span>Woo 在問這趟練得怎麼樣</Link>
+            ) : (
+              <button type="button" className="btn primary" onClick={() => void assign(first, session.id)} disabled={busy}>{busy ? "送出中…" : "這趟就是今天的課"}</button>
+            )}
+            {error ? <p className="hint" style={{ color: "var(--v-bad)" }}>{error}</p> : null}
+          </>
+        ) : (
+          <p className="hint">跑完後 Strava 會自動同步到這裡</p>
+        )}
+      </div>
     </div>
   );
 }
@@ -186,10 +194,10 @@ function PlanNext() {
   const to = draft && (draft.status === "pending" || draft.status === "ready" || draft.status === "failed") ? `/plan/draft/${draft.id}` : "/plan/new";
   return (
     <div className="plan-next">
-      {draft?.status === "pending" ? <Link to={to}><CoachAvatar size={20} />{T.pending}</Link>
-        : draft?.status === "ready" ? <Link to={to}><CoachAvatar size={20} badge="check" />{T.ready}</Link>
-        : draft?.status === "failed" ? <Link to={to}>{T.failed}</Link>
-        : <Link to={to}>{T.next}</Link>}
+      {draft?.status === "pending" ? <PushLink to={to}><CoachAvatar size={20} />{T.pending}</PushLink>
+        : draft?.status === "ready" ? <PushLink to={to}><CoachAvatar size={20} badge="check" />{T.ready}</PushLink>
+        : draft?.status === "failed" ? <PushLink to={to}>{T.failed}</PushLink>
+        : <PushLink to={to}>{T.next}</PushLink>}
     </div>
   );
 }
@@ -201,13 +209,13 @@ function ExtraRow({ a, view }: { a: ApiActivity; view: PlanView }) {
   const { assign, busy, error } = useAssign(view.todayDay?.activities ?? []);
   return (
     <div className="extra-row">
-      <Link to={`/activities/${a.id}`} className="who">
+      <PushLink to={`/activities/${a.id}`} className="who">
         <Avatar session={null} sport={a.sport_type} />
         <span className="txt">
           <span className="t">{sportName(a.sport_type)} {a.distance_m > 0 ? `${km(a.distance_m)} km` : duration(a.moving_time_sec)}</span>
           <span className="s">{[timeJst(a.start_time), run ? `${pace(a.avg_pace_sec_km)} /km` : null].filter(Boolean).join(" · ")}</span>
         </span>
-      </Link>
+      </PushLink>
       {appendTo ? <button type="button" className="chip" onClick={() => void assign(a, appendTo.id, true)} disabled={busy}>{busy ? "…" : "也算今天的課"}</button>
         : target ? <button type="button" className="chip" onClick={() => void assign(a, target.id)} disabled={busy}>{busy ? "…" : `算成 ${target.scheduled_date === activityDate(a) ? "今天" : md(target.scheduled_date)} 的課`}</button> : null}
       {error ? <p className="err" role="alert">{error}</p> : null}
@@ -238,41 +246,48 @@ export default function Today() {
   // the newest weekly review: 上週回顧 when it is last week's, else its week's number (only while the plan is running: there is a 本週 and the race is not over)
   const latest = reviews[0] ?? null;
   const latestNo = latest ? weekNoOfReview(latest, data.weeks) : null;
-  const reviewLabel = latestNo == null ? "週回顧 ›" : currentWeek && latestNo === currentWeek.week_no - 1 ? "上週回顧 ›" : `第 ${latestNo} 週回顧 ›`;
+  // (the 「›」 of the label is the chevron icon now, 02 §2.3-3)
+  const reviewLabel = latestNo == null ? "週回顧" : currentWeek && latestNo === currentWeek.week_no - 1 ? "上週回顧" : `第 ${latestNo} 週回顧`;
+  const showFoot = !!(currentWeek && latest && daysToRace >= 0);
 
   return (
     <>
-      <TopBar
-        title={<><MountainIcon /><span className="t">{data.plan.race_name}</span></>}
-        aside={<Link to="/settings" className="gear" aria-label="設定"><GearIcon /></Link>}
+      <NavBar
+        kind="large"
+        title="今天"
+        subtitle={<><MountainIcon />{data.plan.race_name}</>}
+        right={<GlassButton to="/settings" label="設定"><GearIcon /></GlassButton>}
       />
       <main>
-        <div className="hero2">
-          <div>
+        <section className="hero5">
+          <div className="h-left">
             <div className="k">倒數</div>
             <div className="v">{daysToRace > 0 ? <><span className="num big">{daysToRace}</span><span className="unit">天</span></> : <span className="num mid">{daysToRace === 0 ? "比賽日" : "已完賽"}</span>}</div>
-            <i aria-hidden="true" />
           </div>
-          {currentWeek ? (
-            <Link to="/plan" className="week-line" aria-label={`第 ${currentWeek.week_no} 週 ${km(currentWeek.actual_m)} / ${kmPlan(currentWeek.plan_m)} km`}>
-              <div className="k">第 {currentWeek.week_no} 週 · {md(currentWeek.week_start)}–{md(currentWeek.week_end)}</div>
-              <div className="v"><span className={`num mid${currentWeek.isComplete ? " done" : ""}`}>{km(currentWeek.actual_m)}</span><span className="unit">/ {kmPlan(currentWeek.plan_m)} km</span></div>
-              <Bar value={currentWeek.actual_m} max={currentWeek.plan_m} tone={currentWeek.isComplete ? "good" : "ink"} />
-            </Link>
-          ) : null}
-        </div>
-        {currentWeek && latest && daysToRace >= 0 ? <button type="button" className="review-entry today" onClick={() => setReviewId(latest.id)}><CoachAvatar size={20} />{reviewLabel}</button> : null}
+          {currentWeek ? (() => {
+            const label = `第 ${currentWeek.week_no} 週 ${km(currentWeek.actual_m)} / ${kmPlan(currentWeek.plan_m)} km`;
+            return (
+              <Link to="/plan" className="h-right week-link" aria-label={label}>
+                <div className="k"><span>第 {currentWeek.week_no} 週 ·</span> <span>{md(currentWeek.week_start)}–{md(currentWeek.week_end)}</span></div>
+                <Ring value={currentWeek.actual_m} max={currentWeek.plan_m} complete={currentWeek.isComplete} label={label} ringKey={currentWeek.week_start}>
+                  <b className="num">{km(currentWeek.actual_m)}</b><small>/ {kmPlan(currentWeek.plan_m)} km</small>
+                </Ring>
+              </Link>
+            );
+          })() : null}
+          {showFoot && latest ? <button type="button" className="hero-foot" onClick={() => setReviewId(latest.id)}><CoachAvatar size={24} /><span>{reviewLabel}</span><ChevronIcon small className="chev" /></button> : null}
+        </section>
 
         <SectionH
-          action={<button type="button" className="chip" onClick={() => void revalidator.revalidate()} disabled={revalidator.state === "loading"}>{revalidator.state === "loading" ? "更新中…" : "重新整理"}</button>}
+          action={<button type="button" className="txtbtn" onClick={() => void revalidator.revalidate()} disabled={revalidator.state === "loading"}>{revalidator.state === "loading" ? "更新中…" : "重新整理"}</button>}
         >
-          今天 · {mdDow(today)}
+          {mdDow(today)}
         </SectionH>
         {todayDay ? (
           <TodayPost day={todayDay} view={view} slow={timedOut} onOpen={setOpen} />
         ) : (
           <>
-            <p className="empty">{today > data.plan.race_date ? "課表已結束，辛苦了。" : data.weeks[0] && today < data.weeks[0].week_start ? "課表還沒開始。" : "今天沒有排課。"}</p>
+            <p className="empty blk">{today > data.plan.race_date ? "課表已結束，辛苦了。" : data.weeks[0] && today < data.weeks[0].week_start ? "課表還沒開始。" : "今天沒有排課。"}</p>
             {today > data.plan.race_date ? <PlanNext /> : null}
           </>
         )}
@@ -280,21 +295,22 @@ export default function Today() {
         {extras.length ? (
           <>
             <SectionH>今天其他活動</SectionH>
-            {extras.map((a) => <ExtraRow key={a.id} a={a} view={view} />)}
+            <div className="grp">{extras.map((a) => <ExtraRow key={a.id} a={a} view={view} />)}</div>
           </>
         ) : null}
 
         {/* Only the next session: the 進步 block below should start on the second screen. */}
         <SectionH>下次{next ? ` · ${mdDow(next.session.scheduled_date)}` : ""}</SectionH>
         {next ? (
-          <button type="button" className="next-row first" onClick={() => setOpen(next.session)}>
+          <button type="button" className="blk link next-row first" onClick={() => setOpen(next.session)}>
             <Avatar session={next.session} />
             <span className="t">{next.session.content ?? shortName(next.session)}</span>
             <span className="when">{md(next.session.scheduled_date)} · {relativeDay(next.session.scheduled_date, today)}</span>
             {next.session.target ? <span className="sub">{next.session.target}</span> : null}
             {nextPrep ? <WooLine text={nextPrep} /> : null}
+            <ChevronIcon small className="chev" />
           </button>
-        ) : <p className="empty">沒有後續課表</p>}
+        ) : <p className="empty blk">沒有後續課表</p>}
 
         <Progress view={view} />
       </main>

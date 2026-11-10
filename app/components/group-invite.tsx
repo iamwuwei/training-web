@@ -85,7 +85,7 @@ function Inner({ onClose, groupId, invite, onChanged }: { onClose: () => void; g
     <>
       {/* while a confirm is up, Escape and the backdrop belong to it, not to this sheet; the confirms are siblings, not children, so each is its own top layer */}
       <BottomSheet open onClose={ask ? () => undefined : onClose} label="邀請夥伴" className="invite-sheet">
-        <h2 className="sheet-title">邀請夥伴</h2>
+        <h2 className="sheet-title st">邀請夥伴</h2>
         <div className="group-invite">
           {!current ? (
             <>

@@ -2,7 +2,9 @@ import { useMemo } from "react";
 import { Link, useRouteLoaderData } from "react-router";
 import type { clientLoader } from "../routes/_app";
 import { GearIcon } from "../components/icons";
-import { CoachAvatar, TopBar } from "../components/ui";
+import { GlassButton, NavBar } from "../components/nav-bar";
+import { PushLink } from "../components/push-link";
+import { CoachAvatar } from "../components/ui";
 import { WooStatus } from "../components/woo-status";
 import type { SessionUser } from "./auth";
 import { todayJst } from "./date";
@@ -28,7 +30,7 @@ export function useUser(): SessionUser | null {
 export function NoPlanEntry({ title }: { title: "今天" | "課表" }) {
   const { me, draft, latestNotFound, loading } = useLatestDraft();
   const T = DRAFT_TEXT.entry;
-  const aside = title === "今天" ? <Link to="/settings" className="gear" aria-label="設定"><GearIcon /></Link> : undefined;
+  const aside = title === "今天" ? <GlassButton to="/settings" label="設定"><GearIcon /></GlassButton> : undefined;
 
   let body: React.ReactNode;
   if (loading) {
@@ -46,7 +48,7 @@ export function NoPlanEntry({ title }: { title: "今天" | "課表" }) {
         <CoachAvatar size={44} />
         <p className="t">{T.noneTitle}</p>
         <p className="sub">{T.stravaSub}</p>
-        <div className="actions-row center"><Link to="/settings" className="btn primary compact">{T.stravaCta}</Link></div>
+        <div className="actions-row center"><Link to="/settings/strava" className="btn primary compact">{T.stravaCta}</Link></div>
       </div>
     );
   } else if (latestNotFound) {
@@ -57,7 +59,7 @@ export function NoPlanEntry({ title }: { title: "今天" | "課表" }) {
         <CoachAvatar size={44} />
         <p className="t"><WooStatus stage={null} fallback={T.pendingTitle} /></p>
         <p className="sub">{T.pendingSub}</p>
-        <div className="actions-row center"><Link to={`/plan/draft/${draft.id}`} className="btn primary compact">{T.pendingCta}</Link></div>
+        <div className="actions-row center"><PushLink to={`/plan/draft/${draft.id}`} className="btn primary compact">{T.pendingCta}</PushLink></div>
       </div>
     );
   } else if (draft?.status === "ready") {
@@ -66,7 +68,7 @@ export function NoPlanEntry({ title }: { title: "今天" | "課表" }) {
         <CoachAvatar size={44} badge="check" />
         <p className="t">{T.readyTitle}</p>
         <p className="sub">{T.readySub(draftName(draft), draftWeeks(draft))}</p>
-        <div className="actions-row center"><Link to={`/plan/draft/${draft.id}`} className="btn primary compact">{T.readyCta}</Link></div>
+        <div className="actions-row center"><PushLink to={`/plan/draft/${draft.id}`} className="btn primary compact">{T.readyCta}</PushLink></div>
       </div>
     );
   } else if (draft?.status === "failed") {
@@ -75,7 +77,7 @@ export function NoPlanEntry({ title }: { title: "今天" | "課表" }) {
         <CoachAvatar size={44} />
         <p className="t">{T.failedTitle}</p>
         <p className="sub">{draft.can_resume ? T.failedSub : T.failedSubNoResume}</p>
-        <div className="actions-row center"><Link to={`/plan/draft/${draft.id}`} className="btn primary compact">{T.failedCta}</Link></div>
+        <div className="actions-row center"><PushLink to={`/plan/draft/${draft.id}`} className="btn primary compact">{T.failedCta}</PushLink></div>
       </div>
     );
   } else {
@@ -84,7 +86,7 @@ export function NoPlanEntry({ title }: { title: "今天" | "課表" }) {
         <CoachAvatar size={44} />
         <p className="t">{T.noneTitle}</p>
         <p className="sub">{T.noneSub}</p>
-        <div className="actions-row center"><Link to="/plan/new" className="btn primary compact woo"><span className="w" aria-hidden="true">W</span>{T.noneCta}</Link></div>
+        <div className="actions-row center"><PushLink to="/plan/new" className="btn primary compact woo"><span className="w" aria-hidden="true">W</span>{T.noneCta}</PushLink></div>
         <p className="hint">{T.noneHint}</p>
       </div>
     );
@@ -92,7 +94,7 @@ export function NoPlanEntry({ title }: { title: "今天" | "課表" }) {
 
   return (
     <>
-      <TopBar title={title} aside={aside} />
+      <NavBar kind="large" title={title} right={aside} />
       <main>{body}</main>
     </>
   );

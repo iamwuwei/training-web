@@ -58,7 +58,7 @@ export function WeeklyReviewSheet({ review, view, onClose }: { review: ApiWeekly
     <BottomSheet open={!!review} onClose={onClose} label="週回顧" className="review-sheet">
       {review ? (
         <>
-          <div className="wr-head">
+          <div className="wr-head st">
             <div className="sheet-title">{title}</div>
             <div className="wr-sub">{md(from)}–{md(to)} · Woo</div>
           </div>

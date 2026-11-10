@@ -170,7 +170,7 @@ export function StrengthDay({ session, routine, title }: { session: ApiSession; 
         {error ? <p className="hint" style={{ color: "var(--v-bad)" }}>{error}</p> : null}
       </div>
       <BottomSheet open={sheetOpen} onClose={() => { setSheet(false); setSheetDismissed(true); }} label="完成肌力">
-        <div className="done-head">
+        <div className="done-head st">
           <CoachAvatar size={36} badge={allDone ? "check" : null} />
           <div><div className="t">{allDone ? `${items.length} 項都做完了` : `做了 ${nDone} / ${items.length} 項`}</div><div className="s">{[title.replace(/^今天肌力日\s*·?\s*/, "") || "肌力", routine.minutes ? `${routine.minutes} 分` : null].filter(Boolean).join(" · ")}</div></div>
         </div>

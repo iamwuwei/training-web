@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Route } from "./+types/_app.plan";
-import { Link, useLocation, useNavigate, useRevalidator, useSearchParams } from "react-router";
-import { BackIcon } from "../components/icons";
-import { DayRow, WeekBars } from "../components/plan-week";
+import { useNavigate, useRevalidator, useSearchParams } from "react-router";
+import { DayRow, WeekBars, WeekBody } from "../components/plan-week";
 import { SessionSheet } from "../components/session-sheet";
 import { WeeklyReviewSheet } from "../components/weekly-review-sheet";
-import { Avatar, Bar, CoachAvatar, TopBar } from "../components/ui";
+import { BackPill, NavBar } from "../components/nav-bar";
+import { PushLink } from "../components/push-link";
+import { Avatar, Bar, CoachAvatar } from "../components/ui";
 import { ApiError, postProposal } from "../lib/api";
 import { md, timeJst } from "../lib/date";
 import { km, kmPlan, pace } from "../lib/format";
@@ -17,6 +18,7 @@ import { useProposal, useReviewedWeeks } from "../lib/use-proposal";
 import { reviewForWeek, useWeeklyReviews } from "../lib/use-weekly";
 import { resetWeeklyCaches } from "../lib/use-weekly-message";
 import type { ApiActivity, ApiSession, ApiWeek, PlanResponse } from "../types/api";
+import { hasPrevious } from "../lib/nav";
 import { pageTitle } from "../lib/meta";
 
 export function meta({ matches }: Route.MetaArgs): Route.MetaDescriptors {
@@ -34,18 +36,20 @@ function ExtraRows({ week, unassigned }: { week: Week; unassigned: ApiActivity[]
   return (
     <section className="extras" aria-label="其他活動">
       <h3 className="h">其他活動 · 沒配到課的</h3>
+      <div className="grp">
       {rows.map((a) => {
         const run = isRunSport(a.sport_type);
         return (
-          <Link key={a.id} to={`/activities/${a.id}`} className="row">
+          <PushLink key={a.id} to={`/activities/${a.id}`} className="xrow">
             <span aria-hidden="true" />
             <Avatar session={null} sport={a.sport_type} />
             <span className="n"><span className="t">{sportName(a.sport_type)}</span><span className="when">{md(activityDate(a))} {timeJst(a.start_time)}</span></span>
             <span className="r">{run || a.distance_m > 0 ? <><b className="num">{km(a.distance_m)}</b> km</> : <><b className="num">{Math.round(a.moving_time_sec / 60)}</b> 分</>}</span>
             <span className="r">{run && a.avg_pace_sec_km ? <><b className="num">{pace(a.avg_pace_sec_km)}</b> /km</> : a.avg_hr != null ? <><b className="num">{a.avg_hr}</b> bpm</> : null}</span>
-          </Link>
+          </PushLink>
         );
       })}
+      </div>
     </section>
   );
 }
@@ -57,10 +61,8 @@ export default function Plan() {
   const proposalId = useSearchParams()[0].get("proposal");
   const { proposal, ready } = useProposal(proposalId);
   const navigate = useNavigate();
-  const location = useLocation();
   // the preview is reached from the thread's 「在課表上看」: going back to the thread is one step back in history (the thread is a modal; closing it again lands before it)
-  const cameFromApp = location.key !== "default";
-  const backToCoach = () => void (cameFromApp ? navigate(-1) : navigate("/coach", { replace: true }));
+  const backToCoach = () => void (hasPrevious() ? navigate(-1) : navigate("/coach", { replace: true }));
   const revalidator = useRevalidator();
   const [picked, setPicked] = useState<number | null>(null);
   const [open, setOpen] = useState<ApiSession | null>(null);
@@ -131,52 +133,60 @@ export default function Plan() {
   return (
     <>
       {preview ? (
-        <header className="plan-preview-bar">
-          <button type="button" className="back" aria-label="返回教練" onClick={backToCoach}><BackIcon /></button>
-          <CoachAvatar size={24} />
-          <div className="mid">
-            <div className="t">預覽 Woo 的提案</div>
-            <div className="s">{changedList.length ? `第 ${changedList.join("、")} 週會改 · 還沒生效` : "還沒生效"}</div>
-          </div>
-          <button type="button" className="chip primary" disabled={busy} onClick={() => void decide("apply")}>採用</button>
-          <button type="button" className="chip" disabled={busy} onClick={() => void decide("dismiss")}>不用</button>
-        </header>
-      ) : <TopBar title="課表" aside={currentWeek?.phase ? currentWeek.phase : `${weeks.length} 週`} />}
+        <NavBar
+          kind="inline"
+          className="preview"
+          left={<BackPill label="教練" ariaLabel="返回教練" onClick={backToCoach} />}
+          title={<span className="pv"><CoachAvatar size={24} /><span className="pv-t">預覽 Woo 的提案<small>{changedList.length ? <><span className={changedList.length <= 2 ? "nw" : undefined}>第 {changedList.join("、")} 週會改 ·</span>{" "}<span className="nw">還沒生效</span></> : "還沒生效"}</small></span></span>}
+          right={<>
+            <button type="button" className="chip primary" disabled={busy} onClick={() => void decide("apply")}>採用</button>
+            <button type="button" className="chip" disabled={busy} onClick={() => void decide("dismiss")}>不用</button>
+          </>}
+        />
+      ) : <NavBar kind="large" title="課表" subtitle={currentWeek?.phase ? currentWeek.phase : `${weeks.length} 週`} />}
       <main>
         {notice && noticeGone !== proposalId ? <p className="plan-notice" role="status">這張提案已經處理過了</p> : null}
         {error ? <p className="plan-notice" role="alert" style={{ color: "var(--v-bad)" }}>{error}</p> : null}
-        <WeekBars weeks={weeks} selected={selected} onSelect={setPicked} changed={preview?.changedWeeks} />
         {week ? (
           <>
-            <div className="week-head2">
-              <button type="button" className="step" onClick={go(idx - 1)} disabled={!go(idx - 1)} aria-label="上一週">‹</button>
-              <div className="mid">
-                <div className="line">
-                  <span className="title">第 {week.week_no} 週 {week.isCurrent ? <span className="pill">本週</span> : current != null && current !== week.week_no ? <button type="button" className="back-today" onClick={() => setPicked(current)}>回本週</button> : null}</span>
-                  <span className="kms">
-                    {preview && preview.changedWeeks.has(week.week_no) && preview.beforeM.get(week.week_no) !== week.plan_m ? <span className="was"><s>{kmPlan(preview.beforeM.get(week.week_no))}</s> →</span> : null}
-                    {week.isFuture ? <><b className="num plan">{kmPlan(week.plan_m)}</b><span className="of"> km</span></> : <><b className={`num${week.isComplete ? " done" : ""}`}>{km(week.actual_m)}</b><span className="of"> / {kmPlan(week.plan_m)} km</span></>}
-                  </span>
+            <section className="card weekcard">
+              <WeekBars weeks={weeks} selected={selected} onSelect={setPicked} changed={preview?.changedWeeks} />
+              <div className="week-head2">
+                <button type="button" className="step" onClick={go(idx - 1)} disabled={!go(idx - 1)} aria-label="上一週">‹</button>
+                <div className="mid">
+                  <div className="line">
+                    <span className="title">第 {week.week_no} 週 {week.isCurrent ? <span className="pill">本週</span> : current != null && current !== week.week_no ? <button type="button" className="back-today" onClick={() => setPicked(current)}>回本週</button> : null}</span>
+                    <span className="kms">
+                      {preview && preview.changedWeeks.has(week.week_no) && preview.beforeM.get(week.week_no) !== week.plan_m ? <span className="was"><s>{kmPlan(preview.beforeM.get(week.week_no))}</s> →</span> : null}
+                      {week.isFuture ? <><b className="num plan">{kmPlan(week.plan_m)}</b><span className="of"> km</span></> : <><b className={`num${week.isComplete ? " done" : ""}`}>{km(week.actual_m)}</b><span className="of"> / {kmPlan(week.plan_m)} km</span></>}
+                    </span>
+                  </div>
                 </div>
-                {preview && preview.focusWas.has(week.week_no) ? (
-                  <div className="sub">{md(week.week_start)}–{md(week.week_end)} · <span className="was"><s>{preview.focusWas.get(week.week_no)}</s></span><br /><span className="now">{week.focus}</span></div>
-                ) : <div className="sub">{md(week.week_start)}–{md(week.week_end)} · {weekSubline(week, view)}</div>}
-                {entry ? <button type="button" className="review-entry" onClick={() => setReviewId(entry.id)}><CoachAvatar size={20} />週回顧 ›</button> : null}
+                <button type="button" className="step" onClick={go(idx + 1)} disabled={!go(idx + 1)} aria-label="下一週">›</button>
               </div>
-              <button type="button" className="step" onClick={go(idx + 1)} disabled={!go(idx + 1)} aria-label="下一週">›</button>
-            </div>
-            {!week.isFuture ? <Bar value={week.actual_m} max={week.plan_m} tone={week.isComplete ? "good" : "ink"} /> : null}
-            <div className="dayrows">
-              {week.days.map((d) => <DayRow key={d.session.id} day={d} view={view} weekNo={week.week_no} isToday={d.session.scheduled_date === today} onOpen={setOpen} routine={view.routineBySession.get(d.session.id) ?? null} was={preview?.was.get(d.session.id)} preview={!!preview} />)}
-            </div>
-            {preview ? (
-              <p className="plan-note">
-                琥珀線的列是這張提案會改的，下面一行是改前。
-                {changedList.filter((n) => n !== week.week_no).length ? `${changedList.filter((n) => n !== week.week_no).map((n) => `第 ${n} 週也有改${n < week.week_no ? "（‹）" : "（›）"}`).join("；")}。` : ""}
-                採用後{changedList.map(weekAfter).join("、")}。
-              </p>
-            ) : null}
-            <ExtraRows week={week} unassigned={view.unassigned} />
+              {!week.isFuture ? <Bar value={week.actual_m} max={week.plan_m} tone={week.isComplete ? "good" : "ink"} className="bar6" /> : null}
+              {/* the dates and what is left of the week, on two lines across the whole card (02 §2.4) */}
+              <div className="wmeta">
+                <span>{md(week.week_start)}–{md(week.week_end)}</span>
+                {preview && preview.focusWas.has(week.week_no)
+                  ? <><span className="was"><s>{preview.focusWas.get(week.week_no)}</s></span><span className="now">{week.focus}</span></>
+                  : <span>{weekSubline(week, view)}</span>}
+              </div>
+              {entry ? <button type="button" className="review-entry" onClick={() => setReviewId(entry.id)}><CoachAvatar size={20} />週回顧 ›</button> : null}
+            </section>
+            <WeekBody weekNo={week.week_no}>
+              <div className="grp dayrows">
+                {week.days.map((d) => <DayRow key={d.session.id} day={d} view={view} weekNo={week.week_no} isToday={d.session.scheduled_date === today} onOpen={setOpen} routine={view.routineBySession.get(d.session.id) ?? null} was={preview?.was.get(d.session.id)} preview={!!preview} />)}
+              </div>
+              {preview ? (
+                <p className="plan-note">
+                  琥珀線的列是這張提案會改的，下面一行是改前。
+                  {changedList.filter((n) => n !== week.week_no).length ? `${changedList.filter((n) => n !== week.week_no).map((n) => `第 ${n} 週也有改${n < week.week_no ? "（‹）" : "（›）"}`).join("；")}。` : ""}
+                  採用後{changedList.map(weekAfter).join("、")}。
+                </p>
+              ) : null}
+              <ExtraRows week={week} unassigned={view.unassigned} />
+            </WeekBody>
           </>
         ) : null}
       </main>

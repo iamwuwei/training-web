@@ -34,7 +34,7 @@ function Body({ onClose, onCreate }: { onClose: () => void; onCreate: () => void
 
   return (
     <>
-      <h2 className="sheet-title">加入或建立群組</h2>
+      <h2 className="sheet-title st">加入或建立群組</h2>
       <button type="button" className="ga-row" onClick={onCreate}>
         <span className="ic" aria-hidden="true"><PlusIcon /></span>
         <span><div className="t">建立群組</div><div className="s">你當擁有者，再邀朋友</div></span>

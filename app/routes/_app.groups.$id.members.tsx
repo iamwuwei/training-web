@@ -5,7 +5,8 @@ import { GroupConfirm } from "../components/group-confirm";
 import { GroupInviteSheet } from "../components/group-invite";
 import { GroupBack, GroupNotFound, LoadFailed } from "../components/group-parts";
 import { ShareIcon } from "../components/icons";
-import { SectionH, TopBar } from "../components/ui";
+import { GlassButton, NavBar } from "../components/nav-bar";
+import { SectionH } from "../components/ui";
 import { getGroup, postGroupMemberRemove } from "../lib/api";
 import { toJstDate } from "../lib/date";
 import { groupIsGone, isStatus, mdPlain, NOTICE_GONE } from "../lib/groups";
@@ -39,7 +40,7 @@ export default function GroupMembers({ loaderData, params }: Route.ComponentProp
   if (loaderData.status === "error") {
     return (
       <>
-        <TopBar title="成員" back={<GroupBack to={`/groups/${id}`} label="回群組" />} />
+        <NavBar kind="inline" title="成員" left={<GroupBack to={`/groups/${id}`} label="群組" ariaLabel="回群組" />} />
         <main><LoadFailed text="讀不到群組。" onRetry={() => void revalidator.revalidate()} /></main>
       </>
     );
@@ -74,13 +75,14 @@ export default function GroupMembers({ loaderData, params }: Route.ComponentProp
 
   return (
     <>
-      <TopBar
+      <NavBar
+        kind="inline"
         title="成員"
-        back={<GroupBack to={`/groups/${id}`} label="回群組" />}
-        aside={owner
+        left={<GroupBack to={`/groups/${id}`} label="群組" ariaLabel="回群組" />}
+        right={owner
           ? full
-            ? <button type="button" className="icon-btn" aria-disabled="true" aria-label={`邀請夥伴（已滿 ${g.max_members} 人）`} onClick={showFull}><ShareIcon /></button>
-            : <button type="button" className="icon-btn" aria-label="邀請夥伴" onClick={() => setInviteOpen(true)}><ShareIcon /></button>
+            ? <GlassButton ariaDisabled label={`邀請夥伴（已滿 ${g.max_members} 人）`} onClick={showFull}><ShareIcon /></GlassButton>
+            : <GlassButton label="邀請夥伴" onClick={() => setInviteOpen(true)}><ShareIcon /></GlassButton>
           : undefined}
       />
       <main>

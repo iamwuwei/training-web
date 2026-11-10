@@ -54,7 +54,7 @@ function Body({ onClose, defaults, today }: { onClose: () => void; defaults: Cre
 
   return (
     <>
-      <h2 className="sheet-title">建立群組</h2>
+      <h2 className="sheet-title st">建立群組</h2>
       <div className="gf-field">
         <label className="gf-label" htmlFor="g-name"><span>群組名稱</span><span className={`gf-count${name.length >= NAME_MAX ? " max" : ""}`}>{name.length} / {NAME_MAX}</span></label>
         <input id="g-name" type="text" className={`oneline${errs.name ? " bad" : ""}`} value={name} maxLength={NAME_MAX} placeholder="例如：富士山組" autoComplete="off" onChange={(e) => setName(e.target.value)} aria-invalid={!!errs.name} />

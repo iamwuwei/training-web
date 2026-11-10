@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useRevalidator } from "react-router";
 import type { Route } from "./+types/_app.groups._index";
+import { PushLink } from "../components/push-link";
 import { GroupAddSheet } from "../components/group-add-sheet";
 import { GroupCreateSheet } from "../components/group-create-sheet";
 import { LoadFailed } from "../components/group-parts";
 import { ChevronIcon, GroupIcon, PlusIcon } from "../components/icons";
-import { SectionH, TopBar } from "../components/ui";
+import { GlassButton, NavBar } from "../components/nav-bar";
+import { SectionH } from "../components/ui";
 import { getGroups } from "../lib/api";
 import { todayJst } from "../lib/date";
 import { countdown, limitText } from "../lib/groups";
@@ -26,7 +28,7 @@ export function meta({ matches }: Route.MetaArgs): Route.MetaDescriptors {
 function GroupRow({ g, today }: { g: ApiGroup; today: string }) {
   const cd = countdown(g.race_date, today);
   return (
-    <Link to={`/groups/${g.id}`} className="group-row">
+    <PushLink to={`/groups/${g.id}`} className="group-row">
       <div className="txt">
         <div className="l1">
           <span className="nm">{g.name}</span>
@@ -39,7 +41,7 @@ function GroupRow({ g, today }: { g: ApiGroup; today: string }) {
         {cd.kind === "days" ? <><span className="num">{cd.n}</span><span className="unit">天</span></> : cd.kind === "today" ? "比賽日" : "已完賽"}
       </div>
       <ChevronIcon aria-hidden="true" />
-    </Link>
+    </PushLink>
   );
 }
 
@@ -64,7 +66,7 @@ export default function Groups({ loaderData }: Route.ComponentProps) {
     const missing = loaderData.status === "notfound" || (loaderData.status === "error" && loaderData.http === 404);
     return (
       <>
-        <TopBar title="群組" />
+        <NavBar kind="large" title="群組" />
         <main>
           <LoadFailed text={missing ? "這個功能還沒開通。" : "讀不到群組。"} onRetry={() => void revalidator.revalidate()} />
         </main>
@@ -83,11 +85,12 @@ export default function Groups({ loaderData }: Route.ComponentProps) {
 
   return (
     <>
-      <TopBar
+      <NavBar
+        kind="large"
         title="群組"
-        aside={full
-          ? <button type="button" className="icon-btn" aria-disabled="true" aria-label={`新增群組（已經有 ${max} 個群組）`} onClick={showLimit}><PlusIcon /></button>
-          : <button type="button" className="icon-btn" aria-label="新增群組：建立或用邀請連結加入" onClick={() => setAddOpen(true)}><PlusIcon /></button>}
+        right={full
+          ? <GlassButton ariaDisabled label={`新增群組（已經有 ${max} 個群組）`} onClick={showLimit}><PlusIcon /></GlassButton>
+          : <GlassButton label="新增群組：建立或用邀請連結加入" onClick={() => setAddOpen(true)}><PlusIcon /></GlassButton>}
       />
       <main>
         {notice ? <p className="group-note" role="status">{notice}</p> : null}
@@ -101,7 +104,7 @@ export default function Groups({ loaderData }: Route.ComponentProps) {
               <button type="button" className="btn compact primary" onClick={() => setCreateOpen(true)}>建立群組</button>
               <p className="hint">有邀請連結？點連結就能加入。</p>
             </div>
-            <p className="group-privacy">每個人在<Link to="/settings">設定</Link>裡決定給群組看什麼（第一次建立或加入時五項都開著，隨時可以關）。跟 Woo 的對話、心得、Woo 記住的限制與傷痛和 Strava 的原始資料，永遠不會給別人看；課表備註和 Woo 的評論可能提到傷痛或行程。</p>
+            <p className="group-privacy">每個人在<Link to="/settings/privacy">設定</Link>裡決定給群組看什麼（第一次建立或加入時五項都開著，隨時可以關）。跟 Woo 的對話、心得、Woo 記住的限制與傷痛和 Strava 的原始資料，永遠不會給別人看；課表備註和 Woo 的評論可能提到傷痛或行程。</p>
           </>
         ) : (
           <>
