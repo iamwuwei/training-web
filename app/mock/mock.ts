@@ -436,6 +436,26 @@ const withoutMakeupFields = (sessions: ApiSession[]): ApiSession[] =>
     return o as ApiSession;
   });
 
+/**
+ * apple-native-redesign (今天 hero ring): `window.__mock = { ring: "half" | "done" | "over" }` gives the current week runs for its sessions
+ * (about 55 %, 100 %, 112 % of the week's plan) so the ring can be seen part-way, closed (達標) and over 100 %. Off by default: the data is the same as before.
+ */
+function ringRuns(d: PlanResponse, sessions: ApiSession[]): ApiActivity[] {
+  const mode = (globalThis as unknown as { __mock?: { ring?: string } }).__mock?.ring;
+  if (!mode) return [];
+  const today = todayJst();
+  const week = d.weeks.find((w) => today >= w.week_start && today <= w.week_end);
+  if (!week) return [];
+  const k = mode === "half" ? 0.55 : mode === "over" ? 1.12 : 1;
+  const mine = sessions.filter((x) => x.counts_in_week_no === week.week_no && (x.target_distance_m ?? 0) > 0 && x.type !== "rest" && !x.moved_to_date);
+  const tpl = d.activities.find((a) => a.session_id) ?? d.activities[0];
+  if (!tpl) return [];
+  return mine.filter((x) => !d.activities.some((a) => a.session_id === x.id)).map((x) => ({
+    ...tpl, id: `a-ring-${x.id}`, strava_activity_id: `ring-${x.id}`, session_id: x.id, start_time: new Date(`${x.scheduled_date}T07:00:00+09:00`).toISOString(),
+    distance_m: Math.round((x.target_distance_m ?? 0) * k), moving_time_sec: Math.round(((x.target_distance_m ?? 0) * k) / 1000 * 420), match_status: "auto" as const, splits: null,
+  }));
+}
+
 /** Every GET /plan the app made (timestamps), for QA (`window.__planCalls`): with `__weeklyCalls`, shows /weekly is asked next to /plan. */
 const planCalls: number[] = [];
 if (typeof window !== "undefined") (window as unknown as { __planCalls: number[] }).__planCalls = planCalls;
@@ -458,7 +478,7 @@ export function mockPlan(): PlanResponse {
     coach_unread: coachUnread,
     coach_checkin_open: !!openAsk || t.some((m) => m.kind === "checkin" && m.checkin?.state === "open"),
     coach_ask_kind: openAsk?.kind ?? null,
-    activities: [...d.activities, ...d.unassigned].filter((a) => a.session_id),
+    activities: [...d.activities, ...ringRuns(d, sessions), ...d.unassigned].filter((a) => a.session_id),
     unassigned: d.unassigned.filter((a) => !a.session_id),
     routines: routines.map((r) => ({ ...r, items: r.items.map((i) => ({ ...i })) })),
     constraints: constraints.filter((c) => c.status === "active").map((c) => ({ ...c })),

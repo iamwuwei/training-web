@@ -161,7 +161,7 @@ function DraftPreview({ d, adopt, adopting, adoptError }: { d: ApiPlanDraft; ado
               <button type="button" className="step" onClick={go(idx + 1)} disabled={!go(idx + 1)} aria-label="下一週">›</button>
             </div>
             {weekFlags.map((t, i) => <p className="draft-week-flag" key={i}>{t}</p>)}
-            <div className="dayrows draft-days">
+            <div className="grp dayrows draft-days">
               {week.days.map((day) => {
                 const flags = byDate.get(day.session.scheduled_date) ?? [];
                 return <DayRow key={day.session.id} day={day} view={view} weekNo={week.week_no} isToday={day.session.scheduled_date === today} onOpen={noop} routine={null} was={flags.length ? flags.join("；") : undefined} preview />;

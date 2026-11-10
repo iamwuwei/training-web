@@ -83,7 +83,7 @@ function MemberPlan({ data }: { data: MemberPlanResponse }) {
             <button type="button" className="step" onClick={go(idx + 1)} disabled={!go(idx + 1)} aria-label="下一週">›</button>
           </div>
           {ro.runs && !week.isFuture ? <Bar value={week.actual_m} max={week.plan_m} tone={week.isComplete ? "good" : "ink"} /> : null}
-          <div className="dayrows">
+          <div className="grp dayrows">
             {week.days.map((d) => <DayRow key={d.session.id} day={d} view={view} weekNo={week.week_no} isToday={d.session.scheduled_date === today} onOpen={setOpen} routine={null} readonly={ro} />)}
           </div>
         </>
