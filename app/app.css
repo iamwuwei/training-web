@@ -390,6 +390,7 @@ ul { padding: 0; list-style: none; }
 .grp .row .v { color: var(--ink-2); text-align: right; }
 .grp .row .chev { width: 8px; height: 14px; color: var(--ink-3); }
 .grp .row.link:active { background-color: var(--fill-press); }
+.grp :is(a, button):focus-visible { outline-offset: -2px; } /* the group clips (overflow hidden, rounded): a ring drawn outside a row is cut to a line at the bottom; inside it is whole */
 .grp .row.tall { grid-template-columns: minmax(0, 1fr) auto; min-height: 64px; padding-top: 10px; padding-bottom: 10px; }
 .sf { margin: 8px 16px 0; font-size: 13px; line-height: 1.6; color: var(--ink-2); }
 /* content straight on the grey page; `.blk.link` is a tappable one. `.link` (the underlined text link) is overridden here: same class name */
@@ -409,7 +410,7 @@ a.blk.link { display: block; }
 .login .count .num { font-size: 88px; color: var(--accent); letter-spacing: -0.02em; }
 .login .count span { font-size: 15px; color: var(--ink-2); }
 .login .bottom { display: flex; flex-direction: column; gap: 14px; padding-bottom: calc(44px + var(--sa-b)); }
-.apple-btn { display: flex; align-items: center; justify-content: center; gap: 8px; height: 52px; border-radius: var(--r-m); background: #000; color: #fff; font-size: 17px; font-weight: 600; width: 100%; }
+.apple-btn { display: flex; align-items: center; justify-content: center; gap: 8px; height: 52px; border-radius: var(--r-m); background: var(--ink); color: var(--on-ink); font-size: 17px; font-weight: 600; width: 100%; }
 .apple-btn:disabled { opacity: 0.6; }
 .login .fine { font-size: 12px; color: var(--ink-3); line-height: 1.6; }
 .login .err { font-size: 13px; color: var(--v-bad); }
@@ -1511,7 +1512,7 @@ button.next-row { width: 100%; text-align: left; }
 .pstack.busy { pointer-events: none; }
 /* the left-edge strip (standalone only): 20 px wide, under the bar, the length of the page; the browser does not take the gesture */
 .edge { position: absolute; z-index: 3; left: 0; top: calc(var(--nav-h) + var(--nav-top)); bottom: 0; width: 20px; touch-action: none; }
-[tabindex="-1"]:focus { outline: none; } /* what the focus is moved to on a new page (the title, `main`; lib/use-page-focus.ts, PushStack) is not a control: no ring (not a Tab stop either) */
+:is(h1, main)[tabindex="-1"]:focus { outline: none; } /* what the focus is moved to on a new page (the title, `main`; lib/use-page-focus.ts, PushStack) is not a control: no ring. Only these two: a control that takes arrow-key focus with tabindex -1 must keep its ring */
 
 /* ---- push / pop of the other pages by View Transition (01b §5.4; Safari 18+, Chrome; without `document.startViewTransition` the page just changes) ----
    The link or the back button says which way (`html[data-nav]`, lib/nav.ts). A transition nobody marked (the browser's own back or forward: Safari has just played its swipe) has no animation.

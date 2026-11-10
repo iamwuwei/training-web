@@ -14,9 +14,9 @@ export function rememberPushFocus(link: HTMLElement) {
   if (href) pressed.set(window.location.pathname + window.location.search, href);
 }
 
-/** The title of the page that is on screen (the inline bar's `h1`), else its first `h1`, else `main`: given a `tabindex` of -1 so it can take focus without being a stop of Tab. */
+/** The title of the page that is on screen (the inline bar's `h1`; a tab root's large title is an `h1` outside the bar and `main`), else its first `h1`, else `main`: given a `tabindex` of -1 so it can take focus without being a stop of Tab. */
 function pageTarget(): HTMLElement | null {
-  const el = document.querySelector<HTMLElement>(".navbar h1") ?? document.querySelector<HTMLElement>("main h1") ?? document.querySelector<HTMLElement>("main");
+  const el = document.querySelector<HTMLElement>(".navbar h1") ?? document.querySelector<HTMLElement>("main h1") ?? document.querySelector<HTMLElement>("h1") ?? document.querySelector<HTMLElement>("main");
   if (el && !el.hasAttribute("tabindex")) el.setAttribute("tabindex", "-1");
   return el;
 }

@@ -28,6 +28,10 @@ npm run build          # 靜態檔輸出到 build/client
 npm run preview
 ```
 
+### App icon（加到主畫面的圖示）
+
+`public/icons/` 的四張 PNG（`apple-touch-icon` 180、192、512、512 maskable）由 `public/favicon.svg` 在 `#f2f2f7` 上畫出來，**不要手改**：換圖時換掉 `favicon.svg`，然後 `npm run icons`（`scripts/make-icons.mjs`；沒有任何相依，只需要本機有 Chrome／Chromium，找不到時用環境變數 `CHROME` 指路徑），把四張 PNG 一起 commit。iOS 在「加入主畫面」那一刻就存了一份圖示，之後換圖要刪掉再加一次才會更新。目前的圖是暫代（`favicon.svg` 還是範本的圖）。
+
 ### 環境變數
 
 | 變數 | 說明 |

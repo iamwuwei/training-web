@@ -8,7 +8,8 @@
     "build": "react-router build",
     "typecheck": "react-router typegen && tsc",
     "lint": "oxlint",
-    "preview": "vite preview --outDir build/client"
+    "preview": "vite preview --outDir build/client",
+    "icons": "node scripts/make-icons.mjs"
   },
   "dependencies": {
     "isbot": "^5.2.2",
