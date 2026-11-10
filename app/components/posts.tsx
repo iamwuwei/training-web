@@ -49,7 +49,7 @@ export function ActivityPost({ activity, session, showReminders, weekNo }: {
   const r = activity.review;
   const memo = activity.memo ?? activity.description;
   return (
-    <Link to={`/activities/${activity.id}`} className="post link">
+    <Link to={`/activities/${activity.id}`} className="post open">
       <Avatar session={session} sport={activity.sport_type} />
       <div className="body">
         <div className="meta">

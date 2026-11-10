@@ -68,7 +68,10 @@ export const RotateIcon = (p: SVGProps<SVGSVGElement>) => (<svg {...small(p)}><p
 export const TrashIcon = (p: SVGProps<SVGSVGElement>) => (<svg {...small(p)}><path d="M4.5 7h15" /><path d="M9.5 7V4.5h5V7" /><path d="M6.5 7l.8 12a1.5 1.5 0 0 0 1.5 1.4h6.4a1.5 1.5 0 0 0 1.5-1.4l.8-12" /><path d="M10 11v6M14 11v6" /></svg>);
 export const LinkIcon = (p: SVGProps<SVGSVGElement>) => (<svg {...small(p)}><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" /><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" /></svg>);
 /** › and ▾ at 16 px (list rows, the member picker). */
-export const ChevronIcon = (p: SVGProps<SVGSVGElement>) => (<svg {...base({ width: 16, height: 16, viewBox: "0 0 16 16", strokeWidth: 2, ...p })}><path d="M6 3l5 5-5 5" /></svg>);
+/** `small`: the 8 × 14 chevron at the end of a grouped row or a tappable block (01b §6.3). */
+export const ChevronIcon = ({ small: sm, ...p }: SVGProps<SVGSVGElement> & { small?: boolean }) => (sm
+  ? <svg {...base({ width: 8, height: 14, viewBox: "0 0 8 14", strokeWidth: 2, ...p })}><path d="M1 1l6 6-6 6" /></svg>
+  : <svg {...base({ width: 16, height: 16, viewBox: "0 0 16 16", strokeWidth: 2, ...p })}><path d="M6 3l5 5-5 5" /></svg>);
 export const CaretDownIcon = (p: SVGProps<SVGSVGElement>) => (<svg {...base({ width: 16, height: 16, viewBox: "0 0 16 16", strokeWidth: 2, ...p })}><path d="M3.5 6l4.5 4.5L12.5 6" /></svg>);
 
 // ---- ai-plan-generation ----

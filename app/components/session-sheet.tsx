@@ -7,6 +7,7 @@ import { labelStyle, rowName, shortName } from "../lib/labels";
 import { activityDate, isRunSport, lastReminderFor, movedCountsIn, type PlanView } from "../lib/plan";
 import { segmentRows } from "../lib/segments";
 import { BottomSheet } from "./sheet";
+import { ChevronIcon } from "./icons";
 import { Avatar, CoachAvatar, VerdictTag } from "./ui";
 import { WooVerdict } from "./woo-verdict";
 
@@ -112,6 +113,7 @@ export function SessionSheet({ session, view, onClose, onOpen, readOnly }: { ses
                   </span>
                 </span>
                 <VerdictTag verdict={last.a.review?.verdict} />
+                <ChevronIcon small className="chev" />
               </Link>
             </>
           ) : null}

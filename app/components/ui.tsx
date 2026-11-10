@@ -38,10 +38,10 @@ export function VerdictTag({ verdict }: { verdict: Verdict | "跳過" | null | u
   return <span className={`verdict ${kind}`}>{verdict}</span>;
 }
 
-export function Bar({ value, max, tone }: { value: number; max: number; tone?: "good" | "ink" }) {
+export function Bar({ value, max, tone, className }: { value: number; max: number; tone?: "good" | "ink"; className?: string }) {
   const pct = max > 0 ? Math.max(0, Math.min(100, (value / max) * 100)) : 0;
   return (
-    <div className={`bar${tone ? ` ${tone}` : ""}`} role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100}>
+    <div className={`bar${tone ? ` ${tone}` : ""}${className ? ` ${className}` : ""}`} role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100}>
       <i style={{ width: `${pct}%` }} />
     </div>
   );
@@ -96,25 +96,32 @@ export function SectionH({ children, action }: { children: ReactNode; action?: R
   );
 }
 
-/** Skeleton rows shown while the plan loads (Aurora cold start can take 10 s+). */
+/** Skeleton shown while the plan loads (Aurora cold start can take 10 s+): the hero card, then posts straight on the page (02 §2.3). */
 export function FeedSkeleton() {
   return (
     <div aria-busy="true" aria-label="載入中">
-      <div className="hero">
-        <div className="sk" style={{ width: 140, height: 40 }} />
-        <div className="sk" style={{ width: "80%", height: 14 }} />
-        <div className="sk" style={{ height: 3 }} />
-      </div>
-      {[0, 1, 2].map((i) => (
-        <div className="post" key={i}>
-          <div className="sk" style={{ width: 36, height: 36, borderRadius: "50%" }} />
-          <div className="body" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <div className="sk" style={{ width: "50%", height: 14 }} />
-            <div className="sk" style={{ width: "85%", height: 16 }} />
-            <div className="sk" style={{ width: "65%", height: 13 }} />
-          </div>
+      <div className="hero5">
+        <div className="h-left">
+          <div className="sk" style={{ width: 40, height: 13 }} />
+          <div className="sk" style={{ width: 96, height: 56, marginTop: 8 }} />
         </div>
-      ))}
+        <div className="h-right">
+          <div className="sk" style={{ width: 110, height: 13, marginLeft: "auto" }} />
+          <div className="sk" style={{ width: 96, height: 96, borderRadius: "50%", marginTop: 8, marginLeft: "auto" }} />
+        </div>
+      </div>
+      <div className="blk skel-posts">
+        {[0, 1].map((i) => (
+          <div className="post" key={i}>
+            <div className="sk" style={{ width: 36, height: 36, borderRadius: "50%" }} />
+            <div className="body" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <div className="sk" style={{ width: "50%", height: 14 }} />
+              <div className="sk" style={{ width: "85%", height: 16 }} />
+              <div className="sk" style={{ width: "65%", height: 13 }} />
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

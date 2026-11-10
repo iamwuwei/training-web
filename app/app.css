@@ -64,7 +64,7 @@ html, body { margin: 0; height: 100%; }
 body {
   background: var(--bg);
   color: var(--ink);
-  font: 15px/1.5 var(--font);
+  font: 16px/1.5 var(--font); /* v5: 16 (02 §7-6); fixed-15 exceptions are listed in 03-實作 PR 3 */
   font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
@@ -82,6 +82,7 @@ ul { padding: 0; list-style: none; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; transition-delay: 0s !important; scroll-behavior: auto !important; }
   .typing-dots { display: none; }
+  .ring.done { animation: none; } /* no pulse: the 0.01 ms rule above does not zero its delay */
 }
 :is(.chip, .week-head2 .step, .week-head .step, .back-today, .details-sheet .ds-clear, .composer .quote-chip button, .msg.me .when button, .review-entry) { position: relative; }
 :is(.chip, .week-head2 .step, .week-head .step, .back-today, .details-sheet .ds-clear, .composer .quote-chip button, .msg.me .when button, .routine .items .how, .review-entry)::before {
@@ -140,10 +141,15 @@ ul { padding: 0; list-style: none; }
 /* 課表預覽: the bar carries a 2 px amber line even at rest (that line is the marker that this is not the plan yet) */
 .navbar.preview::before { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--v-warn); }
 .navbar.preview.glass::after { box-shadow: none; }
-.navbar.preview .ttl { text-align: left; }
+.navbar.preview { height: auto; min-height: calc(var(--nav-h) + var(--sa-t)); }
+.navbar.preview .navrow { height: auto; min-height: var(--nav-h); padding: 4px 0; grid-template-columns: auto minmax(0, 1fr) auto; }
+.navbar.preview .ttl { text-align: left; white-space: normal; overflow: visible; text-overflow: clip; } /* 320 and 375: the title and 「第 N 週會改 · 還沒生效」 wrap to a second line instead of ending in … (04 PR 2 should 3) */
+.navbar.preview .pv { align-items: flex-start; }
+.navbar.preview .pv > .avatar { margin-top: 1px; }
+.navbar.preview .pv-t, .navbar.preview .pv-t small { text-wrap: balance; }
 .navbar .pv { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; vertical-align: middle; }
-.navbar .pv-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 15px; font-weight: 700; line-height: 1.2; }
-.navbar .pv-t small { display: block; font-size: 12px; font-weight: 400; color: var(--ink); overflow: hidden; text-overflow: ellipsis; }
+.navbar .pv-t { min-width: 0; font-size: 15px; font-weight: 700; line-height: 1.25; }
+.navbar .pv-t small { display: block; font-size: 12px; font-weight: 400; line-height: 1.3; color: var(--ink); }
 .navbar .chip { height: 32px; padding: 0 14px; font-size: 13px; }
 
 /* tab bar: a floating glass capsule; the lens is the selected tab's rest, it slides to the next one (400 ms --spring) */
@@ -164,12 +170,36 @@ ul { padding: 0; list-style: none; }
 .section-row { display: flex; justify-content: space-between; align-items: baseline; margin: 20px 0 4px; }
 .section-row .section-h { margin: 0; }
 .section-row a { font-size: 13px; color: var(--ink-2); }
+.section-row { align-items: center; }
+.section-row > .txtbtn { margin: -12px 8px -12px 0; } /* 44 px to touch, the row keeps the height of its 13 px heading */
 
-.hero { padding: 18px 0 16px; border-bottom: .5px solid var(--sep); display: flex; flex-direction: column; gap: 8px; }
-.hero .big { display: flex; align-items: baseline; gap: 6px; }
-.hero .big .num { font-size: 40px; }
-.hero .big span { font-size: 15px; color: var(--ink-2); }
-.hero .sub { font-size: 13px; color: var(--ink-2); }
+/* ---- 今天 hero card (01b §6.9, 02 §2.3-2): countdown left, this week's label + ring right, 上週回顧 as the card's last row ---- */
+.hero5 { display: grid; grid-template-columns: auto auto; justify-content: space-between; column-gap: 16px; align-items: end; margin-top: 8px; padding: 16px 16px 18px; background: var(--surface); border-radius: var(--r-xl); overflow: hidden; color: var(--ink); }
+.hero5 .h-left { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.hero5 .h-left .k { font-size: 13px; color: var(--ink-2); }
+.hero5 .v { display: flex; align-items: baseline; gap: 4px; white-space: nowrap; }
+.hero5 .v .unit { font-size: 15px; color: var(--ink-2); }
+.hero5 .big { font-size: 56px; color: var(--accent); letter-spacing: -0.01em; }
+.hero5 .mid { font-size: 40px; line-height: 1.15; color: var(--ink); }
+.hero5 .h-right { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; min-width: 0; color: var(--ink); }
+.hero5 .h-right .k { font-size: 13px; color: var(--ink-2); text-align: right; } /* never an ellipsis: both columns are `auto`, the countdown keeps its width and this label, only when the two together are wider than the card (320 with 「比賽日」), breaks after the 「·」 */
+.hero5 .h-right .k span { white-space: nowrap; }
+.hero5 .hero-foot { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; height: 48px; margin: 12px -16px -18px; padding: 0 16px; font-size: 16px; text-align: left; color: var(--ink); background: linear-gradient(var(--sep), var(--sep)) 16px 0 / calc(100% - 16px) .5px no-repeat; }
+.hero5 .hero-foot:active { background-color: var(--fill-press); }
+.hero5 .hero-foot:focus-visible { outline-offset: -2px; border-radius: 0; }
+.hero5 .hero-foot .chev { margin-left: auto; flex: none; width: 8px; height: 14px; color: var(--ink-3); }
+/* the ring (01b §6.5): track --track, arc --ink, round cap; a week that is done is closed, --accent, and pulses once after it has grown */
+.ring { position: relative; flex: none; }
+.ring svg { display: block; }
+.ring .track { stroke: var(--track); }
+.ring .arc { stroke: var(--ink); transition: stroke-dashoffset var(--d-4) var(--ease-out), stroke var(--d-2) var(--ease-out); }
+.ring .mid { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; }
+.ring .mid .num { font-size: 26px; }
+.ring .mid small { font-size: 11px; line-height: 1.2; color: var(--ink-2); white-space: nowrap; }
+.ring.done .arc { stroke: var(--accent); }
+.ring.done .mid .num { color: var(--accent); }
+.ring.done { animation: ring-pulse var(--d-3) var(--bounce) var(--d-4) 1; }
+@keyframes ring-pulse { 50% { transform: scale(1.04); } }
 
 .bar { height: 3px; background: var(--track); border-radius: var(--r-pill); overflow: hidden; }
 .bar > i { display: block; height: 100%; background: var(--ink-3); border-radius: var(--r-pill); transition: width var(--d-4) var(--ease-out); }
@@ -177,7 +207,7 @@ ul { padding: 0; list-style: none; }
 .bar.ink > i { background: var(--ink); }
 
 .post { display: grid; grid-template-columns: 40px 1fr; gap: 12px; padding: 12px 0; border-bottom: .5px solid var(--sep); color: var(--ink); }
-.post.link:active { background: var(--fill-press); margin: 0 -16px; padding-left: 16px; padding-right: 16px; }
+.blk .post { border-bottom: 0; }
 .post.dim { color: var(--ink-3); }
 .post .body { min-width: 0; }
 .post .meta { display: flex; align-items: baseline; gap: 6px; font-size: 14px; flex-wrap: wrap; }
@@ -185,7 +215,7 @@ ul { padding: 0; list-style: none; }
 .post .meta .grey { color: var(--ink-3); }
 .post .title { margin-top: 2px; font-weight: 600; }
 .post .title.lg { margin-top: 4px; font-size: 16px; line-height: 1.4; }
-.post .text { margin-top: 4px; font-size: 15px; line-height: 1.55; }
+.post .text { margin-top: 4px; line-height: 1.55; } /* follows the body size (16) */
 .post .text.clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; color: var(--ink-2); font-size: 14px; }
 .post .muted { margin-top: 2px; font-size: 13px; color: var(--ink-2); }
 .post .foot { margin-top: 8px; font-size: 12px; color: var(--ink-3); }
@@ -237,6 +267,7 @@ ul { padding: 0; list-style: none; }
 .chip .dot.easy { background: var(--t-easy); } .chip .dot.long { background: var(--t-long); } .chip .dot.hard { background: var(--t-hard); }
 
 .empty { padding: 24px 0; color: var(--ink-3); font-size: 14px; text-align: center; }
+.empty.blk { padding: 16px; text-align: left; font-size: 16px; color: var(--ink-2); } /* a sentence straight on the grey page under its heading */
 .note { margin: 18px 0 0; font-size: 12px; color: var(--ink-3); text-align: center; }
 
 /* ---- week bars (課表 top) -------------------------------------------------- */
@@ -267,7 +298,7 @@ ul { padding: 0; list-style: none; }
 
 .verdict-block { padding: 16px 0; border-bottom: .5px solid var(--sep); display: flex; flex-direction: column; gap: 8px; }
 .verdict-block h2 { display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 700; }
-.verdict-block .comment { font-size: 15px; line-height: 1.65; color: var(--ink); }
+.verdict-block .comment { line-height: 1.65; color: var(--ink); }
 .verdict-block h2::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
 .verdict-block.good h2 { color: var(--accent-ink); } .verdict-block.warn h2 { color: var(--v-warn); } .verdict-block.bad h2 { color: var(--v-bad); }
 .verdict-block .reminders { margin: 0; padding-left: 16px; gap: 4px; font-size: 14px; }
@@ -314,7 +345,7 @@ ul { padding: 0; list-style: none; }
 .memo { padding: 16px 0; border-bottom: .5px solid var(--sep); display: flex; flex-direction: column; gap: 10px; }
 .memo .head { display: flex; justify-content: space-between; align-items: baseline; }
 .memo .head h2 { margin: 0; font-size: 12px; font-weight: 600; color: var(--ink-3); letter-spacing: 0.08em; }
-.memo .body { font-size: 15px; line-height: 1.65; white-space: pre-wrap; }
+.memo .body { line-height: 1.65; white-space: pre-wrap; }
 .memo .body.placeholder { color: var(--ink-3); }
 .memo .rpe-k { font-size: 12px; color: var(--ink-3); }
 .rpe { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 4px; }
@@ -358,6 +389,7 @@ ul { padding: 0; list-style: none; }
 .blk.link { position: relative; padding-right: 32px; border-radius: var(--r-m); color: var(--ink); text-decoration: none; }
 .blk.link > .chev { position: absolute; right: 16px; top: 50%; width: 8px; height: 14px; margin-top: -7px; color: var(--ink-3); }
 .blk.link:active { background: var(--fill-press); }
+a.blk.link { display: block; }
 .txtbtn { display: inline-flex; align-items: center; min-height: 44px; padding: 0 8px; font-size: 15px; color: var(--ink); }
 
 /* ---- login -------------------------------------------------------------------- */
@@ -418,20 +450,22 @@ ul { padding: 0; list-style: none; }
 .today-post .pending.failed { color: var(--v-bad); }
 .today-post .pending.failed::before { border-color: var(--v-bad); }
 .today-post .next { margin-top: 6px; font-size: 14px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.today-open { padding-bottom: 16px; border-bottom: .5px solid var(--sep); }
+.today-open { padding-bottom: 8px; }
 .today-open .post { border-bottom: none; padding-bottom: 4px; }
 .today-open .post .foot { display: none; }
 .today-open .synced { margin: 4px 0 12px 52px; font-size: 13px; color: var(--ink-2); display: flex; align-items: baseline; gap: 0 4px; white-space: nowrap; overflow: hidden; }
 .today-open .synced i { width: 7px; height: 7px; border-radius: 50%; background: #fc5200; align-self: center; margin-right: 4px; }
 .today-open .synced .num { font-size: 16px; color: var(--ink); }
 .today-open .hint { margin: 0 0 0 52px; font-size: 13px; color: var(--ink-3); }
-.extra-row { display: grid; grid-template-columns: minmax(0, 1fr) 128px; gap: 12px; align-items: center; padding: 10px 0; border-bottom: .5px solid var(--sep); }
+.extra-row { display: grid; grid-template-columns: minmax(0, 1fr) 128px; gap: 12px; align-items: center; padding: 10px 16px; }
+.extra-row + .extra-row { background: linear-gradient(var(--sep), var(--sep)) 68px 0 / calc(100% - 68px) .5px no-repeat; } /* inset to the text, after the 40 px avatar */
 .extra-row .who { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 12px; align-items: center; color: var(--ink); }
 .extra-row .txt { display: flex; flex-direction: column; min-width: 0; }
 .extra-row .t { font-weight: 600; }
 .extra-row .s { font-size: 13px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .extra-row .chip { color: var(--ink); width: 100%; justify-content: center; height: auto; min-height: 32px; padding: 5px 10px; white-space: normal; text-align: center; line-height: 1.25; }
-.next-row { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 0; border-bottom: .5px solid var(--sep); color: var(--ink); }
+.next-row { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 0; color: var(--ink); }
+.blk.link.next-row { padding: 10px 32px 10px 16px; }
 .next-row .avatar { width: 28px; height: 28px; font-size: 13px; justify-self: center; }
 .next-row .avatar.cjk { font-size: 12px; }
 .next-row .t { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -521,7 +555,7 @@ ul { padding: 0; list-style: none; }
 .msg.coach .meta .grey { color: var(--ink-3); }
 .msg.coach .head { display: flex; align-items: baseline; gap: 8px; margin-top: 2px; }
 .msg.coach .head b { font-size: 16px; }
-:is(.msg.coach, .weekly-body) .text { margin: 4px 0 0; font-size: 15px; line-height: 1.6; white-space: pre-wrap; }
+:is(.msg.coach, .weekly-body) .text { margin: 4px 0 0; line-height: 1.6; white-space: pre-wrap; }
 /* Woo's text as markdown (md.ts): paragraphs, - / 1. lists, bold. The global reset (h1, h2, h3, p, ul { margin: 0 } and
    ul { padding: 0; list-style: none }) is undone here only; ol is not in the reset, so it is set here too. */
 .text.md { white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -551,7 +585,7 @@ ul { padding: 0; list-style: none; }
 .wooline .woo-status { min-height: 20px; align-items: center; }
 /* reduced motion: no dots at all (and no "…" in their place), just the text, swapped without a fade */
 .msg.me { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; padding: 6px 0 10px; }
-.msg.me .bubble { max-width: 82%; background: var(--surface); border-radius: var(--r-l) var(--r-l) 4px var(--r-l); padding: 10px 14px; font-size: 15px; line-height: 1.55; white-space: pre-wrap; }
+.msg.me .bubble { max-width: 82%; background: var(--surface); border-radius: var(--r-l) var(--r-l) 4px var(--r-l); padding: 10px 14px; line-height: 1.55; white-space: pre-wrap; }
 .msg.me .quote { border-left: 2px solid var(--chip-line); padding-left: 10px; margin-bottom: 6px; font-size: 13px; color: var(--ink-2); }
 .msg.me .when { font-size: 11px; color: var(--ink-3); margin-right: 4px; }
 .msg.me .when button { font-size: 11px; color: var(--ink); text-decoration: underline; }
@@ -618,7 +652,7 @@ ul { padding: 0; list-style: none; }
 .next-row.first .when { grid-column: 2; font-size: 13px; color: var(--ink-3); }
 .next-row.first .sub { grid-column: 2; font-size: 14px; color: var(--ink-2); margin-top: 2px; }
 .next-row.first .wooline { grid-column: 2; margin-top: 8px; }
-.rest-day { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 22px 0 18px; border-bottom: .5px solid var(--sep); }
+.rest-day { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 22px 0 18px; }
 .rest-day svg { color: var(--ink); }
 .rest-day .t { margin-top: 12px; font-size: 16px; font-weight: 600; }
 .rest-day .note { margin-top: 6px; font-size: 14px; color: var(--ink-2); max-width: 300px; line-height: 1.6; }
@@ -651,6 +685,24 @@ ul { padding: 0; list-style: none; }
 
 /* ---- 今天: 進步 (one sentence, one big number, three metrics) + 累積; on the grey page, no card, no lines (v5 02 §2.3-8) ---- */
 .card { min-width: 0; padding: 16px; background: var(--surface); border-radius: var(--r-l); } /* v5 card: the week card (PR 3); progress no longer uses it */
+/* 週卡 (02 §2.4): the week bars and the week header in one card; bars → 18 → header → 12 → bar → 10 → dates and what is left */
+.weekcard { margin-top: 8px; }
+.weekcard .weekbars { padding: 0; border-bottom: 0; }
+.weekcard .weekbars .cols { height: 64px; }
+.weekcard .weekbars .col > i { border-radius: 4px; }
+.weekcard .weekbars .col.on > i { box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px var(--ink); }
+.weekcard .week-head2 { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; gap: 8px; align-items: center; padding: 18px 0 0; }
+.weekcard .week-head2 .step { width: 44px; height: 44px; font-size: 22px; }
+.weekcard .week-head2 .line { flex-wrap: wrap; column-gap: 8px; row-gap: 2px; } /* a long title and a long distance (「第 12 週 本週」+「102.5 / 110 km」) go on two lines at 320, not on top of each other */
+.weekcard .week-head2 .title { font-size: 17px; font-weight: 600; }
+.weekcard .week-head2 .kms { margin-left: auto; }
+.weekcard .week-head2 .kms .num { font-size: 26px; }
+.bar.bar6 { height: 6px; margin-top: 12px; border-radius: 3px; }
+.wmeta { display: flex; flex-direction: column; margin-top: 10px; font-size: 13px; line-height: 1.5; color: var(--ink-2); }
+.week-head2 + .wmeta { margin-top: 12px; }
+.wmeta .was { color: var(--ink-3); }
+.wmeta .now { color: var(--ink-2); font-weight: 600; }
+.weekcard .review-entry { margin-top: 4px; }
 .blk { padding: 0 16px; }
 .prog { padding-bottom: 8px; }
 .prog .lead { font-size: 16px; font-weight: 600; line-height: 1.4; }
@@ -705,14 +757,14 @@ ul { padding: 0; list-style: none; }
 .sheet-handle { display: flex; justify-content: center; padding: 10px 0 6px; width: 100%; border-radius: var(--r-sheet) var(--r-sheet) 0 0; }
 .sheet-handle i { width: 36px; height: 4px; border-radius: var(--r-pill); background: var(--handle); }
 .sheet-body { overflow-y: auto; padding: 0 20px calc(28px + env(safe-area-inset-bottom)); }
-.sheet-body .section-h { margin-top: 18px; }
+.sheet-body .section-h { margin-top: 18px; padding: 0; } /* a heading in a sheet starts where the sheet's content starts (it was inset 16 for the grey page) */
 .sheet-title { font-size: 16px; font-weight: 700; padding: 4px 0 10px; }
 .sheet-foot { margin: 12px 0 0; font-size: 12px; color: var(--ink-3); text-align: center; }
 @keyframes up { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 
 /* ---- session sheet: 怎麼跑 · Woo · 備註 · 上次 ---- */
-.ss-head { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 12px; align-items: center; padding: 4px 0 14px; border-bottom: .5px solid var(--sep); }
+.ss-head { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 12px; align-items: center; padding: 4px 0 14px; }
 .ss-head .t { font-size: 20px; font-weight: 700; line-height: 1.3; }
 .ss-head .s { font-size: 13px; color: var(--ink-3); }
 /* session sheet of a 補課: the 已改期 row and the new row */
@@ -720,15 +772,18 @@ ul { padding: 0; list-style: none; }
 .ss-head.moved .t { color: var(--ink-2); }
 .ss-moved { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 10px 0 12px; border-bottom: .5px solid var(--sep); font-size: 14px; line-height: 1.5; color: var(--ink); }
 .ss-moved .go { flex: none; display: inline-flex; align-items: center; min-height: 44px; margin: -12px 0; font-size: 13px; color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; }
-.ss-rows { border-bottom: .5px solid var(--sep); padding-bottom: 6px; }
-.ss-row { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 10px; align-items: baseline; padding: 8px 0; border-top: .5px solid var(--sep); }
+.ss-rows { margin-top: 4px; }
+.ss-row { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 6px; row-gap: 1px; align-items: baseline; align-content: center; min-height: 64px; padding: 10px 0; border-top: .5px solid var(--sep); }
 .ss-row:first-child { border-top: none; }
-.ss-row .num { font-size: 20px; }
-.ss-row .b { font-size: 14px; }
-.ss-row .r { font-size: 13px; color: var(--ink-2); text-align: right; white-space: nowrap; }
-.ss-note { font-size: 14px; color: var(--ink-2); line-height: 1.65; padding-bottom: 14px; border-bottom: .5px solid var(--sep); white-space: pre-wrap; }
-.ss-last { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 12px; align-items: center; height: 56px; border-bottom: .5px solid var(--sep); color: var(--ink); }
-.ss-last .avatar { width: 28px; height: 28px; font-size: 13px; }
+.ss-row .num { font-family: inherit; font-size: 16px; font-weight: 600; letter-spacing: 0; line-height: inherit; } /* 02: one line of 16 (the number and the part's name), the target under it */
+.ss-row .b { font-size: 16px; }
+.ss-row .r { grid-column: 1 / -1; font-size: 13px; color: var(--ink-2); }
+.ss-row .r:empty { display: none; }
+.ss-rows + .wooline { margin-top: 0; padding: 14px 0; border-top: .5px solid var(--sep); color: var(--ink); } /* Woo's line is the group's last row */
+.ss-note { font-size: 14px; color: var(--ink-2); line-height: 1.65; padding-bottom: 6px; white-space: pre-wrap; }
+.ss-last { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto 8px; gap: 12px; align-items: center; min-height: 56px; color: var(--ink); }
+.ss-last .chev { width: 8px; height: 14px; color: var(--ink-3); }
+.ss-last .avatar { width: 30px; height: 30px; font-size: 13px; }
 .ss-last .avatar.cjk { font-size: 12px; }
 .ss-last .txt { display: flex; flex-direction: column; min-width: 0; }
 .ss-last .l1 { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -753,16 +808,19 @@ ul { padding: 0; list-style: none; }
 .week-head2 .back-today { font-size: 12px; font-weight: 500; color: var(--ink-2); border: 0; background: var(--fill); border-radius: var(--r-pill); padding: 0 8px; }
 main > .bar { height: 4px; margin: 6px 0 6px; }
 .dayrows { display: flex; flex-direction: column; }
-.dayrow { display: grid; grid-template-columns: 34px 28px minmax(0, 1fr) 112px; gap: 10px; align-items: center; width: 100%; height: 56px; border-bottom: .5px solid var(--sep); color: var(--ink); text-align: left; border-radius: 0; }
-.dayrow.today { outline: 2px solid var(--ink); outline-offset: -2px; border-radius: var(--r-m); margin: 0 -8px; padding: 0 8px; width: calc(100% + 16px); }
+.grp.dayrows { margin-top: 12px; }
+.dayrow { display: grid; grid-template-columns: 28px 30px minmax(0, 1fr) 104px; gap: 10px; align-items: center; width: 100%; height: 56px; padding: 0 16px; color: var(--ink); text-align: left; border-radius: 0; }
+.dayrow + .dayrow { background: linear-gradient(var(--sep), var(--sep)) 54px 0 / calc(100% - 54px) .5px no-repeat; } /* hairline inset to the avatar column */
+:is(a, button).dayrow:active { background-color: var(--fill-press); }
 .dayrow.skipped .n .t { color: var(--ink-2); }
 .dayrow.skipped .n .sub, .dayrow.skipped .d .dow, .dayrow.skipped .d .dom, .dayrow.skipped .r { color: var(--ink-3); }
 .dayrow.skipped .avatar { background: transparent; color: var(--ink-3); border: 1.5px solid var(--field-line); }
-.dayrow .d { display: flex; flex-direction: column; line-height: 1.1; }
+.dayrow .d { display: flex; flex-direction: column; align-items: center; line-height: 1.1; }
 .dayrow .d .dow { font-size: 11px; color: var(--ink-3); }
 .dayrow .d .dom { font-size: 16px; color: var(--ink-2); }
-.dayrow.today .d .dom { color: var(--ink); }
-.dayrow .avatar { width: 28px; height: 28px; font-size: 13px; }
+.dayrow.today .d .dom { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--ink); color: var(--on-ink); } /* today: the date in a solid disc */
+.dayrow.today .n .t { font-weight: 700; }
+.dayrow .avatar { width: 30px; height: 30px; font-size: 13px; }
 .dayrow .avatar.cjk { font-size: 12px; }
 .dayrow .n { min-width: 0; }
 .dayrow .n .t { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -787,22 +845,25 @@ main > .bar { height: 4px; margin: 6px 0 6px; }
 
 /* ---- 課表: 其他活動 (unassigned, under the week's rows) ---- */
 .extras { padding-top: 4px; }
-.extras .h { margin: 14px 0 2px; font-size: 12px; font-weight: 700; color: var(--ink-3); }
-.extras .row { display: grid; grid-template-columns: 34px 28px minmax(0, 1fr) 60px 64px; gap: 10px; align-items: center; height: 48px; border-bottom: .5px solid var(--sep); color: var(--ink-2); }
-.extras .avatar { width: 28px; height: 28px; font-size: 13px; }
+.extras .grp { margin-top: 0; }
+.extras .h { margin: 22px 0 4px; padding: 0 16px; font-size: 13px; font-weight: 700; color: var(--ink-2); letter-spacing: 0.04em; }
+.extras .xrow { display: grid; grid-template-columns: 28px 30px minmax(0, 1fr) 60px 64px; gap: 10px; align-items: center; min-height: 56px; padding: 0 16px; color: var(--ink-2); }
+.extras .xrow + .xrow { background: linear-gradient(var(--sep), var(--sep)) 54px 0 / calc(100% - 54px) .5px no-repeat; }
+.extras .xrow:active { background-color: var(--fill-press); }
+.extras .avatar { width: 30px; height: 30px; font-size: 13px; }
 .extras .avatar.cjk { font-size: 12px; }
-.extras .n { min-width: 0; display: flex; align-items: baseline; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.extras .n { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
 .extras .n .t { font-size: 15px; font-weight: 600; }
 .extras .n .when { font-size: 13px; color: var(--ink-3); }
 .extras .r { font-size: 12px; color: var(--ink-2); white-space: nowrap; text-align: right; }
 .extras .r .num { font-size: 17px; color: var(--ink); }
 
 /* ---- today: rows that open the session sheet ---- */
-.today-open .open-plan { display: block; width: 100%; text-align: left; border-radius: 0; }
-button.next-row { width: 100%; text-align: left; border-radius: 0; }
+.today-open .open-plan { display: block; width: 100%; text-align: left; }
+button.next-row { width: 100%; text-align: left; }
 
 /* ---- 肌力 day: Woo's checklist ---- */
-.strength-day { padding-bottom: 14px; border-bottom: .5px solid var(--sep); }
+.strength-day { padding-bottom: 14px; }
 .strength-head { border-bottom: none; padding-bottom: 4px; }
 .strength-head .t { font-size: 16px; font-weight: 600; }
 .strength-head .sub { margin-top: 2px; font-size: 13px; color: var(--ink-3); }
@@ -946,7 +1007,7 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 .week-head2 .kms .was { margin-right: 4px; font-size: 13px; color: var(--ink-3); }
 .week-head2 .sub .was { color: var(--ink-3); }
 .week-head2 .sub .now { color: var(--ink-2); font-weight: 600; }
-.dayrow.changed { margin: 0 -16px; padding: 0 16px 0 13px; width: calc(100% + 32px); border-left: 3px solid var(--v-warn); }
+.dayrow.changed { padding: 0 16px 0 13px; border-left: 3px solid var(--v-warn); }
 .dayrow > .was { grid-column: 3 / -1; font-size: 12px; line-height: 1.35; color: var(--ink-3); margin-top: -4px; }
 .dayrow.changed { height: auto; min-height: 56px; grid-template-rows: minmax(44px, auto) auto; align-content: center; padding-top: 6px; padding-bottom: 8px; row-gap: 0; } /* the 原本 line gets its own full-width line */
 .plan-note { margin: 12px 0 0; font-size: 12px; line-height: 1.5; color: var(--ink-3); }
@@ -1221,7 +1282,7 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 .group-create .oneline.bad { border-color: var(--v-bad); }
 .group-create .gf-hint { margin-top: 6px; font-size: 12px; line-height: 1.4; color: var(--ink-3); }
 .group-create .gf-field .err { margin-top: 6px; font-size: 12px; }
-.group-confirm .gc-text { font-size: 15px; line-height: 1.6; color: var(--ink-2); }
+.group-confirm .gc-text { line-height: 1.6; color: var(--ink-2); }
 
 /* 找不到這個群組／這位成員 */
 .group-404 { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 40px 0 16px; }
@@ -1354,7 +1415,7 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 
 .draft-why { display: grid; grid-template-columns: 36px minmax(0, 1fr); column-gap: 12px; padding: 14px 0; border-bottom: .5px solid var(--sep); }
 .draft-why .k { font-size: 13px; font-weight: 700; color: var(--ink-2); letter-spacing: 0.04em; }
-.draft-why .text { margin-top: 2px; font-size: 15px; line-height: 1.6; overflow-wrap: anywhere; }
+.draft-why .text { margin-top: 2px; line-height: 1.6; overflow-wrap: anywhere; }
 .draft-why .more { font-size: 14px; color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
 .draft-why .basis { margin-top: 8px; font-size: 12px; line-height: 1.55; color: var(--ink-3); }
 
@@ -1411,12 +1472,19 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 
 /* 320 px column widths (v4) */
 @media (max-width: 359px) {
-  .dayrow { grid-template-columns: 34px 28px minmax(0, 1fr) 96px; }
+  /* the grouped card (inner 256 at 320) gave the course name 72 px, 20 less than v4 had; tighter gaps and padding give it back (≥ 90) */
+  .dayrow { grid-template-columns: 26px 28px minmax(0, 1fr) 92px; gap: 8px; padding: 0 12px; }
+  .dayrow.changed { padding: 0 12px 0 9px; }
+  .dayrow + .dayrow { background-position: 46px 0; background-size: calc(100% - 46px) .5px; }
+  .dayrow .avatar { width: 28px; height: 28px; }
   .dayrow .r .l .num { font-size: 16px; }
-  .extras .row { grid-template-columns: 28px minmax(0, 1fr) 56px 60px; }
-  .extras .row > span:first-child { display: none; }
+  .extras .xrow { grid-template-columns: 30px minmax(0, 1fr) 56px 60px; }
+  .extras .xrow > span:first-child { display: none; }
+  .extras .xrow + .xrow { background-position: 16px 0; background-size: calc(100% - 16px) .5px; }
   .extras .n { flex-direction: column; align-items: flex-start; gap: 0; white-space: normal; }
-  .extra-row { grid-template-columns: minmax(0, 1fr) 112px; }
+  /* the grouped card leaves 224 px at 320: the button goes under the activity (aligned with its text) instead of squeezing the name and time into 50 px */
+  .extra-row { grid-template-columns: minmax(0, 1fr); row-gap: 8px; }
+  .extra-row .chip { width: calc(100% - 52px); margin-left: 52px; }
   .metrics, .totals { column-gap: 8px; }
   .tabbar a span { white-space: nowrap; }
   /* 課表預覽 bar: the back pill is the arrow only (still named 「返回教練」) so 預覽 Woo 的提案 and the 採用／不用 chips fit */
@@ -1435,7 +1503,6 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 /* ---- weekly-review-entry (v4.3): the 週回顧 entries on 課表 and 今天, the sheet, the ring on the message `/coach?message=` jumps to ---- */
 .review-entry { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; margin-top: 4px; font-size: 13px; color: var(--ink-2); }
 .review-entry:active { color: var(--ink); }
-.review-entry.today { display: flex; width: 100%; min-height: 44px; margin: 0; gap: 8px; font-size: 14px; text-align: left; }
 .review-sheet .wr-head { padding: 4px 0 12px; border-bottom: .5px solid var(--sep); }
 .review-sheet .wr-head .sheet-title { padding: 0; }
 .review-sheet .wr-sub { margin-top: 2px; font-size: 12px; color: var(--ink-3); }
