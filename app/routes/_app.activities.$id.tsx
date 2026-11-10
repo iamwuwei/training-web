@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState } from "react";
-import { Link, redirect, useLocation, useNavigate, useRevalidator } from "react-router";
+import { Link, redirect, useNavigate, useRevalidator } from "react-router";
 import { useReviewPolling } from "../lib/use-review-polling";
 import type { Route } from "./+types/_app.activities.$id";
 import { DetailsSheet } from "../components/details-sheet";
@@ -11,6 +11,7 @@ import { BackPill, NavBar } from "../components/nav-bar";
 import { Avatar, CoachAvatar, Reminders, verdictBadge } from "../components/ui";
 import { ApiError, getActivities, putSession, rereview } from "../lib/api";
 import { hasSession } from "../lib/auth";
+import { hasPrevious, setNavDir } from "../lib/nav";
 import { assignErrorText, combine, groupOf, inOtherMultiSession, MAX_PER_SESSION, primaryOf, type Combined } from "../lib/combine";
 import { dayDiff, md, mdDow, timeJst } from "../lib/date";
 import { duration, int, km, kmPlan, pace } from "../lib/format";
@@ -333,13 +334,10 @@ function ActivitiesSheet({ open, onClose, c, s, all, view }: { open: boolean; on
 export default function Report({ loaderData }: Route.ComponentProps) {
   const view = usePlan();
   const navigate = useNavigate();
-  const location = useLocation();
   const revalidator = useRevalidator();
   const { all } = loaderData;
-  // ← goes back to where the report was opened from; opened directly (the router's initial
-  // entry, key "default") there is no source page, so 課表. Any other key means the app
-  // itself pushed this entry, so there is always something to go back to.
-  const cameFromApp = location.key !== "default";
+  // ← goes back to where the report was opened from; with no earlier entry of the app's own history (opened directly, or the first entry was replaced)
+  // there is no source page, so 課表 (`hasPrevious()`, the same answer as the left-edge swipe's).
   // A memo or details save shows immediately through `override`; once a revalidation brings the
   // same memo_updated_at / details_updated_at back from the server, the loader's copy (with the new review) wins.
   const [override, setOverride] = useState<ApiActivity | null>(null);
@@ -401,7 +399,7 @@ export default function Report({ loaderData }: Route.ComponentProps) {
 
   return (
     <>
-      <NavBar kind="inline" title="報告" left={<BackPill label="返回" onClick={() => (cameFromApp ? void navigate(-1) : void navigate("/plan"))} />} />
+      <NavBar kind="inline" title="報告" left={<BackPill label="返回" onClick={() => { setNavDir("pop"); void (hasPrevious() ? navigate(-1) : navigate("/plan", { viewTransition: true })); }} />} />
       <main>
         <article className="post report-head">
           <Avatar session={s} sport={a.sport_type} />

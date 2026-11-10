@@ -1,4 +1,5 @@
 // Shell navigation helpers (01b §5.3, §5.5). Module state only: nothing is stored anywhere.
+import { useEffect } from "react";
 
 /** The three tab roots whose scroll position is remembered per path (ScrollRestoration getKey, root.tsx). 教練 is a modal, 設定 is not a tab. */
 export const TAB_ROOTS = new Set(["/", "/plan", "/groups"]);
@@ -36,4 +37,33 @@ export function takeOwnBack(): boolean {
 export function hasPrevious(): boolean {
   const idx = (window.history.state as { idx?: number } | null)?.idx;
   return typeof idx === "number" && idx > 0;
+}
+
+// Which way a page is about to move, for the View Transitions of the pages that are not settings (01b §5.4): `html[data-nav="push" | "pop"]` is what app.css reads.
+// A transition nobody marked (the browser's own back, forward) has no `data-nav`, and app.css gives it no animation: Safari has just played its own.
+// The transition starts when the navigation lands (after its loaders, which can take seconds), so the mark is not timed from the click: it is cleared 1 s after
+// the location changed (`useNavDirClear`, in the app layout), and a mark whose navigation never landed goes after 10 s.
+let navDirTimer = 0;
+/** Mark the navigation that is about to start. */
+export function setNavDir(dir: "push" | "pop") {
+  if (typeof document === "undefined") return;
+  document.documentElement.dataset.nav = dir;
+  window.clearTimeout(navDirTimer);
+  navDirTimer = window.setTimeout(() => { delete document.documentElement.dataset.nav; }, 10_000);
+}
+
+// The browser's own back and forward are always a `popstate`, and one that this app started marks `pop` (never `push`): a `push` still on the page when a
+// `popstate` comes is left over from the push before it (the transition is still within its 1 s), so it goes, and the browser's back plays no animation.
+// Registered once when the module is loaded, in the capture phase so it runs before the router starts its navigation.
+if (typeof window !== "undefined") {
+  window.addEventListener("popstate", () => { if (document.documentElement.dataset.nav === "push") delete document.documentElement.dataset.nav; }, true);
+}
+
+/** The mark goes once the transition that the location change started is over (400 ms at most, plus room for a slow device: the animation starts after the new page is drawn). */
+export function useNavDirClear(locationKey: string) {
+  useEffect(() => {
+    if (!document.documentElement.dataset.nav) return;
+    const t = window.setTimeout(() => { window.clearTimeout(navDirTimer); delete document.documentElement.dataset.nav; }, 1000);
+    return () => window.clearTimeout(t);
+  }, [locationKey]);
 }

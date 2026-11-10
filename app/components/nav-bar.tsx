@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { Link } from "react-router";
+import { setNavDir } from "../lib/nav";
 import { BackIcon } from "./icons";
+import { PushLink } from "./push-link";
 
 // Top of a page (01b §5.7, 02 §2.2): the bar is the page's background colour while the page is at rest; once content scrolls under it
 // the glass and the .5px line fade in (opacity only, the blur never animates). A root page (今天, 課表, 群組) has a large title that
@@ -91,8 +93,10 @@ export function LargeTitle({ title, subtitle, id, h1Ref }: { title: string; subt
 }
 
 /** A 44 px round glass button (a link when `to`, else a button). `label` is its accessible name. */
-export function GlassButton({ to, onClick, label, children, className, disabled, busy, ariaDisabled }: {
+export function GlassButton({ to, push, onClick, label, children, className, disabled, busy, ariaDisabled }: {
   to?: string;
+  /** `to` is a page pushed over this one (View Transition, 01b §5.4) */
+  push?: boolean;
   onClick?: () => void;
   label: string;
   children: ReactNode;
@@ -104,7 +108,7 @@ export function GlassButton({ to, onClick, label, children, className, disabled,
   ariaDisabled?: boolean;
 }) {
   const cls = `gbtn glass${className ? ` ${className}` : ""}`;
-  if (to) return <Link to={to} className={cls} aria-label={label}>{children}</Link>;
+  if (to) return push ? <PushLink to={to} className={cls} aria-label={label}>{children}</PushLink> : <Link to={to} className={cls} aria-label={label}>{children}</Link>;
   return (
     <button type="button" className={cls} aria-label={label} aria-busy={busy || undefined} aria-disabled={ariaDisabled || undefined} disabled={disabled} onClick={onClick}>{children}</button>
   );
@@ -116,6 +120,7 @@ export function GlassButton({ to, onClick, label, children, className, disabled,
 export function BackPill({ label, ariaLabel, to, onClick }: { label: string; ariaLabel?: string; to?: string; onClick?: () => void }) {
   const inner = <><BackIcon /><span>{label}</span></>;
   const cls = "gbtn glass backpill";
-  if (to) return <Link to={to} className={cls} aria-label={ariaLabel ?? label}>{inner}</Link>;
+  // a back by link is a pop: the page slides out to the right (View Transition; none where it is not supported)
+  if (to) return <Link to={to} viewTransition onClick={() => setNavDir("pop")} className={cls} aria-label={ariaLabel ?? label}>{inner}</Link>;
   return <button type="button" className={cls} aria-label={ariaLabel ?? label} onClick={onClick}>{inner}</button>;
 }

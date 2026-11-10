@@ -1,5 +1,5 @@
 import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Link, redirect, useLocation, useNavigate, useRevalidator, useSearchParams } from "react-router";
+import { Link, redirect, useNavigate, useRevalidator, useSearchParams } from "react-router";
 import type { Route } from "./+types/_app.coach";
 import { CloseIcon, SendIcon } from "../components/icons";
 import { GlassButton, NavBar } from "../components/nav-bar";
@@ -18,6 +18,7 @@ import { useReviewPolling } from "../lib/use-review-polling";
 import { usePlan } from "../lib/use-plan";
 import { JUMP_MAX_PAGES, JUMP_PAGE, resetWeeklyCaches } from "../lib/use-weekly-message";
 import type { ApiActivity, ApiCoachMessage, ApiProposal, ApiSession, ApiWeeklyAsk, ApiWeeklyReview } from "../types/api";
+import { hasPrevious } from "../lib/nav";
 import { pageTitle } from "../lib/meta";
 
 // Woo's thread: weekly reviews (with their proposals), each run's verdict, his
@@ -359,8 +360,6 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
   // height to follow. Closing goes one step back in history (the page you came from); with nothing to go back to
   // (the app was opened at /coach) it goes to 今天, replacing this entry.
   const navigate = useNavigate();
-  const location = useLocation();
-  const cameFromApp = location.key !== "default";
   // Leaving slides the modal down (300 ms) and then goes one step back; a second press while it leaves is ignored. The browser's back button has no leaving animation.
   // the thread takes the focus when the modal is there: keys (PageUp, arrows, Space, Home, End) scroll it, as they scrolled the window before
   useEffect(() => { scrollerRef.current?.focus({ preventScroll: true }); }, []);
@@ -369,7 +368,7 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
     if (closing.current) return;
     closing.current = true;
     const shell = scrollerRef.current?.closest<HTMLElement>(".shell") ?? null;
-    const done = () => void (cameFromApp ? navigate(-1) : navigate("/", { replace: true }));
+    const done = () => void (hasPrevious() ? navigate(-1) : navigate("/", { replace: true }));
     if (!shell) { done(); return; }
     void leaveModal(shell, [...shell.querySelectorAll<HTMLElement>(".navbar, .composer")]).finished.then(done);
   };
