@@ -2,7 +2,8 @@ import { useMemo } from "react";
 import { Link, useRouteLoaderData } from "react-router";
 import type { clientLoader } from "../routes/_app";
 import { GearIcon } from "../components/icons";
-import { CoachAvatar, TopBar } from "../components/ui";
+import { GlassButton, NavBar } from "../components/nav-bar";
+import { CoachAvatar } from "../components/ui";
 import { WooStatus } from "../components/woo-status";
 import type { SessionUser } from "./auth";
 import { todayJst } from "./date";
@@ -28,7 +29,7 @@ export function useUser(): SessionUser | null {
 export function NoPlanEntry({ title }: { title: "今天" | "課表" }) {
   const { me, draft, latestNotFound, loading } = useLatestDraft();
   const T = DRAFT_TEXT.entry;
-  const aside = title === "今天" ? <Link to="/settings" className="gear" aria-label="設定"><GearIcon /></Link> : undefined;
+  const aside = title === "今天" ? <GlassButton to="/settings" label="設定"><GearIcon /></GlassButton> : undefined;
 
   let body: React.ReactNode;
   if (loading) {
@@ -92,7 +93,7 @@ export function NoPlanEntry({ title }: { title: "今天" | "課表" }) {
 
   return (
     <>
-      <TopBar title={title} aside={aside} />
+      <NavBar kind="large" title={title} right={aside} />
       <main>{body}</main>
     </>
   );

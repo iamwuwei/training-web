@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Route } from "./+types/_app.plan";
 import { Link, useLocation, useNavigate, useRevalidator, useSearchParams } from "react-router";
-import { BackIcon } from "../components/icons";
 import { DayRow, WeekBars } from "../components/plan-week";
 import { SessionSheet } from "../components/session-sheet";
 import { WeeklyReviewSheet } from "../components/weekly-review-sheet";
-import { Avatar, Bar, CoachAvatar, TopBar } from "../components/ui";
+import { BackPill, NavBar } from "../components/nav-bar";
+import { Avatar, Bar, CoachAvatar } from "../components/ui";
 import { ApiError, postProposal } from "../lib/api";
 import { md, timeJst } from "../lib/date";
 import { km, kmPlan, pace } from "../lib/format";
@@ -131,17 +131,17 @@ export default function Plan() {
   return (
     <>
       {preview ? (
-        <header className="plan-preview-bar">
-          <button type="button" className="back" aria-label="返回教練" onClick={backToCoach}><BackIcon /></button>
-          <CoachAvatar size={24} />
-          <div className="mid">
-            <div className="t">預覽 Woo 的提案</div>
-            <div className="s">{changedList.length ? `第 ${changedList.join("、")} 週會改 · 還沒生效` : "還沒生效"}</div>
-          </div>
-          <button type="button" className="chip primary" disabled={busy} onClick={() => void decide("apply")}>採用</button>
-          <button type="button" className="chip" disabled={busy} onClick={() => void decide("dismiss")}>不用</button>
-        </header>
-      ) : <TopBar title="課表" aside={currentWeek?.phase ? currentWeek.phase : `${weeks.length} 週`} />}
+        <NavBar
+          kind="inline"
+          className="preview"
+          left={<BackPill label="教練" ariaLabel="返回教練" onClick={backToCoach} />}
+          title={<span className="pv"><CoachAvatar size={24} /><span className="pv-t">預覽 Woo 的提案<small>{changedList.length ? `第 ${changedList.join("、")} 週會改 · 還沒生效` : "還沒生效"}</small></span></span>}
+          right={<>
+            <button type="button" className="chip primary" disabled={busy} onClick={() => void decide("apply")}>採用</button>
+            <button type="button" className="chip" disabled={busy} onClick={() => void decide("dismiss")}>不用</button>
+          </>}
+        />
+      ) : <NavBar kind="large" title="課表" subtitle={currentWeek?.phase ? currentWeek.phase : `${weeks.length} 週`} />}
       <main>
         {notice && noticeGone !== proposalId ? <p className="plan-notice" role="status">這張提案已經處理過了</p> : null}
         {error ? <p className="plan-notice" role="alert" style={{ color: "var(--v-bad)" }}>{error}</p> : null}

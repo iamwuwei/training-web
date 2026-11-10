@@ -5,7 +5,8 @@ import { GroupBack, GroupNotFound, LoadFailed, RowsSkeleton } from "../component
 import { GroupMemberPicker } from "../components/group-member-picker";
 import { DayRow, WeekBars } from "../components/plan-week";
 import { SessionSheet } from "../components/session-sheet";
-import { Bar, TopBar } from "../components/ui";
+import { NavBar } from "../components/nav-bar";
+import { Bar } from "../components/ui";
 import { ApiError, getGroup, getMemberPlan } from "../lib/api";
 import { md, todayJst } from "../lib/date";
 import { km, kmPlan } from "../lib/format";
@@ -124,7 +125,7 @@ export default function GroupPlans({ loaderData, params }: Route.ComponentProps)
   if (!group) {
     return (
       <>
-        <TopBar title="大家的課表" back={<GroupBack to={`/groups/${id}`} label="回群組" />} />
+        <NavBar kind="inline" title="大家的課表" left={<GroupBack to={`/groups/${id}`} label="群組" ariaLabel="回群組" />} />
         <main><LoadFailed text="讀不到群組。" onRetry={() => void revalidator.revalidate()} /></main>
       </>
     );
@@ -134,7 +135,7 @@ export default function GroupPlans({ loaderData, params }: Route.ComponentProps)
 
   return (
     <>
-      <TopBar title="大家的課表" back={<GroupBack to={`/groups/${id}`} label="回群組" />} />
+      <NavBar kind="inline" title="大家的課表" left={<GroupBack to={`/groups/${id}`} label="群組" ariaLabel="回群組" />} />
       <main>
         <div className="member-pick-row">
           <GroupMemberPicker members={group.members} selectedId={listed ? mid : null} onSelect={(m) => setSearch({ m }, { replace: true })} />

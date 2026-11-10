@@ -2,13 +2,13 @@ import { Fragment, useEffect, useState } from "react";
 import { Link, redirect, useLocation, useNavigate, useRevalidator } from "react-router";
 import { useReviewPolling } from "../lib/use-review-polling";
 import type { Route } from "./+types/_app.activities.$id";
-import { BackIcon } from "../components/icons";
 import { DetailsSheet } from "../components/details-sheet";
 import { GearInfo } from "../components/gear-info";
 import { MemoEditor } from "../components/memo";
 import { SessionSheet } from "../components/session-sheet";
 import { BottomSheet } from "../components/sheet";
-import { Avatar, CoachAvatar, Reminders, TopBar, verdictBadge } from "../components/ui";
+import { BackPill, NavBar } from "../components/nav-bar";
+import { Avatar, CoachAvatar, Reminders, verdictBadge } from "../components/ui";
 import { ApiError, getActivities, putSession, rereview } from "../lib/api";
 import { hasSession } from "../lib/auth";
 import { assignErrorText, combine, groupOf, inOtherMultiSession, MAX_PER_SESSION, primaryOf, type Combined } from "../lib/combine";
@@ -401,7 +401,7 @@ export default function Report({ loaderData }: Route.ComponentProps) {
 
   return (
     <>
-      <TopBar title="報告" back={<button type="button" className="back" aria-label="返回" onClick={() => (cameFromApp ? void navigate(-1) : void navigate("/plan"))}><BackIcon /></button>} />
+      <NavBar kind="inline" title="報告" left={<BackPill label="返回" onClick={() => (cameFromApp ? void navigate(-1) : void navigate("/plan"))} />} />
       <main>
         <article className="post report-head">
           <Avatar session={s} sport={a.sport_type} />

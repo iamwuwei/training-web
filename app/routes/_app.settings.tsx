@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { redirect, useLocation, useRevalidator } from "react-router";
+import { redirect, useLocation, useNavigate, useRevalidator } from "react-router";
 import type { Route } from "./+types/_app.settings";
 import { Fold } from "../components/fold";
 import { ShareSettingsSection } from "../components/share-settings";
-import { SectionH, TopBar } from "../components/ui";
+import { BackPill, NavBar } from "../components/nav-bar";
+import { SectionH } from "../components/ui";
 import { ApiError, disconnectStrava, getGroups, getMe, getShare, postConstraint } from "../lib/api";
 import { hasSession, logout } from "../lib/auth";
 import { config, useMock } from "../lib/config";
@@ -92,7 +93,8 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Folded unless the url asks for it (#share, #strava) or there is nothing else to do here (no Strava yet). Not stored anywhere.
-  const { hash } = useLocation();
+  const { hash, key } = useLocation();
+  const navigate = useNavigate();
   const [stravaOpen, setStravaOpen] = useState(() => hash === "#strava" || !strava);
   const [shareOpen, setShareOpen] = useState(() => hash === "#share");
 
@@ -112,7 +114,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 
   return (
     <>
-      <TopBar title="設定" />
+      <NavBar kind="inline" title="設定" left={<BackPill label="今天" ariaLabel="返回今天" onClick={() => void (key !== "default" ? navigate(-1) : navigate("/", { replace: true }))} />} />
       <main>
         <SectionH>帳號</SectionH>
         <div className="setting"><span className="k">名字</span><span className="v">{user.display_name}</span></div>

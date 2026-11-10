@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
 import type { Route } from "./+types/_app.plan_.new";
-import { BackIcon } from "../components/icons";
-import { CoachAvatar, SectionH, TopBar } from "../components/ui";
+import { BackPill, NavBar } from "../components/nav-bar";
+import { CoachAvatar, SectionH } from "../components/ui";
 import { ApiError, getActivities, getLatestPlanDraft, postPlanDraft } from "../lib/api";
 import { addDays, todayJst } from "../lib/date";
 import {
@@ -200,12 +200,12 @@ export default function NewPlan() {
   const err = (k: keyof IntakeForm) => errors[k];
 
   const back = step === 2
-    ? <button type="button" className="back" aria-label="回表單" onClick={() => setStep(1)}><BackIcon /></button>
-    : <button type="button" className="back" aria-label="返回" onClick={() => void (cameFromApp ? navigate(-1) : navigate("/"))}><BackIcon /></button>;
+    ? <BackPill label="表單" ariaLabel="回表單" onClick={() => setStep(1)} />
+    : <BackPill label="返回" onClick={() => void (cameFromApp ? navigate(-1) : navigate("/"))} />;
 
   return (
     <>
-      <TopBar title={step === 1 ? F.title : T.summary.title} back={back} />
+      <NavBar kind="inline" title={step === 1 ? F.title : T.summary.title} left={back} />
       <main className="intake">
         {step === 1 && init.carried ? <p className="group-note" role="status">{F.carried}</p> : null}
         {step === 2 ? (

@@ -6,7 +6,8 @@ import { GroupEventSheet } from "../components/group-event-sheet";
 import { GroupMemberRow } from "../components/group-member-row";
 import { GroupBack, GroupNotFound, LoadFailed, TopTitle } from "../components/group-parts";
 import { ChevronIcon, GearIcon, RefreshIcon } from "../components/icons";
-import { SectionH, TopBar } from "../components/ui";
+import { GlassButton, NavBar } from "../components/nav-bar";
+import { SectionH } from "../components/ui";
 import { getGroup } from "../lib/api";
 import { todayJst } from "../lib/date";
 import { countdown, mdDowPlain } from "../lib/groups";
@@ -30,7 +31,7 @@ export default function GroupPage({ loaderData }: Route.ComponentProps) {
   if (loaderData.status === "error") {
     return (
       <>
-        <TopBar title="群組" back={<GroupBack to="/groups" label="回群組清單" />} />
+        <NavBar kind="inline" title="群組" left={<GroupBack to="/groups" label="群組清單" ariaLabel="回群組清單" />} />
         <main><LoadFailed text="讀不到群組。" onRetry={() => void revalidator.revalidate()} /></main>
       </>
     );
@@ -45,13 +46,14 @@ export default function GroupPage({ loaderData }: Route.ComponentProps) {
 
   return (
     <>
-      <TopBar
+      <NavBar
+        kind="inline"
         title={<TopTitle>{g.name}</TopTitle>}
-        back={<GroupBack to="/groups" label="回群組清單" />}
-        aside={
+        left={<GroupBack to="/groups" label="群組清單" ariaLabel="回群組清單" />}
+        right={
           <>
-            <button type="button" className="icon-btn refresh" aria-label={loading ? "更新中" : "重新整理"} aria-busy={loading} disabled={loading} onClick={() => void revalidator.revalidate()}><RefreshIcon /></button>
-            <Link to={`/groups/${g.id}/settings`} className="icon-btn" aria-label="群組設定"><GearIcon /></Link>
+            <GlassButton className="refresh" label={loading ? "更新中" : "重新整理"} busy={loading} disabled={loading} onClick={() => void revalidator.revalidate()}><RefreshIcon /></GlassButton>
+            <GlassButton to={`/groups/${g.id}/settings`} label="群組設定"><GearIcon /></GlassButton>
           </>
         }
       />
