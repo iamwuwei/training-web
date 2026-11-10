@@ -640,97 +640,97 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
   return (
     <FlashContext.Provider value={flash}>
       <div className="modal-scroll" ref={scrollerRef} tabIndex={-1}>
-      <NavBar kind="inline" left={<GlassButton label="關閉" onClick={close}><CloseIcon /></GlassButton>} title="Woo" subtitle="你的教練 · 只聊跑步和課表" scroller={scrollerRef} />
-      <main className="thread" style={{ "--composer-h": `${composerH}px` } as React.CSSProperties}>
-        <div className={`thread-top${hasMore ? "" : " end"}`} ref={topRef} aria-live="polite">
-          {loadingOlder ? <span className="tt-load">載入更早的對話<span className="typing-dots" aria-hidden="true"><i /><i /><i /></span></span> : olderError ? "載入失敗，往上滑再試一次" : null}
-        </div>
-        {messages.length === 0 ? (
-          <p className="empty">Woo 還沒說話。跑完第一堂課、或每週日的回顧之後，這裡會出現他的訊息。你也可以先問他。</p>
-        ) : null}
-        {messages.map((m, i) => {
-          const day = toJstDate(m.created_at);
-          const rule = i === 0 || toJstDate(messages[i - 1].created_at) !== day ? <DayRule date={day} /> : null;
-          let node: React.ReactNode;
-          if (m.role === "athlete") {
-            // No 選錯了 while the mismatch question is open, nor while Woo's next line (after 是) is on its way.
-            const resettable = m.kind === "pick" && i === lastPickIdx && i > lastCheckinIdx && lastCheckin?.checkin?.state === "picked" && !mismatchOpen && !expectPending;
-            node = <AthleteMessage m={m} busy={busy} onReset={resettable ? () => void reset() : undefined} onRetry={m.kind === "chat" && !m.rpe ? () => void send(m.text, m.activity_id ?? undefined) : undefined} />;
-          } else if (m.kind === "weekly") {
-            const w = reviews.find((r) => r.id === m.weekly_review_id) ?? null;
-            const rewriting = rerunPending && rerun?.id === m.id;
-            node = (
-              <CoachMessage m={m} badge={m.weekly?.updated ? "check" : null}>
-                <WeeklyReviewBody m={m} review={w} view={view} sessions={sessions} weeks={planWeeks} busy={busy}
-                  rerun={rewriting ? (timedOut ? "gave-up" : "pending") : null}
-                  cards={{ statusOf, onStatus: (id, status) => setDecisions((d) => ({ ...d, [id]: status })), onChanged: () => void revalidator.revalidate(), onRepropose: repropose }}
-                  onAnswerAsk={(ask, answer) => void answerWeeklyAsk(m, ask, answer)} />
-              </CoachMessage>
-            );
-          } else if (m.kind === "ask" && m.ask?.kind === "mismatch") {
-            node = (
-              <CoachMessage m={m}>
-                <MdText text={m.text} />
-                {m.ask.state === "open" ? (
-                  <div className="chips-row" role="group" aria-label="是不是這趟">
-                    <button type="button" className="chip" disabled={busy} onClick={() => void confirmMatch(m, true)}>是，就是這趟</button>
-                    <button type="button" className="chip primary" disabled={busy} onClick={() => void confirmMatch(m, false)}>{m.ask.from === "report" ? "不是這堂" : "不是，重選"}</button>
-                  </div>
-                ) : unlinked === m.id ? (
-                  <div className="said">已解除配對，<Link to={`/activities/${m.ask.activity_id}`}>到報告頁重選 ›</Link></div>
-                ) : null}
-              </CoachMessage>
-            );
-          } else if (m.kind === "chat" && (m.proposal || m.constraint)) {
-            const members = (m.proposal?.group_id && groups.get(m.proposal.group_id)) || [m];
-            if (members[0] !== m) return null; // drawn with the first card of its group
-            const stale = members.some((x) => x.proposal && statusOf(x.proposal) === "stale");
-            node = (
-              <CoachMessage m={m} badge={stale ? "warn" : null}>
-                <MdText text={m.text} />
-                {members.slice(1).filter((x) => x.text && x.text !== m.text).map((x) => <MdText key={x.id} text={x.text} />)}
-                {cards(members)}
-                {m.proposal_rejected ? <Rejected /> : null}
-                <CorrectionLine m={m} timedOut={timedOut} />
-              </CoachMessage>
-            );
-          } else if (m.kind === "review") {
-            // A newer verdict of this session is below: this one is dimmed, has no badge and is not "the first" anything.
-            const old = m.review?.superseded === true;
-            const first = old ? null : firstTime(m.activity_id);
-            node = (
-              <CoachMessage m={m} badge={old ? null : verdictBadge(m.review?.verdict)} className={old ? "superseded" : undefined}>
-                {old ? <p className="cancelled">這則判定已更新，以下面新的為準</p> : null}
-                {m.review?.updated ? <div className="updated rejudged"><span aria-hidden="true">⟳</span> 已更新判定 · {m.review.updated.reason}</div> : null}
-                <div className="head"><b>{m.review?.label}</b><VerdictTag verdict={m.review?.verdict} /></div>
-                {first ? <div className="celebrate"><div className="k">第一次</div><div className="v"><span className="num">{first}</span><span>km 長跑</span></div></div> : null}
-                <MdText text={m.text} />
-                {m.review?.reminder ? <p className="next">→ {m.review.reminder}</p> : null}
-                {m.activity_id ? <Link to={`/activities/${m.activity_id}`} className="chip" style={{ marginTop: 8 }}>看報告</Link> : null}
-              </CoachMessage>
-            );
-          } else if (m.kind === "checkin") {
-            node = (
-              <CoachMessage m={m}>
-                <MdText text={m.text} />
-                <CheckinChips m={m} busy={busy} elsewhere={(id) => { const x = allActs.find((a) => a.id === id); return !!x && inOtherMultiSession(x, m.checkin?.session_id ?? null); }} onPick={(body) => void pick(m.id, body)} />
-                {i === lastCheckinIdx && m.checkin?.state === "dismissed" ? <button type="button" className="relink" onClick={() => void reset()} disabled={busy}>重新選 ›</button> : null}
-              </CoachMessage>
-            );
-          } else {
-            // Woo's line written as a card was applied (within a few seconds of it) is his confirmation: the avatar gets the check.
-            const confirms = confirmedCard(m, appliedCards) != null;
-            node = <CoachMessage m={m} badge={confirms ? "check" : null}><MdText text={m.text} />{m.proposal_rejected ? <Rejected /> : null}<CorrectionLine m={m} timedOut={timedOut} />{planWaits.has(m.id) ? <PlanRejudgeLine left={planWaits.get(m.id) ?? []} timedOut={timedOut} /> : null}</CoachMessage>;
-          }
-          return <Fragment key={m.id}>{rule}{node}</Fragment>;
-        })}
-        {typing ? (
-          <article className="msg coach typing">
-            <CoachAvatar />
-            <div className="body">{timedOut ? "Woo 回得比較慢，稍後再回來看。" : <WooStatus stage={last?.stage} />}</div>
-          </article>
-        ) : null}
-      </main>
+        <NavBar kind="inline" left={<GlassButton label="關閉" onClick={close}><CloseIcon /></GlassButton>} title="Woo" subtitle="你的教練 · 只聊跑步和課表" scroller={scrollerRef} />
+        <main className="thread" style={{ "--composer-h": `${composerH}px` } as React.CSSProperties}>
+          <div className={`thread-top${hasMore ? "" : " end"}`} ref={topRef} aria-live="polite">
+            {loadingOlder ? <span className="tt-load">載入更早的對話<span className="typing-dots" aria-hidden="true"><i /><i /><i /></span></span> : olderError ? "載入失敗，往上滑再試一次" : null}
+          </div>
+          {messages.length === 0 ? (
+            <p className="empty">Woo 還沒說話。跑完第一堂課、或每週日的回顧之後，這裡會出現他的訊息。你也可以先問他。</p>
+          ) : null}
+          {messages.map((m, i) => {
+            const day = toJstDate(m.created_at);
+            const rule = i === 0 || toJstDate(messages[i - 1].created_at) !== day ? <DayRule date={day} /> : null;
+            let node: React.ReactNode;
+            if (m.role === "athlete") {
+              // No 選錯了 while the mismatch question is open, nor while Woo's next line (after 是) is on its way.
+              const resettable = m.kind === "pick" && i === lastPickIdx && i > lastCheckinIdx && lastCheckin?.checkin?.state === "picked" && !mismatchOpen && !expectPending;
+              node = <AthleteMessage m={m} busy={busy} onReset={resettable ? () => void reset() : undefined} onRetry={m.kind === "chat" && !m.rpe ? () => void send(m.text, m.activity_id ?? undefined) : undefined} />;
+            } else if (m.kind === "weekly") {
+              const w = reviews.find((r) => r.id === m.weekly_review_id) ?? null;
+              const rewriting = rerunPending && rerun?.id === m.id;
+              node = (
+                <CoachMessage m={m} badge={m.weekly?.updated ? "check" : null}>
+                  <WeeklyReviewBody m={m} review={w} view={view} sessions={sessions} weeks={planWeeks} busy={busy}
+                    rerun={rewriting ? (timedOut ? "gave-up" : "pending") : null}
+                    cards={{ statusOf, onStatus: (id, status) => setDecisions((d) => ({ ...d, [id]: status })), onChanged: () => void revalidator.revalidate(), onRepropose: repropose }}
+                    onAnswerAsk={(ask, answer) => void answerWeeklyAsk(m, ask, answer)} />
+                </CoachMessage>
+              );
+            } else if (m.kind === "ask" && m.ask?.kind === "mismatch") {
+              node = (
+                <CoachMessage m={m}>
+                  <MdText text={m.text} />
+                  {m.ask.state === "open" ? (
+                    <div className="chips-row" role="group" aria-label="是不是這趟">
+                      <button type="button" className="chip" disabled={busy} onClick={() => void confirmMatch(m, true)}>是，就是這趟</button>
+                      <button type="button" className="chip primary" disabled={busy} onClick={() => void confirmMatch(m, false)}>{m.ask.from === "report" ? "不是這堂" : "不是，重選"}</button>
+                    </div>
+                  ) : unlinked === m.id ? (
+                    <div className="said">已解除配對，<Link to={`/activities/${m.ask.activity_id}`}>到報告頁重選 ›</Link></div>
+                  ) : null}
+                </CoachMessage>
+              );
+            } else if (m.kind === "chat" && (m.proposal || m.constraint)) {
+              const members = (m.proposal?.group_id && groups.get(m.proposal.group_id)) || [m];
+              if (members[0] !== m) return null; // drawn with the first card of its group
+              const stale = members.some((x) => x.proposal && statusOf(x.proposal) === "stale");
+              node = (
+                <CoachMessage m={m} badge={stale ? "warn" : null}>
+                  <MdText text={m.text} />
+                  {members.slice(1).filter((x) => x.text && x.text !== m.text).map((x) => <MdText key={x.id} text={x.text} />)}
+                  {cards(members)}
+                  {m.proposal_rejected ? <Rejected /> : null}
+                  <CorrectionLine m={m} timedOut={timedOut} />
+                </CoachMessage>
+              );
+            } else if (m.kind === "review") {
+              // A newer verdict of this session is below: this one is dimmed, has no badge and is not "the first" anything.
+              const old = m.review?.superseded === true;
+              const first = old ? null : firstTime(m.activity_id);
+              node = (
+                <CoachMessage m={m} badge={old ? null : verdictBadge(m.review?.verdict)} className={old ? "superseded" : undefined}>
+                  {old ? <p className="cancelled">這則判定已更新，以下面新的為準</p> : null}
+                  {m.review?.updated ? <div className="updated rejudged"><span aria-hidden="true">⟳</span> 已更新判定 · {m.review.updated.reason}</div> : null}
+                  <div className="head"><b>{m.review?.label}</b><VerdictTag verdict={m.review?.verdict} /></div>
+                  {first ? <div className="celebrate"><div className="k">第一次</div><div className="v"><span className="num">{first}</span><span>km 長跑</span></div></div> : null}
+                  <MdText text={m.text} />
+                  {m.review?.reminder ? <p className="next">→ {m.review.reminder}</p> : null}
+                  {m.activity_id ? <Link to={`/activities/${m.activity_id}`} className="chip" style={{ marginTop: 8 }}>看報告</Link> : null}
+                </CoachMessage>
+              );
+            } else if (m.kind === "checkin") {
+              node = (
+                <CoachMessage m={m}>
+                  <MdText text={m.text} />
+                  <CheckinChips m={m} busy={busy} elsewhere={(id) => { const x = allActs.find((a) => a.id === id); return !!x && inOtherMultiSession(x, m.checkin?.session_id ?? null); }} onPick={(body) => void pick(m.id, body)} />
+                  {i === lastCheckinIdx && m.checkin?.state === "dismissed" ? <button type="button" className="relink" onClick={() => void reset()} disabled={busy}>重新選 ›</button> : null}
+                </CoachMessage>
+              );
+            } else {
+              // Woo's line written as a card was applied (within a few seconds of it) is his confirmation: the avatar gets the check.
+              const confirms = confirmedCard(m, appliedCards) != null;
+              node = <CoachMessage m={m} badge={confirms ? "check" : null}><MdText text={m.text} />{m.proposal_rejected ? <Rejected /> : null}<CorrectionLine m={m} timedOut={timedOut} />{planWaits.has(m.id) ? <PlanRejudgeLine left={planWaits.get(m.id) ?? []} timedOut={timedOut} /> : null}</CoachMessage>;
+            }
+            return <Fragment key={m.id}>{rule}{node}</Fragment>;
+          })}
+          {typing ? (
+            <article className="msg coach typing">
+              <CoachAvatar />
+              <div className="body">{timedOut ? "Woo 回得比較慢，稍後再回來看。" : <WooStatus stage={last?.stage} />}</div>
+            </article>
+          ) : null}
+        </main>
       </div>
       <form className="composer glass" ref={formRef} onSubmit={(e) => { e.preventDefault(); void send(text, quote?.id); }}>
         {quote && !openAsk ? (
