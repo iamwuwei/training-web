@@ -436,7 +436,6 @@ const withoutMakeupFields = (sessions: ApiSession[]): ApiSession[] =>
     return o as ApiSession;
   });
 
-/** Every GET /plan the app made (timestamps), for QA (`window.__planCalls`): with `__weeklyCalls`, shows /weekly is asked next to /plan. */
 /**
  * apple-native-redesign (今天 hero ring): `window.__mock = { ring: "half" | "done" | "over" }` gives the current week runs for its sessions
  * (about 55 %, 100 %, 112 % of the week's plan) so the ring can be seen part-way, closed (達標) and over 100 %. Off by default: the data is the same as before.
@@ -457,6 +456,7 @@ function ringRuns(d: PlanResponse, sessions: ApiSession[]): ApiActivity[] {
   }));
 }
 
+/** Every GET /plan the app made (timestamps), for QA (`window.__planCalls`): with `__weeklyCalls`, shows /weekly is asked next to /plan. */
 const planCalls: number[] = [];
 if (typeof window !== "undefined") (window as unknown as { __planCalls: number[] }).__planCalls = planCalls;
 export function mockPlan(): PlanResponse {

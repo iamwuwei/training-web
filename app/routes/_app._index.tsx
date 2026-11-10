@@ -124,19 +124,19 @@ function TodayPost({ day, view, slow, onOpen }: { day: Day; view: PlanView; slow
     const line = r?.reminders[0] ? `→ ${r.reminders[0]}` : firstSentence(r?.comment);
     return (
       <Link to={`/activities/${activity.id}`} className="blk link">
-       <div className="post open today-post">
-        <Avatar session={session} />
-        <div className="body">
-          <div className="head">
-            <b>{shortName(session)}</b>
-            {combined.count > 1 ? <span className="segs">{combined.count} 筆紀錄</span> : null}
-            {r?.verdict ? <VerdictTag verdict={r.verdict} /> : r?.failed ? <span className="pending failed">分析失敗，點進去重試</span> : view.data.coach_checkin_open ? <span className="pending">{view.data.coach_ask_kind === "mismatch" ? "Woo 在問這趟是不是" : view.data.coach_ask_kind === "feel" ? "Woo 在等你回感受" : "Woo 在等你回"}</span> : <span className="pending">{slow ? "分析比較久，點進去看" : "教練分析中…"}</span>}
+        <div className="post open today-post">
+          <Avatar session={session} />
+          <div className="body">
+            <div className="head">
+              <b>{shortName(session)}</b>
+              {combined.count > 1 ? <span className="segs">{combined.count} 筆紀錄</span> : null}
+              {r?.verdict ? <VerdictTag verdict={r.verdict} /> : r?.failed ? <span className="pending failed">分析失敗，點進去重試</span> : view.data.coach_checkin_open ? <span className="pending">{view.data.coach_ask_kind === "mismatch" ? "Woo 在問這趟是不是" : view.data.coach_ask_kind === "feel" ? "Woo 在等你回感受" : "Woo 在等你回"}</span> : <span className="pending">{slow ? "分析比較久，點進去看" : "教練分析中…"}</span>}
+            </div>
+            <Stats a={combined} day={day} big />
+            {line ? <div className="wooline"><CoachAvatar size={20} /><span>{line}</span></div> : null}
           </div>
-          <Stats a={combined} day={day} big />
-          {line ? <div className="wooline"><CoachAvatar size={20} /><span>{line}</span></div> : null}
         </div>
-       </div>
-       <ChevronIcon small className="chev" />
+        <ChevronIcon small className="chev" />
       </Link>
     );
   }
@@ -159,24 +159,24 @@ function TodayPost({ day, view, slow, onOpen }: { day: Day; view: PlanView; slow
     <div className="today-open">
       <button type="button" className="open-plan blk link" onClick={() => onOpen(session)}><PlanPost session={session} big /><ChevronIcon small className="chev" /></button>
       <div className="blk">
-      {prep && !first ? <WooLine text={prep} /> : null}
-      {first ? (
-        <>
-          <p className="synced">
-            <i aria-hidden="true" />Strava：{sportName(first.sport_type)}
-            {first.distance_m > 0 ? <> <b className="num">{km(first.distance_m)}</b> km</> : null}
-            {isRunSport(first.sport_type) ? <> · <b className="num">{pace(first.avg_pace_sec_km)}</b> /km</> : null}
-          </p>
-          {view.data.coach_checkin_open ? (
-            <Link to="/coach" className="btn primary woo"><span className="w" aria-hidden="true">W</span>Woo 在問這趟練得怎麼樣</Link>
-          ) : (
-            <button type="button" className="btn primary" onClick={() => void assign(first, session.id)} disabled={busy}>{busy ? "送出中…" : "這趟就是今天的課"}</button>
-          )}
-          {error ? <p className="hint" style={{ color: "var(--v-bad)" }}>{error}</p> : null}
-        </>
-      ) : (
-        <p className="hint">跑完後 Strava 會自動同步到這裡</p>
-      )}
+        {prep && !first ? <WooLine text={prep} /> : null}
+        {first ? (
+          <>
+            <p className="synced">
+              <i aria-hidden="true" />Strava：{sportName(first.sport_type)}
+              {first.distance_m > 0 ? <> <b className="num">{km(first.distance_m)}</b> km</> : null}
+              {isRunSport(first.sport_type) ? <> · <b className="num">{pace(first.avg_pace_sec_km)}</b> /km</> : null}
+            </p>
+            {view.data.coach_checkin_open ? (
+              <Link to="/coach" className="btn primary woo"><span className="w" aria-hidden="true">W</span>Woo 在問這趟練得怎麼樣</Link>
+            ) : (
+              <button type="button" className="btn primary" onClick={() => void assign(first, session.id)} disabled={busy}>{busy ? "送出中…" : "這趟就是今天的課"}</button>
+            )}
+            {error ? <p className="hint" style={{ color: "var(--v-bad)" }}>{error}</p> : null}
+          </>
+        ) : (
+          <p className="hint">跑完後 Strava 會自動同步到這裡</p>
+        )}
       </div>
     </div>
   );

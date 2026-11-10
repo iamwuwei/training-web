@@ -146,6 +146,7 @@ ul { padding: 0; list-style: none; }
 .navbar.preview .pv { align-items: flex-start; }
 .navbar.preview .pv > .avatar { margin-top: 1px; }
 .navbar.preview .pv-t, .navbar.preview .pv-t small { text-wrap: balance; }
+.navbar.preview .pv-t small .nw { white-space: nowrap; } /* the sub line breaks only at the 「·」 */
 .navbar .pv { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; vertical-align: middle; }
 .navbar .pv-t { min-width: 0; font-size: 15px; font-weight: 700; line-height: 1.25; }
 .navbar .pv-t small { display: block; font-size: 12px; font-weight: 400; line-height: 1.3; color: var(--ink); }
@@ -166,10 +167,9 @@ ul { padding: 0; list-style: none; }
 
 /* ---- sections / feed -------------------------------------------------------- */
 .section-h { margin: 22px 0 4px; padding: 0 16px; font-size: 13px; font-weight: 700; color: var(--ink-2); letter-spacing: 0.04em; }
-.section-row { display: flex; justify-content: space-between; align-items: baseline; margin: 20px 0 4px; }
+.section-row { display: flex; justify-content: space-between; align-items: center; margin: 20px 0 4px; }
 .section-row .section-h { margin: 0; }
 .section-row a { font-size: 13px; color: var(--ink-2); }
-.section-row { align-items: center; }
 .section-row > .txtbtn { margin: -12px 8px -12px 0; } /* 44 px to touch, the row keeps the height of its 13 px heading */
 
 /* ---- 今天 hero card (01b §6.9, 02 §2.3-2): countdown left, this week's label + ring right, 上週回顧 as the card's last row ---- */
@@ -179,7 +179,7 @@ ul { padding: 0; list-style: none; }
 .hero5 .v { display: flex; align-items: baseline; gap: 4px; white-space: nowrap; }
 .hero5 .v .unit { font-size: 15px; color: var(--ink-2); }
 .hero5 .big { font-size: 56px; color: var(--accent); letter-spacing: -0.01em; }
-.hero5 .mid { font-size: 40px; line-height: 1.15; color: var(--ink); }
+.hero5 .h-left .mid { font-size: 40px; line-height: 1.15; color: var(--ink); }
 .hero5 .h-right { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; min-width: 0; color: var(--ink); }
 .hero5 .h-right .k { font-size: 13px; color: var(--ink-2); text-align: right; } /* never an ellipsis: both columns are `auto`, the countdown keeps its width and this label, only when the two together are wider than the card (320 with 「比賽日」), breaks after the 「·」 */
 .hero5 .h-right .k span { white-space: nowrap; }
@@ -875,7 +875,7 @@ button.next-row { width: 100%; text-align: left; }
 .routine { padding-left: 52px; }
 .routine .rules { font-size: 12px; color: var(--ink-3); margin: 2px 0 4px; }
 .routine .items li { border-bottom: .5px solid var(--sep); position: relative; }
-.routine .items label { display: flex; align-items: center; gap: 12px; min-height: 48px; padding-right: 36px; font-size: 15px; cursor: pointer; }
+.routine .items label { display: flex; align-items: center; gap: 12px; min-height: 48px; padding-right: 36px; cursor: pointer; }
 .routine .items input { position: absolute; opacity: 0; width: 1px; height: 1px; }
 .routine .items .box { flex: none; width: 22px; height: 22px; border-radius: 6px; border: 1.5px solid var(--field-line); display: inline-flex; align-items: center; justify-content: center; color: transparent; transition: background var(--d-1) var(--ease-out), border-color var(--d-1) var(--ease-out); }
 .routine .items li.done .box { background: var(--accent); border-color: var(--accent); color: #fff; animation: pop var(--d-2) var(--ease-out); }
@@ -906,7 +906,7 @@ button.next-row { width: 100%; text-align: left; }
 :is(.msg.coach, .weekly-body) .updated + .text { margin-top: 6px; }
 :is(.msg.coach, .weekly-body) .ask { margin-top: 10px; }
 :is(.msg.coach, .weekly-body) .ask-block { padding: 10px 12px; border-left: 3px solid var(--chip-line); background: var(--chip); border-radius: 0 var(--r-m) var(--r-m) 0; }
-:is(.msg.coach, .weekly-body) .ask-block .q { font-size: 15px; line-height: 1.55; color: var(--ink); }
+:is(.msg.coach, .weekly-body) .ask-block .q { line-height: 1.55; color: var(--ink); }
 :is(.msg.coach, .weekly-body) .ask .chips-row { margin-top: 8px; }
 :is(.msg.coach, .weekly-body) .said { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 13px; color: var(--ink-3); }
 :is(.msg.coach, .weekly-body) .said a { color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; }
@@ -1212,9 +1212,9 @@ button.next-row { width: 100%; text-align: left; }
 .event-sheet .verdict-block h2:not(.pending-h) { color: var(--ink); }
 .event-sheet .verdict-block h2::before { background: var(--ink-3); }
 .event-sheet .verdict-block.good h2::before { background: var(--v-good); } .event-sheet .verdict-block.warn h2::before { background: var(--v-warn); } .event-sheet .verdict-block.bad h2::before { background: var(--v-bad); }
-.event-sheet .verdict-block .fixed { font-size: 15px; color: var(--ink-2); }
+.event-sheet .verdict-block .fixed { color: var(--ink-2); }
 .event-sheet .es-off { padding: 12px 0; border-bottom: .5px solid var(--sep); font-size: 13px; color: var(--ink-3); }
-.event-sheet .es-none { padding: 20px 0 12px; font-size: 15px; color: var(--ink-2); text-align: center; }
+.event-sheet .es-none { padding: 20px 0 12px; color: var(--ink-2); text-align: center; }
 
 /* 大家的課表 /groups/:id/plans?m= */
 /* 成員選擇器 (v3: dropdown, Liquid Glass popover — glass is used ONLY by .member-menu) */
@@ -1302,7 +1302,7 @@ button.next-row { width: 100%; text-align: left; }
 .join-card { padding: 12px 0 4px; }
 .join-card .by { font-size: 13px; color: var(--ink-2); }
 .join-card h2 { margin-top: 4px; font-size: 22px; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
-.join-card .race { margin-top: 4px; font-size: 15px; color: var(--ink); overflow-wrap: anywhere; }
+.join-card .race { margin-top: 4px; color: var(--ink); overflow-wrap: anywhere; }
 .join-card .stats { display: flex; gap: 28px; margin-top: 12px; padding: 12px 0 14px; border-top: .5px solid var(--sep); border-bottom: .5px solid var(--sep); }
 .join-card .stats .k { font-size: 11px; color: var(--ink-3); letter-spacing: 0.04em; }
 .join-card .stats .v { display: flex; align-items: baseline; gap: 3px; margin-top: 2px; }
@@ -1476,7 +1476,6 @@ button.next-row { width: 100%; text-align: left; }
   .extras .xrow { grid-template-columns: 30px minmax(0, 1fr) 56px 60px; }
   .extras .xrow > span:first-child { display: none; }
   .extras .xrow + .xrow { background-position: 16px 0; background-size: calc(100% - 16px) .5px; }
-  .extras .n { flex-direction: column; align-items: flex-start; gap: 0; white-space: normal; }
   /* the grouped card leaves 224 px at 320: the button goes under the activity (aligned with its text) instead of squeezing the name and time into 50 px */
   .extra-row { grid-template-columns: minmax(0, 1fr); row-gap: 8px; }
   .extra-row .chip { width: calc(100% - 52px); margin-left: 52px; }
@@ -1493,7 +1492,7 @@ button.next-row { width: 100%; text-align: left; }
 /* 課表七天 at 375 and below: the grouped card (16 + 16 padding) takes 20 px from the course name that v4 had (92 px at 320, 124 at 360); gaps 8 and padding 12 give it back (94 at 320, 122 at 360) */
 @media (max-width: 375px) {
   .dayrow { grid-template-columns: 26px 28px minmax(0, 1fr) 104px; gap: 8px; padding: 0 12px; }
-  .dayrow.changed { padding: 0 12px 0 9px; }
+  .dayrow.changed { padding-left: 9px; padding-right: 12px; } /* only the sides: the shorthand would zero the 6/8 above and below the 「原本」 line */
   .dayrow + .dayrow { background-position: 46px 0; background-size: calc(100% - 46px) .5px; }
   .dayrow .avatar { width: 28px; height: 28px; }
 }

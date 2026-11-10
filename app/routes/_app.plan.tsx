@@ -137,7 +137,7 @@ export default function Plan() {
           kind="inline"
           className="preview"
           left={<BackPill label="教練" ariaLabel="返回教練" onClick={backToCoach} />}
-          title={<span className="pv"><CoachAvatar size={24} /><span className="pv-t">預覽 Woo 的提案<small>{changedList.length ? `第 ${changedList.join("、")} 週會改 · 還沒生效` : "還沒生效"}</small></span></span>}
+          title={<span className="pv"><CoachAvatar size={24} /><span className="pv-t">預覽 Woo 的提案<small>{changedList.length ? <><span className={changedList.length <= 2 ? "nw" : undefined}>第 {changedList.join("、")} 週會改 ·</span>{" "}<span className="nw">還沒生效</span></> : "還沒生效"}</small></span></span>}
           right={<>
             <button type="button" className="chip primary" disabled={busy} onClick={() => void decide("apply")}>採用</button>
             <button type="button" className="chip" disabled={busy} onClick={() => void decide("dismiss")}>不用</button>
