@@ -71,7 +71,7 @@ export function NavBar(props: LargeProps | InlineProps) {
       <header ref={barRef} className={`navbar ${state}${props.className ? ` ${props.className}` : ""}`}>
         <div className="navrow">
           <div className="nl">{props.left}</div>
-          <h1 className="ttl">{props.title}{props.subtitle ? <small>{props.subtitle}</small> : null}</h1>
+          <h1 className="ttl" tabIndex={-1}>{props.title}{props.subtitle ? <small>{props.subtitle}</small> : null}</h1>
           <div className="nr">{props.right}</div>
         </div>
       </header>

@@ -143,7 +143,7 @@ function SummaryStep({ form, today, onBack, onDone }: { form: IntakeForm; today:
         <p className="err" role="alert">
           {submitErrorText(rejected.error)}
           {link === "draft" && rejected.draftId ? <> <Link to={`/plan/draft/${rejected.draftId}`}>看那份 ›</Link></> : null}
-          {link === "settings" ? <> <Link to="/settings">去設定 ›</Link></> : null}
+          {link === "settings" ? <> <Link to="/settings/strava">去設定 ›</Link></> : null}
         </p>
       ) : null}
       <div className="actions-row">

@@ -47,7 +47,7 @@ export function NoPlanEntry({ title }: { title: "今天" | "課表" }) {
         <CoachAvatar size={44} />
         <p className="t">{T.noneTitle}</p>
         <p className="sub">{T.stravaSub}</p>
-        <div className="actions-row center"><Link to="/settings" className="btn primary compact">{T.stravaCta}</Link></div>
+        <div className="actions-row center"><Link to="/settings/strava" className="btn primary compact">{T.stravaCta}</Link></div>
       </div>
     );
   } else if (latestNotFound) {

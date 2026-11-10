@@ -19,3 +19,21 @@ export function lensIndex(pathname: string): number {
   if (i != null) lastIdx = i;
   return lastIdx;
 }
+
+// A back that the app itself started (a back pill, the left-edge swipe): its pop plays our animation. A `popstate` nobody marked is the browser's own
+// (Safari's swipe back, the back button): in a tab it has just played its own animation, so ours does not play again; in standalone there is no
+// browser animation, so it always plays (01b §5.2, §17-3). Module state only, expires on its own if the navigation never happens.
+let ownBackAt = 0;
+export function markOwnBack() { ownBackAt = Date.now(); }
+/** True once, if `markOwnBack()` was called within the last second. */
+export function takeOwnBack(): boolean {
+  const own = Date.now() - ownBackAt < 1000;
+  ownBackAt = 0;
+  return own;
+}
+
+/** Is there an earlier entry of this app's history to go back to? (React Router counts the entries it made in `history.state.idx`; 0 = the first one of this tab.) */
+export function hasPrevious(): boolean {
+  const idx = (window.history.state as { idx?: number } | null)?.idx;
+  return typeof idx === "number" && idx > 0;
+}

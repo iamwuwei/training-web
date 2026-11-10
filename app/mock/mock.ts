@@ -486,7 +486,7 @@ export function mockPlan(): PlanResponse {
   };
 }
 
-/** 解除 Strava (設定): after it answers ok, GET /me has no Strava (the page stays as it is, unfolded, and shows 尚未連結). `strava: "unlink-fail"` answers 500 and the link stays. */
+/** 解除 Strava (設定): after it answers ok, GET /me has no Strava (the Strava page stays and shows 尚未連結). `strava: "unlink-fail"` answers 500 and the link stays. */
 let stravaUnlinked = false;
 export async function mockDisconnectStrava(): Promise<DeleteStravaResponse> {
   await new Promise((r) => setTimeout(r, 600)); // long enough to see 解除中…
@@ -497,8 +497,8 @@ export async function mockDisconnectStrava(): Promise<DeleteStravaResponse> {
 
 export function mockMe(): MeResponse {
   return {
-    user: { id: MOCK_USER_ID, display_name: "Wei Wu", email: "wei@example.com" },
-    strava: stravaUnlinked || dsw().strava === false || gsw().strava === "none" ? null : { athlete_id: "12345678", scope: "read,activity:read_all", expires_at: new Date(Date.now() + 3600_000).toISOString() },
+    user: { id: MOCK_USER_ID, display_name: "Wei Wu", email: gsw().me === "long" ? "wei.wu.longaddress@example-mail.com" : "wei@example.com" },
+    strava: stravaUnlinked || dsw().strava === false || gsw().strava === "none" ? null : { athlete_id: "12345678", scope: gsw().me === "long" ? "read,activity:read_all,profile:read_all,read_all" : "read,activity:read_all", expires_at: new Date(Date.now() + 3600_000).toISOString() },
     strava_connect_url: `https://example.invalid/strava/oauth/start?user=${MOCK_USER_ID}`,
   };
 }
@@ -1918,11 +1918,12 @@ export function mockPostCoachMessage(body: PostCoachMessageRequest): PostCoachMe
 //   myShare    Partial<ShareSettings>    MY switches at the start (default: progress and events on, plan / runs / reviews off = a user from before 2026-11-06); read once.
 //              The first time I become a member (建立 / 加入 with `groups: "none"`: I was never in a group) they all go on, like the api's first-join row,
 //              unless `myShare` is given or I already switched something (then the row exists and is kept).
-//   strava     "none" → GET /me has no Strava (設定 shows 尚未連結, unfolded; `false` of the plan-draft switches does the same)
+//   strava     "none" → GET /me has no Strava (設定 shows 尚未連結, and 設定 › Strava has the one black 連結 button; `false` of the plan-draft switches does the same)
 //              "unlink-fail" → 解除 Strava 連結 (after the confirm) answers 500 after 0.6 s: the red line shows, still 已連結. Without it the unlink works: 解除中… then GET /me has no Strava.
+//   me         "long" → the longest things 設定 has to fit: a 30-character email, an 8-digit athlete id and a long scope (for the widths 320–390)
 // =====================================================================================================================
 
-interface GroupSwitches { groups?: "none" | "one" | "two" | "three"; share?: Partial<ShareSettings>; variant?: string | string[]; invite?: InviteState | "not_found"; shareFail?: boolean; shareGetFail?: boolean; myShare?: Partial<ShareSettings>; strava?: "none" | "unlink-fail" }
+interface GroupSwitches { groups?: "none" | "one" | "two" | "three"; share?: Partial<ShareSettings>; variant?: string | string[]; invite?: InviteState | "not_found"; shareFail?: boolean; shareGetFail?: boolean; myShare?: Partial<ShareSettings>; strava?: "none" | "unlink-fail"; me?: "long" }
 const gsw = (): GroupSwitches => (globalThis as unknown as { __mock?: GroupSwitches }).__mock ?? {};
 const variants = (): Set<string> => {
   const v = gsw().variant;
