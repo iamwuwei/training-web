@@ -52,6 +52,13 @@ export function setNavDir(dir: "push" | "pop") {
   navDirTimer = window.setTimeout(() => { delete document.documentElement.dataset.nav; }, 10_000);
 }
 
+// The browser's own back and forward are always a `popstate`, and one that this app started marks `pop` (never `push`): a `push` still on the page when a
+// `popstate` comes is left over from the push before it (the transition is still within its 1 s), so it goes, and the browser's back plays no animation.
+// Registered once when the module is loaded, in the capture phase so it runs before the router starts its navigation.
+if (typeof window !== "undefined") {
+  window.addEventListener("popstate", () => { if (document.documentElement.dataset.nav === "push") delete document.documentElement.dataset.nav; }, true);
+}
+
 /** The mark goes once the transition that the location change started is over (400 ms at most, plus room for a slow device: the animation starts after the new page is drawn). */
 export function useNavDirClear(locationKey: string) {
   useEffect(() => {
