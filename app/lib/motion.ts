@@ -31,9 +31,6 @@ function tok() {
   cache = { d1: ms("--d-1", FALLBACK.d1), d2: ms("--d-2", FALLBACK.d2), d3: ms("--d-3", FALLBACK.d3), d4: ms("--d-4", FALLBACK.d4), drm: ms("--d-rm", FALLBACK.drm), spring: str("--spring", FALLBACK.spring), bounce: str("--bounce", FALLBACK.bounce), exit: str("--ease-exit", FALLBACK.exit) };
   return cache;
 }
-/** The curves and times, for callers that start their own animation (the sheet's snap-back). */
-export const motionTokens = () => tok();
-
 /** Asked every time, never cached: the person may change the setting while the app is open. */
 export function reducedMotion(): boolean {
   return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -63,11 +60,11 @@ function currentTransform(el: HTMLElement): string {
 
 function mark(el: HTMLElement, glass: HTMLElement[] | undefined) {
   el.style.willChange = "transform, opacity";
-  for (const g of glass ?? []) { window.clearTimeout(settleTimers.get(g)); g.classList.add("moving"); }
+  for (const g of glass ?? []) { window.clearTimeout(settleTimers.get(g)); g.setAttribute("data-moving", ""); }
 }
 function unmark(el: HTMLElement, glass: HTMLElement[] | undefined) {
   el.style.willChange = "";
-  for (const g of glass ?? []) settleTimers.set(g, window.setTimeout(() => g.classList.remove("moving"), 150)); // glass comes back 150 ms after it stopped (02 §10.4-2)
+  for (const g of glass ?? []) settleTimers.set(g, window.setTimeout(() => g.removeAttribute("data-moving"), 150)); // glass comes back 150 ms after it stopped (02 §10.4-2)
 }
 
 /** `end`: "keep" leaves the final transform / opacity on the element (it left, or faded out); "clear" removes it (it is at rest again). */
@@ -83,7 +80,7 @@ function play(el: HTMLElement, keyframes: Keyframe[], duration: number, easing: 
         anim.cancel();
         running.delete(el);
         if (end === "clear") { el.style.transform = ""; el.style.opacity = ""; }
-        unmark(el, glass); // only the animation that is still the element's: one that was replaced must not take the new one's markers (.moving, will-change) away
+        unmark(el, glass); // only the animation that is still the element's: one that was replaced must not take the new one's markers (`data-moving`, will-change) away
       }
     },
     () => { /* cancelled: whoever cancelled it owns the element (and its markers) now */ },
@@ -96,7 +93,7 @@ const axisT = (axis: Axis, v: string) => `translate${axis.toUpperCase()}(${v})`;
 /** Comes in from the edge (default: all the way out) to rest. From wherever it is now when it was already moving. Reduced motion: a 120 ms fade. */
 export function slideIn(el: HTMLElement, axis: Axis, opts: { from?: string; duration?: number; glass?: HTMLElement[] } = {}): Slide {
   const t = tok();
-  if (reducedMotion()) { el.style.transform = ""; return fadeTo(el, 1, t.drm, opts.glass, 0, true); }
+  if (reducedMotion()) { el.style.transform = ""; return fadeTo(el, 1, { duration: t.drm, glass: opts.glass, from: 0, clearAtEnd: true }); }
   const here = currentTransform(el);
   const from = running.has(el) || here !== "none" ? here : opts.from ?? axisT(axis, "100%");
   return play(el, [{ transform: from }, { transform: "none" }], opts.duration ?? t.d4, t.spring, opts.glass, "clear");
@@ -105,28 +102,38 @@ export function slideIn(el: HTMLElement, axis: Axis, opts: { from?: string; dura
 /** Leaves toward the edge (default: all the way out) in `duration` ms (--d-3), slow start and fast end. Stays at the end until the element is removed. Reduced motion: a 120 ms fade. */
 export function slideOut(el: HTMLElement, axis: Axis, duration?: number, opts: { to?: string; glass?: HTMLElement[] } = {}): Slide {
   const t = tok();
-  if (reducedMotion()) return fadeTo(el, 0, t.drm, opts.glass);
+  if (reducedMotion()) return fadeTo(el, 0, { duration: t.drm, glass: opts.glass });
   const here = currentTransform(el);
   return play(el, [{ transform: here }, { transform: opts.to ?? axisT(axis, "100%") }], duration ?? t.d3, t.exit, opts.glass, "keep");
 }
 
-/** Opacity from where it is to `opacity`. `from` forces a start value (a fade-in from 0). */
-export function fadeTo(el: HTMLElement, opacity: number, duration?: number, glass?: HTMLElement[], from?: number, clearAtEnd = false): Slide {
+export interface FadeOpts {
+  /** ms; default --d-2 */
+  duration?: number;
+  /** Pieces of glass that go solid while it runs (`data-moving`). */
+  glass?: HTMLElement[];
+  /** A start value to force (a fade-in from 0); default: where the opacity is now. */
+  from?: number;
+  /** Remove the inline opacity at the end (it is at rest again) instead of keeping the end value. */
+  clearAtEnd?: boolean;
+}
+
+/** Opacity from where it is to `opacity`. */
+export function fadeTo(el: HTMLElement, opacity: number, opts: FadeOpts = {}): Slide {
   const t = tok();
-  const start = from ?? parseFloat(getComputedStyle(el).opacity);
-  return play(el, [{ opacity: Number.isFinite(start) ? start : 1 }, { opacity }], duration ?? t.d2, reducedMotion() ? "linear" : "cubic-bezier(0.25, 0.8, 0.25, 1)", glass, clearAtEnd ? "clear" : "keep");
+  const start = opts.from ?? parseFloat(getComputedStyle(el).opacity);
+  return play(el, [{ opacity: Number.isFinite(start) ? start : 1 }, { opacity }], opts.duration ?? t.d2, reducedMotion() ? "linear" : "cubic-bezier(0.25, 0.8, 0.25, 1)", opts.glass, opts.clearAtEnd ? "clear" : "keep");
 }
 
 /** Back to rest from a dragged-out place, with a little spring (a sheet that was not pulled far enough). */
 export function springBack(el: HTMLElement, glass?: HTMLElement[]): Slide {
   const t = tok();
-  if (reducedMotion()) { el.style.transform = ""; return fadeTo(el, 1, t.drm, glass, 1, true); }
+  if (reducedMotion()) { el.style.transform = ""; return fadeTo(el, 1, { duration: t.drm, glass, from: 1, clearAtEnd: true }); }
   const here = currentTransform(el);
   return play(el, [{ transform: here }, { transform: "none" }], 350, t.spring, glass, "clear");
 }
 
-/** Stop whatever is running on `el` where it is (a finger takes over); the current transform stays as inline style. */
-/** Returns whether something was running (and is now stopped). */
+/** Stop whatever is running on `el` where it is (a finger takes over); the current transform stays as inline style. Returns whether something was running. */
 export function holdAt(el: HTMLElement): boolean { const was = running.has(el); stopAtCurrent(el); el.style.willChange = ""; return was; }
 
 /** The vertical distance an element is translated by right now (px), from its computed transform. */
@@ -134,4 +141,21 @@ export function translateYNow(el: HTMLElement): number {
   const t = getComputedStyle(el).transform;
   if (!t || t === "none") return 0;
   return new DOMMatrixReadOnly(t).m42;
+}
+
+/** The coach modal comes in (slides up, or with `MODAL_SLIDE` off fades in 200 ms). `glass`: its bar and composer, solid while it moves. */
+export function enterModal(el: HTMLElement, glass?: HTMLElement[]): Slide {
+  return MODAL_SLIDE ? slideIn(el, "y", { glass }) : fadeTo(el, 1, { duration: 200, glass, from: 0, clearAtEnd: true });
+}
+/** …and leaves (300 ms; with `MODAL_SLIDE` off a 150 ms fade). The element stays where it ended until `clearMotion`. */
+export function leaveModal(el: HTMLElement, glass?: HTMLElement[]): Slide {
+  return MODAL_SLIDE ? slideOut(el, "y", undefined, { glass }) : fadeTo(el, 0, { duration: 150, glass });
+}
+
+/** Drop what a finished or stopped animation left on the element (its inline transform and opacity). */
+export function clearMotion(el: HTMLElement) {
+  stopAtCurrent(el);
+  el.style.transform = "";
+  el.style.opacity = "";
+  el.style.willChange = "";
 }

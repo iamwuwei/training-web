@@ -7,7 +7,7 @@ import { BackIcon } from "./icons";
 // collapses into the bar; every other page has an inline title (back pill, centred title, optional right controls).
 
 /**
- * True once `target` has gone up under the bar (the bar then turns glass). `offsetPx` is the bar's height (44 + the top safe area),
+ * True once `target` has gone up under the bar (the bar then turns glass). `offsetPx` is the bar's height (`--nav-h` + `--nav-top`, measured),
  * so a target is "under" the bar as soon as it leaves the part of the viewport the bar does not cover. `root`: the scroller, or null for the window.
  * Without IntersectionObserver the bar is always glass.
  */
@@ -27,7 +27,7 @@ function useNavGlass(target: RefObject<Element | null>, root: RefObject<Element 
   return glass;
 }
 
-/** The bar's measured height (it is `--nav-h` + the top safe area, which CSS knows and JS does not). */
+/** The bar's measured height (it is `--nav-h` + `--nav-top`, which CSS knows and JS does not). */
 function useBarHeight(ref: RefObject<HTMLElement | null>): number {
   const [h, setH] = useState(44);
   useEffect(() => {

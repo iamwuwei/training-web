@@ -8,6 +8,7 @@ import { Rejected, WeeklyReviewBody } from "../components/weekly-review";
 import { CoachAvatar, VerdictTag, verdictBadge } from "../components/ui";
 import { ApiError, getActivities, getCoach, getWeekly, postCheckinPick, postCheckinReset, postCoachMessage, postWeeklyAsk, putCoachSeen } from "../lib/api";
 import { hasSession } from "../lib/auth";
+import { leaveModal } from "../lib/motion";
 import { assignErrorText, groupBySession, inOtherMultiSession } from "../lib/combine";
 import { md, mdDow, timeJst, toJstDate } from "../lib/date";
 import { km, pace } from "../lib/format";
@@ -165,16 +166,16 @@ function mergeThread(cache: Map<string, ApiCoachMessage>, latest: ApiCoachMessag
  * Bring a message into view between the top bar and the composer: a message that fits is centred there, a taller one starts right under the
  * top bar (its top is what the athlete reads first; centring would push it above the screen). Instant, whatever the motion setting.
  */
-function scrollToMessage(id: string): number | null {
+function scrollToMessage(id: string, scroller: HTMLElement | null): number | null {
   const el = document.getElementById(`msg-${id}`);
-  if (!el) return null;
+  if (!el || !scroller) return null;
   const top = document.querySelector(".navbar")?.getBoundingClientRect().bottom ?? 0;
   const bottom = document.querySelector(".composer")?.getBoundingClientRect().top ?? window.innerHeight;
   const room = bottom - top;
   const r = el.getBoundingClientRect();
   const want = r.height <= room ? top + (room - r.height) / 2 : top;
-  window.scrollBy({ top: r.top - want, behavior: "instant" });
-  return window.scrollY;
+  scroller.scrollBy({ top: r.top - want, behavior: "instant" });
+  return scroller.scrollTop;
 }
 
 function DayRule({ date }: { date: string }) {
@@ -341,6 +342,8 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
   // The composer is fixed to the bottom and grows (RPE row, quote chip, an error line, a taller
   // box): its measured height keeps the thread's bottom padding, so it never covers the last message.
   const formRef = useRef<HTMLFormElement>(null);
+  // The thread scrolls inside this box (the page is a fixed modal, 01b §5.6): every scroll position, height and observer below is the box's, not the window's.
+  const scrollerRef = useRef<HTMLDivElement>(null);
   const [composerH, setComposerH] = useState(69);
   useLayoutEffect(() => {
     const el = formRef.current;
@@ -358,7 +361,18 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const cameFromApp = location.key !== "default";
-  const close = () => void (cameFromApp ? navigate(-1) : navigate("/", { replace: true }));
+  // Leaving slides the modal down (300 ms) and then goes one step back; a second press while it leaves is ignored. The browser's back button has no leaving animation.
+  // the thread takes the focus when the modal is there: keys (PageUp, arrows, Space, Home, End) scroll it, as they scrolled the window before
+  useEffect(() => { scrollerRef.current?.focus({ preventScroll: true }); }, []);
+  const closing = useRef(false);
+  const close = () => {
+    if (closing.current) return;
+    closing.current = true;
+    const shell = scrollerRef.current?.closest<HTMLElement>(".shell") ?? null;
+    const done = () => void (cameFromApp ? navigate(-1) : navigate("/", { replace: true }));
+    if (!shell) { done(); return; }
+    void leaveModal(shell, [...shell.querySelectorAll<HTMLElement>(".navbar, .composer")]).finished.then(done);
+  };
   const closeRef = useRef(close);
   useEffect(() => { closeRef.current = close; });
   // Esc closes the page too, but not while a sheet is open (that Esc closes the sheet)
@@ -381,7 +395,8 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
     const j = jumpRef.current;
     if (j.jump && !j.jump.done) return;
     if (j.landed && !moved) return;
-    window.scrollTo({ top: document.documentElement.scrollHeight });
+    const sc = scrollerRef.current;
+    sc?.scrollTo({ top: sc.scrollHeight });
   }, [newestId, typing, composerH]);
 
   // Older pages: the sentinel at the top of the list asks for the 10 before the oldest message we have.
@@ -397,7 +412,7 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
     try {
       const r = await getCoach({ before: messages[0].id, limit: limit ?? PAGE });
       // what the athlete is looking at stays where it is: remember the page height, fix the scroll after the older ones are in
-      anchorRef.current = { h: document.documentElement.scrollHeight, y: window.scrollY };
+      anchorRef.current = { h: scrollerRef.current?.scrollHeight ?? 0, y: scrollerRef.current?.scrollTop ?? 0 };
       setCache((c) => upsert(c, r.messages));
       setHasMore(r.has_more && r.messages.length > 0); // an empty page cannot be followed by another: no loop on a sentinel that stays in view
     } catch {
@@ -412,7 +427,8 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
     const a = anchorRef.current;
     if (!a) return;
     anchorRef.current = null;
-    window.scrollTo(0, a.y + (document.documentElement.scrollHeight - a.h));
+    const sc = scrollerRef.current;
+    sc?.scrollTo(0, a.y + ((sc?.scrollHeight ?? 0) - a.h));
   }, [messages]);
   // (Re)armed after every load: a sentinel still in view (short messages) loads the next page at once.
   // After a failure it waits until the sentinel has left the screen and come back, so it never loops.
@@ -429,7 +445,7 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
       // Look again after a moment: the router scrolls to the top for an instant on a navigation (sending
       // a message clears ?quote), which must not read as "the athlete reached the top".
       timer = window.setTimeout(() => { if (el.getBoundingClientRect().bottom > -200) void loadOlderRef.current(); }, 150);
-    }, { rootMargin: "200px 0px 0px 0px" });
+    }, { root: scrollerRef.current, rootMargin: "200px 0px 0px 0px" });
     io.observe(el);
     return () => { window.clearTimeout(timer); io.disconnect(); };
   }, [hasMore, loadingOlder, olderError, jumpActive]);
@@ -444,8 +460,8 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
       // The layout above the message can still change a moment after the older pages are in (the "載入更早" row folds away): look once more
       // after it has settled, and only if the athlete has not scrolled since.
       requestAnimationFrame(() => {
-        const y = scrollToMessage(jump.id);
-        if (y != null) window.setTimeout(() => { if (Math.abs(window.scrollY - y) < 1) scrollToMessage(jump.id); }, 300);
+        const y = scrollToMessage(jump.id, scrollerRef.current);
+        if (y != null) window.setTimeout(() => { if (Math.abs((scrollerRef.current?.scrollTop ?? 0) - y) < 1) scrollToMessage(jump.id, scrollerRef.current); }, 300);
       });
       setFlash(jump.id);
       window.clearTimeout(flashTimer.current);
@@ -456,7 +472,7 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
       void loadOlder(JUMP_PAGE);
     } else {
       setJump({ ...jump, done: true });
-      requestAnimationFrame(() => window.scrollTo({ top: document.documentElement.scrollHeight })); // not found: the thread as it always opens
+      requestAnimationFrame(() => scrollerRef.current?.scrollTo({ top: scrollerRef.current.scrollHeight })); // not found: the thread as it always opens
     }
   }, [jump, messages, hasMore, loadingOlder, olderError]); // oxlint-disable-line react-hooks/exhaustive-deps -- loadOlder is the latest closure of this render
   /* oxlint-enable react/set-state-in-effect */
@@ -623,102 +639,104 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
 
   return (
     <FlashContext.Provider value={flash}>
-      <NavBar kind="inline" left={<GlassButton label="關閉" onClick={close}><CloseIcon /></GlassButton>} title="Woo" subtitle="你的教練 · 只聊跑步和課表" />
-      <main className="thread" style={{ "--composer-h": `${composerH}px` } as React.CSSProperties}>
-        <div className={`thread-top${hasMore ? "" : " end"}`} ref={topRef} aria-live="polite">
-          {loadingOlder ? <span className="tt-load">載入更早的對話<span className="typing-dots" aria-hidden="true"><i /><i /><i /></span></span> : olderError ? "載入失敗，往上滑再試一次" : null}
-        </div>
-        {messages.length === 0 ? (
-          <p className="empty">Woo 還沒說話。跑完第一堂課、或每週日的回顧之後，這裡會出現他的訊息。你也可以先問他。</p>
-        ) : null}
-        {messages.map((m, i) => {
-          const day = toJstDate(m.created_at);
-          const rule = i === 0 || toJstDate(messages[i - 1].created_at) !== day ? <DayRule date={day} /> : null;
-          let node: React.ReactNode;
-          if (m.role === "athlete") {
-            // No 選錯了 while the mismatch question is open, nor while Woo's next line (after 是) is on its way.
-            const resettable = m.kind === "pick" && i === lastPickIdx && i > lastCheckinIdx && lastCheckin?.checkin?.state === "picked" && !mismatchOpen && !expectPending;
-            node = <AthleteMessage m={m} busy={busy} onReset={resettable ? () => void reset() : undefined} onRetry={m.kind === "chat" && !m.rpe ? () => void send(m.text, m.activity_id ?? undefined) : undefined} />;
-          } else if (m.kind === "weekly") {
-            const w = reviews.find((r) => r.id === m.weekly_review_id) ?? null;
-            const rewriting = rerunPending && rerun?.id === m.id;
-            node = (
-              <CoachMessage m={m} badge={m.weekly?.updated ? "check" : null}>
-                <WeeklyReviewBody m={m} review={w} view={view} sessions={sessions} weeks={planWeeks} busy={busy}
-                  rerun={rewriting ? (timedOut ? "gave-up" : "pending") : null}
-                  cards={{ statusOf, onStatus: (id, status) => setDecisions((d) => ({ ...d, [id]: status })), onChanged: () => void revalidator.revalidate(), onRepropose: repropose }}
-                  onAnswerAsk={(ask, answer) => void answerWeeklyAsk(m, ask, answer)} />
-              </CoachMessage>
-            );
-          } else if (m.kind === "ask" && m.ask?.kind === "mismatch") {
-            node = (
-              <CoachMessage m={m}>
-                <MdText text={m.text} />
-                {m.ask.state === "open" ? (
-                  <div className="chips-row" role="group" aria-label="是不是這趟">
-                    <button type="button" className="chip" disabled={busy} onClick={() => void confirmMatch(m, true)}>是，就是這趟</button>
-                    <button type="button" className="chip primary" disabled={busy} onClick={() => void confirmMatch(m, false)}>{m.ask.from === "report" ? "不是這堂" : "不是，重選"}</button>
-                  </div>
-                ) : unlinked === m.id ? (
-                  <div className="said">已解除配對，<Link to={`/activities/${m.ask.activity_id}`}>到報告頁重選 ›</Link></div>
-                ) : null}
-              </CoachMessage>
-            );
-          } else if (m.kind === "chat" && (m.proposal || m.constraint)) {
-            const members = (m.proposal?.group_id && groups.get(m.proposal.group_id)) || [m];
-            if (members[0] !== m) return null; // drawn with the first card of its group
-            const stale = members.some((x) => x.proposal && statusOf(x.proposal) === "stale");
-            node = (
-              <CoachMessage m={m} badge={stale ? "warn" : null}>
-                <MdText text={m.text} />
-                {members.slice(1).filter((x) => x.text && x.text !== m.text).map((x) => <MdText key={x.id} text={x.text} />)}
-                {cards(members)}
-                {m.proposal_rejected ? <Rejected /> : null}
-                <CorrectionLine m={m} timedOut={timedOut} />
-              </CoachMessage>
-            );
-          } else if (m.kind === "review") {
-            // A newer verdict of this session is below: this one is dimmed, has no badge and is not "the first" anything.
-            const old = m.review?.superseded === true;
-            const first = old ? null : firstTime(m.activity_id);
-            node = (
-              <CoachMessage m={m} badge={old ? null : verdictBadge(m.review?.verdict)} className={old ? "superseded" : undefined}>
-                {old ? <p className="cancelled">這則判定已更新，以下面新的為準</p> : null}
-                {m.review?.updated ? <div className="updated rejudged"><span aria-hidden="true">⟳</span> 已更新判定 · {m.review.updated.reason}</div> : null}
-                <div className="head"><b>{m.review?.label}</b><VerdictTag verdict={m.review?.verdict} /></div>
-                {first ? <div className="celebrate"><div className="k">第一次</div><div className="v"><span className="num">{first}</span><span>km 長跑</span></div></div> : null}
-                <MdText text={m.text} />
-                {m.review?.reminder ? <p className="next">→ {m.review.reminder}</p> : null}
-                {m.activity_id ? <Link to={`/activities/${m.activity_id}`} className="chip" style={{ marginTop: 8 }}>看報告</Link> : null}
-              </CoachMessage>
-            );
-          } else if (m.kind === "checkin") {
-            node = (
-              <CoachMessage m={m}>
-                <MdText text={m.text} />
-                <CheckinChips m={m} busy={busy} elsewhere={(id) => { const x = allActs.find((a) => a.id === id); return !!x && inOtherMultiSession(x, m.checkin?.session_id ?? null); }} onPick={(body) => void pick(m.id, body)} />
-                {i === lastCheckinIdx && m.checkin?.state === "dismissed" ? <button type="button" className="relink" onClick={() => void reset()} disabled={busy}>重新選 ›</button> : null}
-              </CoachMessage>
-            );
-          } else {
-            // Woo's line written as a card was applied (within a few seconds of it) is his confirmation: the avatar gets the check.
-            const confirms = confirmedCard(m, appliedCards) != null;
-            node = <CoachMessage m={m} badge={confirms ? "check" : null}><MdText text={m.text} />{m.proposal_rejected ? <Rejected /> : null}<CorrectionLine m={m} timedOut={timedOut} />{planWaits.has(m.id) ? <PlanRejudgeLine left={planWaits.get(m.id) ?? []} timedOut={timedOut} /> : null}</CoachMessage>;
-          }
-          return <Fragment key={m.id}>{rule}{node}</Fragment>;
-        })}
-        {typing ? (
-          <article className="msg coach typing">
-            <CoachAvatar />
-            <div className="body">{timedOut ? "Woo 回得比較慢，稍後再回來看。" : <WooStatus stage={last?.stage} />}</div>
-          </article>
-        ) : null}
-      </main>
-      <form className="composer" ref={formRef} onSubmit={(e) => { e.preventDefault(); void send(text, quote?.id); }}>
+      <div className="modal-scroll" ref={scrollerRef} tabIndex={-1}>
+        <NavBar kind="inline" left={<GlassButton label="關閉" onClick={close}><CloseIcon /></GlassButton>} title="Woo" subtitle="你的教練 · 只聊跑步和課表" scroller={scrollerRef} />
+        <main className="thread" style={{ "--composer-h": `${composerH}px` } as React.CSSProperties}>
+          <div className={`thread-top${hasMore ? "" : " end"}`} ref={topRef} aria-live="polite">
+            {loadingOlder ? <span className="tt-load">載入更早的對話<span className="typing-dots" aria-hidden="true"><i /><i /><i /></span></span> : olderError ? "載入失敗，往上滑再試一次" : null}
+          </div>
+          {messages.length === 0 ? (
+            <p className="empty">Woo 還沒說話。跑完第一堂課、或每週日的回顧之後，這裡會出現他的訊息。你也可以先問他。</p>
+          ) : null}
+          {messages.map((m, i) => {
+            const day = toJstDate(m.created_at);
+            const rule = i === 0 || toJstDate(messages[i - 1].created_at) !== day ? <DayRule date={day} /> : null;
+            let node: React.ReactNode;
+            if (m.role === "athlete") {
+              // No 選錯了 while the mismatch question is open, nor while Woo's next line (after 是) is on its way.
+              const resettable = m.kind === "pick" && i === lastPickIdx && i > lastCheckinIdx && lastCheckin?.checkin?.state === "picked" && !mismatchOpen && !expectPending;
+              node = <AthleteMessage m={m} busy={busy} onReset={resettable ? () => void reset() : undefined} onRetry={m.kind === "chat" && !m.rpe ? () => void send(m.text, m.activity_id ?? undefined) : undefined} />;
+            } else if (m.kind === "weekly") {
+              const w = reviews.find((r) => r.id === m.weekly_review_id) ?? null;
+              const rewriting = rerunPending && rerun?.id === m.id;
+              node = (
+                <CoachMessage m={m} badge={m.weekly?.updated ? "check" : null}>
+                  <WeeklyReviewBody m={m} review={w} view={view} sessions={sessions} weeks={planWeeks} busy={busy}
+                    rerun={rewriting ? (timedOut ? "gave-up" : "pending") : null}
+                    cards={{ statusOf, onStatus: (id, status) => setDecisions((d) => ({ ...d, [id]: status })), onChanged: () => void revalidator.revalidate(), onRepropose: repropose }}
+                    onAnswerAsk={(ask, answer) => void answerWeeklyAsk(m, ask, answer)} />
+                </CoachMessage>
+              );
+            } else if (m.kind === "ask" && m.ask?.kind === "mismatch") {
+              node = (
+                <CoachMessage m={m}>
+                  <MdText text={m.text} />
+                  {m.ask.state === "open" ? (
+                    <div className="chips-row" role="group" aria-label="是不是這趟">
+                      <button type="button" className="chip" disabled={busy} onClick={() => void confirmMatch(m, true)}>是，就是這趟</button>
+                      <button type="button" className="chip primary" disabled={busy} onClick={() => void confirmMatch(m, false)}>{m.ask.from === "report" ? "不是這堂" : "不是，重選"}</button>
+                    </div>
+                  ) : unlinked === m.id ? (
+                    <div className="said">已解除配對，<Link to={`/activities/${m.ask.activity_id}`}>到報告頁重選 ›</Link></div>
+                  ) : null}
+                </CoachMessage>
+              );
+            } else if (m.kind === "chat" && (m.proposal || m.constraint)) {
+              const members = (m.proposal?.group_id && groups.get(m.proposal.group_id)) || [m];
+              if (members[0] !== m) return null; // drawn with the first card of its group
+              const stale = members.some((x) => x.proposal && statusOf(x.proposal) === "stale");
+              node = (
+                <CoachMessage m={m} badge={stale ? "warn" : null}>
+                  <MdText text={m.text} />
+                  {members.slice(1).filter((x) => x.text && x.text !== m.text).map((x) => <MdText key={x.id} text={x.text} />)}
+                  {cards(members)}
+                  {m.proposal_rejected ? <Rejected /> : null}
+                  <CorrectionLine m={m} timedOut={timedOut} />
+                </CoachMessage>
+              );
+            } else if (m.kind === "review") {
+              // A newer verdict of this session is below: this one is dimmed, has no badge and is not "the first" anything.
+              const old = m.review?.superseded === true;
+              const first = old ? null : firstTime(m.activity_id);
+              node = (
+                <CoachMessage m={m} badge={old ? null : verdictBadge(m.review?.verdict)} className={old ? "superseded" : undefined}>
+                  {old ? <p className="cancelled">這則判定已更新，以下面新的為準</p> : null}
+                  {m.review?.updated ? <div className="updated rejudged"><span aria-hidden="true">⟳</span> 已更新判定 · {m.review.updated.reason}</div> : null}
+                  <div className="head"><b>{m.review?.label}</b><VerdictTag verdict={m.review?.verdict} /></div>
+                  {first ? <div className="celebrate"><div className="k">第一次</div><div className="v"><span className="num">{first}</span><span>km 長跑</span></div></div> : null}
+                  <MdText text={m.text} />
+                  {m.review?.reminder ? <p className="next">→ {m.review.reminder}</p> : null}
+                  {m.activity_id ? <Link to={`/activities/${m.activity_id}`} className="chip" style={{ marginTop: 8 }}>看報告</Link> : null}
+                </CoachMessage>
+              );
+            } else if (m.kind === "checkin") {
+              node = (
+                <CoachMessage m={m}>
+                  <MdText text={m.text} />
+                  <CheckinChips m={m} busy={busy} elsewhere={(id) => { const x = allActs.find((a) => a.id === id); return !!x && inOtherMultiSession(x, m.checkin?.session_id ?? null); }} onPick={(body) => void pick(m.id, body)} />
+                  {i === lastCheckinIdx && m.checkin?.state === "dismissed" ? <button type="button" className="relink" onClick={() => void reset()} disabled={busy}>重新選 ›</button> : null}
+                </CoachMessage>
+              );
+            } else {
+              // Woo's line written as a card was applied (within a few seconds of it) is his confirmation: the avatar gets the check.
+              const confirms = confirmedCard(m, appliedCards) != null;
+              node = <CoachMessage m={m} badge={confirms ? "check" : null}><MdText text={m.text} />{m.proposal_rejected ? <Rejected /> : null}<CorrectionLine m={m} timedOut={timedOut} />{planWaits.has(m.id) ? <PlanRejudgeLine left={planWaits.get(m.id) ?? []} timedOut={timedOut} /> : null}</CoachMessage>;
+            }
+            return <Fragment key={m.id}>{rule}{node}</Fragment>;
+          })}
+          {typing ? (
+            <article className="msg coach typing">
+              <CoachAvatar />
+              <div className="body">{timedOut ? "Woo 回得比較慢，稍後再回來看。" : <WooStatus stage={last?.stage} />}</div>
+            </article>
+          ) : null}
+        </main>
+      </div>
+      <form className="composer glass" ref={formRef} onSubmit={(e) => { e.preventDefault(); void send(text, quote?.id); }}>
         {quote && !openAsk ? (
           <div className="quote-chip">
             <span>引用 {quoteLine(quote)}</span>
-            <button type="button" aria-label="移除引用" onClick={() => { setQuote(null); setSearch({}, { replace: true }); }}>×</button>
+            <button type="button" className="qx" aria-label="移除引用" onClick={() => { setQuote(null); setSearch({}, { replace: true }); }}>×</button>
           </div>
         ) : null}
         {openAsk ? (
@@ -743,7 +761,7 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
           />
           <button type="submit" className="send" aria-label="送出" disabled={busy || !text.trim()}><SendIcon /></button>
         </div>
-        {error ? <p className="hint" style={{ color: "var(--v-bad)" }}>{error}</p> : null}
+        {error ? <p className="hint err" role="alert">{error}</p> : null}
       </form>
     </FlashContext.Provider>
   );
