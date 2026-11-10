@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { useNavigationType } from "react-router";
-import { fadeTo, holdAt, isStandalone, move, reducedMotion, translateXNow } from "../lib/motion";
+import { EDGE_GESTURES, fadeTo, holdAt, isStandalone, move, reducedMotion, translateXNow } from "../lib/motion";
 import { takeOwnBack } from "../lib/nav";
 import { BackPill, NavBar } from "./nav-bar";
 
@@ -205,7 +205,7 @@ export function PushStack({ base, sub, subKey, title, backLabel, onBack }: {
       </div>
       {node ? (
         <div ref={topEl} className="pg top">
-          {isStandalone() && !reducedMotion() && subKey ? (
+          {EDGE_GESTURES && isStandalone() && !reducedMotion() && subKey ? (
             <div className="edge" onPointerDown={onEdgeDown} onPointerMove={onEdgeMove} onPointerUp={(e) => onEdgeUp(e, false)} onPointerCancel={(e) => onEdgeUp(e, true)} />
           ) : null}
           <div className="pg-inner">

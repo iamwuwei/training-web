@@ -1,6 +1,6 @@
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useLocation, useNavigate } from "react-router";
-import { isStandalone } from "../lib/motion";
+import { EDGE_GESTURES, isStandalone } from "../lib/motion";
 import { TAB_ROOTS, hasPrevious, setNavDir } from "../lib/nav";
 
 // The left-edge swipe for the pages that push with a View Transition (01b §5.4; 設定 has its own that follows the finger, push-stack.tsx). Standalone only: a tab has
@@ -17,7 +17,7 @@ export function EdgeBack() {
   const navigate = useNavigate();
   const [active, setActive] = useState(false);
   const drag = useRef<{ id: number; x0: number; y0: number; moved: boolean; samples: { t: number; x: number }[] } | null>(null);
-  if (!isStandalone() || skip(pathname)) return null;
+  if (!EDGE_GESTURES || !isStandalone() || skip(pathname)) return null;
 
   const down = (e: ReactPointerEvent<HTMLDivElement>) => {
     e.currentTarget.setPointerCapture(e.pointerId); // from the press, so a mouse or trackpad that leaves the 20 px strip keeps sending its moves here (a finger is captured by the browser anyway)
