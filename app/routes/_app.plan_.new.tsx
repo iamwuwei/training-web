@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import type { Route } from "./+types/_app.plan_.new";
 import { BackPill, NavBar } from "../components/nav-bar";
 import { CoachAvatar, SectionH } from "../components/ui";
@@ -11,7 +11,7 @@ import {
   type FormErrors, type IntakeForm,
 } from "../lib/draft";
 import { mdDowPlain, mdPlain } from "../lib/groups";
-import { setNavDir } from "../lib/nav";
+import { hasPrevious, setNavDir } from "../lib/nav";
 import { duration, pace } from "../lib/format";
 import { localProfile, type LocalProfile } from "../lib/profile";
 import type { PlanIntake } from "../types/api";
@@ -159,7 +159,6 @@ function SummaryStep({ form, today, onBack, onDone }: { form: IntakeForm; today:
 export default function NewPlan() {
   const today = todayJst();
   const navigate = useNavigate();
-  const location = useLocation();
   const [params] = useSearchParams();
   const [init] = useState(() => {
     const kept = loadIntake(); // answers kept by 改答案再排／重新開始 come first, then the address, then the defaults
@@ -169,7 +168,6 @@ export default function NewPlan() {
   const [form, setForm] = useState<IntakeForm>(init.form);
   const [step, setStep] = useState<1 | 2>(1);
   const [errors, setErrors] = useState<FormErrors>({});
-  const cameFromApp = location.key !== "default";
   useEffect(() => { clearIntake(); }, []); // read once: the answers are not kept for a later visit
   useEffect(() => { window.scrollTo(0, 0); }, [step]);
 
@@ -202,7 +200,7 @@ export default function NewPlan() {
 
   const back = step === 2
     ? <BackPill label="表單" ariaLabel="回表單" onClick={() => setStep(1)} />
-    : <BackPill label="返回" onClick={() => { setNavDir("pop"); void (cameFromApp ? navigate(-1) : navigate("/", { viewTransition: true })); }} />;
+    : <BackPill label="返回" onClick={() => { setNavDir("pop"); void (hasPrevious() ? navigate(-1) : navigate("/", { viewTransition: true })); }} />;
 
   return (
     <>

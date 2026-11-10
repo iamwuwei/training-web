@@ -62,8 +62,8 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
 }
 
 export default function AppLayout({ loaderData }: Route.ComponentProps) {
-  // A page that says so (教練: `handle = { modal: true }`) is a modal: no tab bar, and the shell gets the class (coach-sheet-polish)
   useNavDirClear(useLocation().key);
+  // A page that says so (教練: `handle = { modal: true }`) is a modal: no tab bar, and the shell gets the class (coach-sheet-polish)
   const modal = useMatches().some((m) => (m.handle as { modal?: boolean } | undefined)?.modal === true);
   // The modal slides up over the page (01b §5.6; `MODAL_SLIDE` in lib/motion.ts turns it into a fade). Its bar and its composer are glass that moves with it: solid until it has stopped.
   // When the page is not a modal (leaving: the coach slid down, then we navigated) whatever the leaving animation left on the shell goes.

@@ -6,5 +6,9 @@ import { setNavDir } from "../lib/nav";
  * (01b §5.4, 02 §2.10). Without `document.startViewTransition` (Safari before 18) it is a plain link. Tab to tab is not a push: those links stay `Link`.
  */
 export function PushLink({ onClick, ...props }: LinkProps) {
-  return <Link {...props} viewTransition onClick={(e) => { onClick?.(e); if (!e.defaultPrevented) setNavDir("push"); }} />;
+  return <Link {...props} viewTransition onClick={(e) => {
+    onClick?.(e);
+    // a ⌘／Ctrl／Shift／Alt click or a middle click is the browser's (a new tab): this page does not move, so nothing is marked
+    if (!e.defaultPrevented && e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) setNavDir("push");
+  }} />;
 }

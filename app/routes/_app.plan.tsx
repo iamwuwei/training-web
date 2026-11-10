@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Route } from "./+types/_app.plan";
-import { useLocation, useNavigate, useRevalidator, useSearchParams } from "react-router";
+import { useNavigate, useRevalidator, useSearchParams } from "react-router";
 import { DayRow, WeekBars } from "../components/plan-week";
 import { SessionSheet } from "../components/session-sheet";
 import { WeeklyReviewSheet } from "../components/weekly-review-sheet";
@@ -18,6 +18,7 @@ import { useProposal, useReviewedWeeks } from "../lib/use-proposal";
 import { reviewForWeek, useWeeklyReviews } from "../lib/use-weekly";
 import { resetWeeklyCaches } from "../lib/use-weekly-message";
 import type { ApiActivity, ApiSession, ApiWeek, PlanResponse } from "../types/api";
+import { hasPrevious } from "../lib/nav";
 import { pageTitle } from "../lib/meta";
 
 export function meta({ matches }: Route.MetaArgs): Route.MetaDescriptors {
@@ -60,10 +61,8 @@ export default function Plan() {
   const proposalId = useSearchParams()[0].get("proposal");
   const { proposal, ready } = useProposal(proposalId);
   const navigate = useNavigate();
-  const location = useLocation();
   // the preview is reached from the thread's 「在課表上看」: going back to the thread is one step back in history (the thread is a modal; closing it again lands before it)
-  const cameFromApp = location.key !== "default";
-  const backToCoach = () => void (cameFromApp ? navigate(-1) : navigate("/coach", { replace: true }));
+  const backToCoach = () => void (hasPrevious() ? navigate(-1) : navigate("/coach", { replace: true }));
   const revalidator = useRevalidator();
   const [picked, setPicked] = useState<number | null>(null);
   const [open, setOpen] = useState<ApiSession | null>(null);

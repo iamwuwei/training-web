@@ -6,6 +6,7 @@ import { TAB_ROOTS, hasPrevious, setNavDir } from "../lib/nav";
 // The left-edge swipe for the pages that push with a View Transition (01b §5.4; 設定 has its own that follows the finger, push-stack.tsx). Standalone only: a tab has
 // the browser's own. It does not follow the finger (a View Transition can not be driven by one): while it is dragged a 4 px line shows at the edge so the pull is seen,
 // and on release, past half the width or faster than 0.5 px/ms, the page goes back with the pop transition; otherwise nothing happens.
+// The strip is a 20 px element over the page: a tap on it is a tap on the strip (it does nothing), so the page's own content at x = 16–20 can not be pressed in standalone.
 
 const COMPLETE_VELOCITY = 0.5; // px/ms
 /** Pages that have no use for it: the tab roots (nothing to go back to), 設定 (its own), the plan form (a step of it is not a page: a swipe would drop the answers). */
@@ -19,6 +20,7 @@ export function EdgeBack() {
   if (!isStandalone() || skip(pathname)) return null;
 
   const down = (e: ReactPointerEvent<HTMLDivElement>) => {
+    e.currentTarget.setPointerCapture(e.pointerId); // from the press, so a mouse or trackpad that leaves the 20 px strip keeps sending its moves here (a finger is captured by the browser anyway)
     drag.current = { id: e.pointerId, x0: e.clientX, y0: e.clientY, moved: false, samples: [{ t: e.timeStamp, x: e.clientX }] };
   };
   const move = (e: ReactPointerEvent<HTMLDivElement>) => {
@@ -26,10 +28,13 @@ export function EdgeBack() {
     if (!d || e.pointerId !== d.id) return;
     const dx = e.clientX - d.x0;
     if (!d.moved) {
-      if (Math.abs(e.clientY - d.y0) > Math.abs(dx) && Math.abs(e.clientY - d.y0) > 3) { drag.current = null; return; } // a scroll: not ours
+      if (Math.abs(e.clientY - d.y0) > Math.abs(dx) && Math.abs(e.clientY - d.y0) > 3) { // a scroll: not ours
+        e.currentTarget.releasePointerCapture(e.pointerId);
+        drag.current = null;
+        return;
+      }
       if (dx < 6) return;
       d.moved = true;
-      e.currentTarget.setPointerCapture(e.pointerId); // from here the strip keeps the finger (a tap before this still clicks through)
       setActive(true);
     }
     d.samples.push({ t: e.timeStamp, x: e.clientX });

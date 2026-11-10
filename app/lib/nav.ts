@@ -41,7 +41,7 @@ export function hasPrevious(): boolean {
 
 // Which way a page is about to move, for the View Transitions of the pages that are not settings (01b §5.4): `html[data-nav="push" | "pop"]` is what app.css reads.
 // A transition nobody marked (the browser's own back, forward) has no `data-nav`, and app.css gives it no animation: Safari has just played its own.
-// The transition starts when the navigation lands (after its loaders, which can take seconds), so the mark is not timed from the click: it is cleared 500 ms after
+// The transition starts when the navigation lands (after its loaders, which can take seconds), so the mark is not timed from the click: it is cleared 1 s after
 // the location changed (`useNavDirClear`, in the app layout), and a mark whose navigation never landed goes after 10 s.
 let navDirTimer = 0;
 /** Mark the navigation that is about to start. */
@@ -52,11 +52,11 @@ export function setNavDir(dir: "push" | "pop") {
   navDirTimer = window.setTimeout(() => { delete document.documentElement.dataset.nav; }, 10_000);
 }
 
-/** The mark goes once the transition that the location change started is over (400 ms at most). */
+/** The mark goes once the transition that the location change started is over (400 ms at most, plus room for a slow device: the animation starts after the new page is drawn). */
 export function useNavDirClear(locationKey: string) {
   useEffect(() => {
     if (!document.documentElement.dataset.nav) return;
-    const t = window.setTimeout(() => { window.clearTimeout(navDirTimer); delete document.documentElement.dataset.nav; }, 500);
+    const t = window.setTimeout(() => { window.clearTimeout(navDirTimer); delete document.documentElement.dataset.nav; }, 1000);
     return () => window.clearTimeout(t);
   }, [locationKey]);
 }
