@@ -53,7 +53,7 @@
   --push-dim: rgba(0, 0, 0, 0.10); --push-shadow: -8px 0 24px rgba(20, 22, 40, 0.12);
 
   /* layout (used from PR 2 on); --sa-* wrap env() so QA can override them */
-  --nav-h: 44px; --tab-h: 64px; --tab-gap: max(16px, calc(var(--sa-b) - 10px));
+  --nav-h: 44px; /* the row of buttons and the small title; the bar is --nav-top + this */ --nav-top: max(var(--sa-t), 6px); /* top of every top bar: the safe area, and 6 px in a browser tab (02 §2.2 v5.0.2) so the glass edge and focus ring are not cut */ --tab-h: 64px; --tab-gap: max(16px, calc(var(--sa-b) - 10px));
   --sa-t: env(safe-area-inset-top); --sa-b: env(safe-area-inset-bottom); --sa-l: env(safe-area-inset-left); --sa-r: env(safe-area-inset-right);
   color-scheme: light;
 }
@@ -93,7 +93,8 @@ ul { padding: 0; list-style: none; }
 .shell { max-width: 600px; margin: 0 auto; min-height: 100dvh; display: flex; flex-direction: column; }
 .shell { padding-left: var(--sa-l); padding-right: var(--sa-r); }
 .shell > main { flex: 1 1 auto; padding: 0 16px calc(var(--tab-h) + var(--tab-gap) + 24px); }
-.shell.modal { animation: fade var(--d-2) var(--ease-out); } /* the coach modal; opacity only (a transform would move the fixed composer) */
+.shell.modal { animation: fade var(--d-2) var(--ease-out); } /* the coach modal; opacity only (a transform would move the fixed composer); 4b replaces it with the slide and removes the keyframes */
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 
 /* ---- v5 shell (01b §5.7, §6.1, §6.2; 02 §2.2, §5) -------------------------------------------------------------------
    Glass, two levels: `--glass` (.72 light / .78 dark) on bars and floating controls (tab bar, nav bar, round buttons, back pill), only --ink on it;
@@ -107,7 +108,7 @@ ul { padding: 0; list-style: none; }
 }
 
 /* nav bar: transparent (the page colour) at rest, glass + a .5px line once content is under it. The glass is a ::after layer whose opacity fades (200 ms); the blur itself never animates. */
-.navbar { position: sticky; top: 0; z-index: 2; isolation: isolate; height: calc(var(--nav-h) + var(--sa-t)); padding: var(--sa-t) 8px 0; color: var(--ink); }
+.navbar { position: sticky; top: 0; z-index: 2; isolation: isolate; height: calc(var(--nav-h) + var(--nav-top)); padding: var(--nav-top) 8px 0; color: var(--ink); }
 .navbar::after { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: 0; background: var(--glass-solid); box-shadow: inset 0 -.5px 0 var(--sep); transition: opacity var(--d-2) var(--ease-out); }
 @supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
   .navbar:not(.moving)::after { background: var(--glass); -webkit-backdrop-filter: blur(18px) saturate(180%); backdrop-filter: blur(18px) saturate(180%); }
@@ -140,7 +141,7 @@ ul { padding: 0; list-style: none; }
 /* 課表預覽: the bar carries a 2 px amber line even at rest (that line is the marker that this is not the plan yet) */
 .navbar.preview::before { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--v-warn); }
 .navbar.preview.glass::after { box-shadow: none; }
-.navbar.preview { height: auto; min-height: calc(var(--nav-h) + var(--sa-t)); }
+.navbar.preview { height: auto; min-height: calc(var(--nav-h) + var(--nav-top)); }
 .navbar.preview .navrow { height: auto; min-height: var(--nav-h); padding: 4px 0; grid-template-columns: auto minmax(0, 1fr) auto; }
 .navbar.preview .ttl { text-align: left; white-space: normal; overflow: visible; text-overflow: clip; } /* 320 and 375: the title and 「第 N 週會改 · 還沒生效」 wrap to a second line instead of ending in … (04 PR 2 should 3) */
 .navbar.preview .pv { align-items: flex-start; }
@@ -744,24 +745,30 @@ a.blk.link { display: block; }
 .trend .delta .sub { font-size: 12px; color: var(--ink-3); margin-top: 4px; }
 .trend .empty-line { margin: 0; font-size: 13px; color: var(--ink-3); }
 
-/* ---- bottom sheet (over the tab bar) ---- */
+/* ---- bottom sheet (over the tab bar; 01b §6.6, 02 §2.8) ----
+   Glass: --sheet-bg (.96 / .94) + blur 30; it is solid (--glass-solid) while it moves (`.moving`, put there by lib/motion.ts and by a drag) and fades back 150 ms after it stopped.
+   It slides in and out with the Web Animations API (lib/motion.ts), so there is no CSS animation here. */
 .sheet-root { position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column; justify-content: flex-end; }
-.sheet-backdrop { position: absolute; inset: 0; background: var(--scrim); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); animation: fade var(--d-2) var(--ease-out); border-radius: 0; }
+.sheet-backdrop { position: absolute; inset: 0; background: var(--scrim); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); border-radius: 0; }
 @supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
   .sheet-backdrop { background: rgb(20 22 27 / 0.75); }
   @media (prefers-color-scheme: dark) { .sheet-backdrop { background: rgb(0 0 0 / 0.8); } }
 }
-/* dark: the sheet face is only ~1.3:1 from the dimmed page, so a 1px --line ring (a line, not a shadow) marks its edge */
-@media (prefers-color-scheme: dark) { .sheet { box-shadow: 0 0 0 1px var(--line); } }
-.sheet { position: relative; max-width: 600px; width: 100%; margin: 0 auto; max-height: 86dvh; display: flex; flex-direction: column; background: var(--sheet-bg); border-radius: var(--r-sheet) var(--r-sheet) 0 0; animation: up var(--d-3) var(--ease-sheet); outline: none; }
-.sheet-handle { display: flex; justify-content: center; padding: 10px 0 6px; width: 100%; border-radius: var(--r-sheet) var(--r-sheet) 0 0; }
-.sheet-handle i { width: 36px; height: 4px; border-radius: var(--r-pill); background: var(--handle); }
-.sheet-body { overflow-y: auto; padding: 0 20px calc(28px + env(safe-area-inset-bottom)); }
+.sheet { position: relative; max-width: 600px; width: 100%; margin: 0 auto; max-height: 92dvh; display: flex; flex-direction: column; background: var(--glass-solid); border-radius: var(--r-sheet) var(--r-sheet) 0 0; box-shadow: inset 0 1px 0 var(--glass-hi), var(--sheet-shadow); transition: background-color var(--d-1) var(--ease-out); outline: none; }
+@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .sheet:not(.moving) { background: var(--sheet-bg); -webkit-backdrop-filter: blur(30px) saturate(180%); backdrop-filter: blur(30px) saturate(180%); }
+}
+.grab { position: relative; display: flex; justify-content: center; align-items: center; flex: none; width: 100%; height: 24px; padding: 0; border-radius: var(--r-sheet) var(--r-sheet) 0 0; touch-action: none; cursor: grab; }
+.grab::before { content: ""; position: absolute; left: 0; right: 0; top: -10px; bottom: -10px; } /* 44 px to touch */
+.grab i { width: 36px; height: 5px; border-radius: var(--r-pill); background: var(--handle); }
+.st { touch-action: none; } /* the title area is a handle too (pulling it down closes the sheet) */
+.sheet-body { overflow-y: auto; padding: 0 16px calc(16px + var(--sa-b)); }
 .sheet-body .section-h { margin-top: 18px; padding: 0; } /* a heading in a sheet starts where the sheet's content starts (it was inset 16 for the grey page) */
 .sheet-title { font-size: 16px; font-weight: 700; padding: 4px 0 10px; }
 .sheet-foot { margin: 12px 0 0; font-size: 12px; color: var(--ink-3); text-align: center; }
-@keyframes up { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
-@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+/* what sits on the sheet and is to be used gets a solid face of its own (the sheet is nearly the page colour) */
+.sheet { --surface: var(--surface-in-sheet); --raised: var(--raised-in-sheet); } /* 02 §2.8: inside a sheet the card face and the one-layer-up face are the sheet's own pair */
+.sheet :is(.oneline, textarea) { background: var(--surface-in-sheet); }
 
 /* ---- session sheet: 怎麼跑 · Woo · 備註 · 上次 ---- */
 .ss-head { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 12px; align-items: center; padding: 4px 0 14px; }
@@ -809,7 +816,7 @@ a.blk.link { display: block; }
 main > .bar { height: 4px; margin: 6px 0 6px; }
 .dayrows { display: flex; flex-direction: column; }
 .grp.dayrows { margin-top: 12px; }
-.dayrow { display: grid; grid-template-columns: 28px 30px minmax(0, 1fr) 104px; gap: 10px; align-items: center; width: 100%; height: 56px; padding: 0 16px; color: var(--ink); text-align: left; border-radius: 0; }
+.dayrow { display: grid; grid-template-columns: 28px 30px minmax(0, 1fr) 104px; gap: 10px; align-items: center; width: 100%; min-height: 56px; padding: 4px 16px; color: var(--ink); text-align: left; border-radius: 0; }
 .dayrow + .dayrow { background: linear-gradient(var(--sep), var(--sep)) 54px 0 / calc(100% - 54px) .5px no-repeat; } /* hairline inset to the avatar column */
 :is(a, button).dayrow:active { background-color: var(--fill-press); }
 .dayrow.skipped .n .t { color: var(--ink-2); }
@@ -823,7 +830,8 @@ main > .bar { height: 4px; margin: 6px 0 6px; }
 .dayrow .avatar { width: 30px; height: 30px; font-size: 13px; }
 .dayrow .avatar.cjk { font-size: 12px; }
 .dayrow .n { min-width: 0; }
-.dayrow .n .t { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* the course name: at most two lines and no 「…」 (02 §2.4 v5.0.2): a row is 56, or 64 when the name wraps (the one exception to fixed-height rows) */
+.dayrow .n .t { font-size: 15px; font-weight: 600; line-height: 1.25; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-overflow: clip; overflow-wrap: anywhere; }
 .dayrow .n .t.rest { font-weight: 400; color: var(--ink-3); }
 .dayrow .n .sub { font-size: 12px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dayrow .r { display: grid; grid-template-columns: minmax(0, 1fr) 8px; column-gap: 8px; align-items: center; font-size: 13px; color: var(--ink-2); }
@@ -896,7 +904,7 @@ button.next-row { width: 100%; text-align: left; }
 .sheet-body .rpe-k { margin-top: 16px; font-size: 13px; font-weight: 700; color: var(--ink-2); letter-spacing: 0.04em; }
 .sheet-body .rpe { margin-top: 8px; }
 .sheet-body .rpe-scale { margin-top: 4px; }
-.sheet-body .oneline { width: 100%; margin-top: 14px; height: 44px; padding: 0 14px; border: 1px solid var(--field-line); border-radius: var(--r-m); font: inherit; font-size: 16px; color: var(--ink); background: var(--bg); }
+.sheet-body .oneline { width: 100%; margin-top: 14px; height: 44px; padding: 0 14px; border: 1px solid var(--field-line); border-radius: var(--r-m); font: inherit; font-size: 16px; color: var(--ink); background: var(--surface-in-sheet); }
 .sheet-body .oneline:focus { outline: none; border-color: var(--ink-2); }
 .sheet-body .btn.primary { margin-top: 14px; }
 .msg.coach .relink { margin-top: 8px; font-size: 13px; color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; }
@@ -1048,7 +1056,7 @@ button.next-row { width: 100%; text-align: left; }
 .details-sheet .ds-actions .btn:not(.primary) { flex: 0 0 96px; }
 .details-sheet .ds-error + .ds-actions { margin-top: 10px; }
 /* room to scroll the last box above the keyboard while a box has focus (the form renders .ds-room then; see DetailsForm) */
-.details-sheet .sheet-body:has(.ds-room) { padding-bottom: calc(40vh + env(safe-area-inset-bottom)); }
+.details-sheet .sheet-body:has(.ds-room) { padding-bottom: calc(40vh + var(--sa-b)); }
 
 /* ---- 一堂多筆（multi-session-activities）: only drawn when a session has 2+ activities ---- */
 /* 報告頁「紀錄 · N 段」: between 目標 vs 實際 and 我的心得. One row per recording (36px), a 20px 隔 N 分 line between. */
@@ -1472,6 +1480,7 @@ button.next-row { width: 100%; text-align: left; }
 
 /* 320 px column widths (v4) */
 @media (max-width: 359px) {
+  .dayrow { grid-template-columns: 28px 30px minmax(0, 1fr) 96px; }
   .dayrow .r .l .num { font-size: 16px; }
   .extras .xrow { grid-template-columns: 30px minmax(0, 1fr) 56px 60px; }
   .extras .xrow > span:first-child { display: none; }
@@ -1488,15 +1497,6 @@ button.next-row { width: 100%; text-align: left; }
   .metrics { grid-template-columns: repeat(3, minmax(0, auto)); }
   .metric .d { white-space: normal; }
 }
-
-/* 課表七天 at 375 and below: the grouped card (16 + 16 padding) takes 20 px from the course name that v4 had (92 px at 320, 124 at 360); gaps 8 and padding 12 give it back (94 at 320, 122 at 360) */
-@media (max-width: 375px) {
-  .dayrow { grid-template-columns: 26px 28px minmax(0, 1fr) 104px; gap: 8px; padding: 0 12px; }
-  .dayrow.changed { padding-left: 9px; padding-right: 12px; } /* only the sides: the shorthand would zero the 6/8 above and below the 「原本」 line */
-  .dayrow + .dayrow { background-position: 46px 0; background-size: calc(100% - 46px) .5px; }
-  .dayrow .avatar { width: 28px; height: 28px; }
-}
-@media (max-width: 359px) { .dayrow { grid-template-columns: 26px 28px minmax(0, 1fr) 92px; } }
 
 /* 累積／完成／連續達標: number over its unit line, so three-digit km and "· 55%" still fit (248 px at 320, 256 once main is 16; a long row also overran at 360 and 375) */
 @media (max-width: 379px) {
