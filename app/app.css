@@ -93,7 +93,8 @@ ul { padding: 0; list-style: none; }
 .shell { max-width: 600px; margin: 0 auto; min-height: 100dvh; display: flex; flex-direction: column; }
 .shell { padding-left: var(--sa-l); padding-right: var(--sa-r); }
 .shell > main { flex: 1 1 auto; padding: 0 16px calc(var(--tab-h) + var(--tab-gap) + 24px); }
-.shell.modal { animation: fade var(--d-2) var(--ease-out); } /* the coach modal; opacity only (a transform would move the fixed composer) */
+.shell.modal { animation: fade var(--d-2) var(--ease-out); } /* the coach modal; opacity only (a transform would move the fixed composer); 4b replaces it with the slide and removes the keyframes */
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 
 /* ---- v5 shell (01b §5.7, §6.1, §6.2; 02 §2.2, §5) -------------------------------------------------------------------
    Glass, two levels: `--glass` (.72 light / .78 dark) on bars and floating controls (tab bar, nav bar, round buttons, back pill), only --ink on it;

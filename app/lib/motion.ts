@@ -83,10 +83,10 @@ function play(el: HTMLElement, keyframes: Keyframe[], duration: number, easing: 
         anim.cancel();
         running.delete(el);
         if (end === "clear") { el.style.transform = ""; el.style.opacity = ""; }
+        unmark(el, glass); // only the animation that is still the element's: one that was replaced must not take the new one's markers (.moving, will-change) away
       }
-      unmark(el, glass);
     },
-    () => { unmark(el, glass); }, // cancelled: whoever cancelled it owns the element now
+    () => { /* cancelled: whoever cancelled it owns the element (and its markers) now */ },
   );
   return { finished, cancelToCurrent: () => { if (running.get(el) === anim) stopAtCurrent(el); } };
 }

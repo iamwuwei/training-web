@@ -132,6 +132,9 @@ export function BottomSheet({ open, onClose, label, className, children }: { ope
     suppressClick.current = true;
     window.setTimeout(() => { suppressClick.current = false; }, 60);
     const ty = translateYNow(p);
+    // the speed is the speed at the moment of release: the release itself is a sample, so a hand that flicked and then rested before letting go has v ≈ 0
+    d.samples.push({ t: e.timeStamp, y: e.clientY });
+    while (d.samples.length > 2 && e.timeStamp - d.samples[0].t > 100) d.samples.shift();
     const first = d.samples[0], last = d.samples[d.samples.length - 1];
     const v = last.t > first.t ? (last.y - first.y) / (last.t - first.t) : 0; // px/ms over the last ~100 ms; down is positive
     if (!cancelled && (ty > CLOSE_DISTANCE || v > CLOSE_VELOCITY)) {
