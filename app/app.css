@@ -956,7 +956,6 @@ button.next-row { width: 100%; text-align: left; }
 .proposal-card:not(.multi) > .collapse:not(.open) { margin-top: -8px; } /* cancels the card's row gap while shut */
 .proposal-card:not(.multi) .impact, .proposal-card:not(.multi) .fold-wrap, .proposal-card:not(.multi) .conflict { margin-left: 52px; }
 .proposal-card .basis .toggle, .proposal-card .fold { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; width: 100%; text-align: left; font-size: 12px; line-height: 1.5; color: var(--ink-3); border-radius: 0; }
-.proposal-card .fold { border-bottom: .5px solid var(--sep); } /* was inherited from the settings accordion's `.fold`, which is gone: kept as it looked */
 .proposal-card .basis .toggle b, .proposal-card .fold b { font-weight: 700; color: var(--ink-2); }
 .proposal-card .basis .more, .proposal-card .fold .more { flex: none; }
 .proposal-card .basis .what { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
