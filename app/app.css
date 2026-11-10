@@ -82,7 +82,6 @@ ul { padding: 0; list-style: none; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; transition-delay: 0s !important; scroll-behavior: auto !important; }
   .typing-dots { display: none; }
-  .ring.done { animation: none; } /* no pulse: the 0.01 ms rule above does not zero its delay */
 }
 :is(.chip, .week-head2 .step, .week-head .step, .back-today, .details-sheet .ds-clear, .composer .quote-chip button, .msg.me .when button, .review-entry) { position: relative; }
 :is(.chip, .week-head2 .step, .week-head .step, .back-today, .details-sheet .ds-clear, .composer .quote-chip button, .msg.me .when button, .routine .items .how, .review-entry)::before {
@@ -200,6 +199,7 @@ ul { padding: 0; list-style: none; }
 .ring.done .mid .num { color: var(--accent); }
 .ring.done { animation: ring-pulse var(--d-3) var(--bounce) var(--d-4) 1; }
 @keyframes ring-pulse { 50% { transform: scale(1.04); } }
+@media (prefers-reduced-motion: reduce) { .ring.done { animation: none; } } /* no pulse (the global 0.01 ms rule does not zero the 400 ms delay); after the rule it overrides */
 
 .bar { height: 3px; background: var(--track); border-radius: var(--r-pill); overflow: hidden; }
 .bar > i { display: block; height: 100%; background: var(--ink-3); border-radius: var(--r-pill); transition: width var(--d-4) var(--ease-out); }
