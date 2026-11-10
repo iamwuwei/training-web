@@ -1,7 +1,14 @@
 import { useState } from "react";
 import { useOutletContext } from "react-router";
+import type { Route } from "./+types/_app.settings.strava";
 import { disconnectStrava } from "../lib/api";
+import { pageTitle } from "../lib/meta";
 import type { SettingsContext } from "../lib/settings-context";
+
+/** The tab title of this page (a layout's `meta` only sees the matches down to itself, so the sub page names itself). */
+export function meta({ matches }: Route.MetaArgs): Route.MetaDescriptors {
+  return pageTitle("Strava", matches);
+}
 
 /**
  * /settings/strava (02 §2.6): the connection and what can be done to it. The way Strava gets linked is unchanged: the button is a link that opens

@@ -8,7 +8,8 @@ import { BackPill, NavBar } from "./nav-bar";
 // (fixed, scrolled to where it was, inert), so coming back finds it as it was and the left-edge swipe has a real page to uncover. Only the settings layout needs this.
 //
 // push: the new page slides in from the right (400 ms --spring) while the main page moves 30% to the left under a dimming layer.
-// pop:  the same backwards (350 ms). Interruptible: a back pressed mid-push starts from where the page is.
+// pop:  the same backwards (350 ms). While a page moves `.busy` takes the pointer away from both layers (02 §2.10: two pages in motion can not be pressed), so a touch can not
+//       interrupt; a back that gets in anyway (the browser's own button, a key, a script) starts from where the page is, not from the end.
 // edge swipe (standalone only, a 20 px strip at the left edge): follows the finger; past half the width, or flicked (> 0.5 px/ms), it completes, else it springs back.
 // A pop that is the browser's own (Safari's swipe back already animated it) is swapped without animation, except in standalone where nothing else animates (`takeOwnBack`).
 // Reduced motion: no movement, a 120 ms fade, no edge strip.
@@ -146,8 +147,9 @@ export function PushStack({ base, sub, subKey, title, backLabel, onBack }: {
   const onEdgeDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     const top = topEl.current, inner = innerEl.current, dim = dimEl.current;
     if (!top || !inner || !dim || !subKey) return;
-    holdAt(top); holdAt(inner); holdAt(dim); // catch a push that is still running where it is
-    e.currentTarget.setPointerCapture(e.pointerId);
+    // the strip only gets a press at rest (`.busy` has the pointer off during a push or pop); holdAt is a guard for a run that has not quite ended, it stops it where it is
+    holdAt(top); holdAt(inner); holdAt(dim);
+    e.currentTarget.setPointerCapture(e.pointerId); // from the press: a mouse that leaves the 20 px strip keeps sending its moves here (the strip has nothing to click, so nothing is lost)
     drag.current = { id: e.pointerId, x0: e.clientX, y0: e.clientY, moved: false, samples: [{ t: e.timeStamp, x: e.clientX }] };
   };
   const onEdgeMove = (e: ReactPointerEvent<HTMLDivElement>) => {

@@ -29,15 +29,14 @@ export async function clientLoader() {
   }
 }
 
-/** The pushed pages (route id → the bar's title). The pages themselves only draw their content. */
+/** The pushed pages (route id → the bar's title). The pages draw their content and name their own browser title (`meta`). */
 const SUB_TITLES: Record<string, string> = {
   "routes/_app.settings.privacy": "隱私",
   "routes/_app.settings.strava": "Strava",
 };
 
 export function meta({ matches }: Route.MetaArgs): Route.MetaDescriptors {
-  const sub = matches.at(-1)?.id ?? "";
-  return pageTitle(SUB_TITLES[sub] ?? "設定", matches);
+  return pageTitle("設定", matches);
 }
 
 /**
