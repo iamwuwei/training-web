@@ -1,8 +1,9 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { Link, useLocation } from "react-router";
 import type { ApiSession, Verdict } from "../types/api";
 import { labelStyle, verdictKind } from "../lib/labels";
 import { rootIndex, lensIndex } from "../lib/nav";
+import { markMoving, reducedMotion } from "../lib/motion";
 import { CalendarIcon, ChatIcon, GroupIcon, HomeIcon } from "./icons";
 
 /** Type avatar: coloured disc with a 1–2 character code; rest/strength is a hollow grey ring. */
@@ -66,9 +67,16 @@ export function TabBar({ coachUnread = false, groupsUnread = false }: { coachUnr
   const { pathname } = useLocation();
   const idx = lensIndex(pathname);
   const cur = rootIndex(pathname);
+  // the lens slides over the glass (a CSS transition, 400 ms): the glass is solid while it does and 150 ms after (02 §10.4-2)
+  const bar = useRef<HTMLDivElement>(null);
+  const was = useRef(idx);
+  useEffect(() => {
+    if (was.current !== idx && bar.current && !reducedMotion()) markMoving(bar.current, 400);
+    was.current = idx;
+  }, [idx]);
   const here = (i: number, root: string): "page" | "true" | undefined => (cur === i ? (pathname === root ? "page" : "true") : undefined);
   return (
-    <div className="tabbar glass">
+    <div ref={bar} className="tabbar glass">
       <nav aria-label="主選單">
         <i className="lens" aria-hidden="true" style={{ transform: `translateX(${idx * 100}%)` }} />
         <Link to="/" aria-current={here(0, "/")}><HomeIcon /><span>今天</span></Link>

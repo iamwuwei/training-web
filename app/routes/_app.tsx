@@ -1,8 +1,10 @@
+import { useLayoutEffect, useRef } from "react";
 import { Outlet, redirect, useMatches, type ShouldRevalidateFunctionArgs } from "react-router";
 import type { Route } from "./+types/_app";
 import { NavBar } from "../components/nav-bar";
 import { TabBar } from "../components/ui";
 import { ApiError, getGroups, getPlan } from "../lib/api";
+import { clearMotion, enterModal } from "../lib/motion";
 import { ensureWeekly } from "../lib/use-weekly";
 import { AuthError, completeLogin, getUser, hasSession, logout, saveReturnTo, takeReturnTo, type SessionUser } from "../lib/auth";
 import type { PlanResponse } from "../types/api";
@@ -60,6 +62,15 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
 export default function AppLayout({ loaderData }: Route.ComponentProps) {
   // A page that says so (教練: `handle = { modal: true }`) is a modal: no tab bar, and the shell gets the class (coach-sheet-polish)
   const modal = useMatches().some((m) => (m.handle as { modal?: boolean } | undefined)?.modal === true);
+  // The modal slides up over the page (01b §5.6; `MODAL_SLIDE` in lib/motion.ts turns it into a fade). Its bar and its composer are glass that moves with it: solid until it has stopped.
+  // When the page is not a modal (leaving: the coach slid down, then we navigated) whatever the leaving animation left on the shell goes.
+  const shellRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = shellRef.current;
+    if (!el) return;
+    if (!modal) { clearMotion(el); return; }
+    void enterModal(el, [...el.querySelectorAll<HTMLElement>(".navbar, .composer")]);
+  }, [modal]);
   if (loaderData.error) {
     const notRegistered = loaderData.error === "not_registered";
     return (
@@ -81,7 +92,7 @@ export default function AppLayout({ loaderData }: Route.ComponentProps) {
     );
   }
   return (
-    <div className={modal ? "shell modal" : "shell"}>
+    <div ref={shellRef} className={modal ? "shell modal" : "shell"}>
       <Outlet />
       {modal ? null : <TabBar coachUnread={(loaderData.data?.coach_unread ?? 0) > 0} groupsUnread={loaderData.groupsUnread > 0} />}
     </div>

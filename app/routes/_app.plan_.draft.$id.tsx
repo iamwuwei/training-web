@@ -171,7 +171,7 @@ function DraftPreview({ d, adopt, adopting, adoptError }: { d: ApiPlanDraft; ado
           </>
         ) : null}
       </main>
-      <div className="draft-bar">
+      <div className="draft-bar glass">
         <div className="row">
           <span className={`s${adoptError ? " err" : ""}`} role={adoptError ? "alert" : undefined}>{adoptError ?? startLine(d)}</span>
           <button type="button" className="btn compact primary" disabled={adopting} onClick={adopt}>{adopting ? T.preview.adopting : T.preview.adopt}</button>

@@ -47,7 +47,7 @@ export function BottomSheet({ open, onClose, label, className, children }: { ope
   useEffect(() => { closeRef.current = onClose; openRef.current = open; });
   // While it leaves, the panel is drawn from the children it had when it was last open (the page has usually emptied them by then).
   const [shown, setShown] = useState(open);
-  const [kept, setKept] = useState<ReactNode>(children);
+  const [kept, setKept] = useState<ReactNode>(open ? children : null);
   if (open && !shown) setShown(true);
   if (open && kept !== children) setKept(children);
 
@@ -76,20 +76,20 @@ export function BottomSheet({ open, onClose, label, className, children }: { ope
       p.removeAttribute("inert");
       r.style.pointerEvents = "";
       slideIn(p, "y", { glass: [p] });
-      fadeTo(b, 1, undefined, undefined, wasUp.current ? undefined : 0, true);
+      fadeTo(b, 1, { from: wasUp.current ? undefined : 0, clearAtEnd: true });
       wasUp.current = true;
       return;
     }
     // leaving: nothing under it is blocked any more (unlock ran), and the leaving sheet takes no touches
     p.setAttribute("inert", "");
     r.style.pointerEvents = "none";
-    r.classList.remove("dragging");
     const out = slideOut(p, "y", undefined, { glass: [p] });
     const fade = fadeTo(b, 0);
     void Promise.all([out.finished, fade.finished]).then(() => {
       if (openRef.current) return; // opened again while it was leaving
       wasUp.current = false;
       setShown(false);
+      setKept(null); // what the sheet showed is not kept past its leaving (it may hold a link that is shown once)
     });
   }, [open]);
 
@@ -116,8 +116,7 @@ export function BottomSheet({ open, onClose, label, className, children }: { ope
     if (!d.moved) return;
     const ty = d.base + (raw >= 0 ? raw : raw / 3); // pulling up gives a third of the distance
     p.style.transform = `translateY(${ty}px)`;
-    p.classList.add("moving"); // solid while it moves (02 §10.4-2)
-    root.current?.classList.add("dragging");
+    p.setAttribute("data-moving", ""); // solid while it moves (02 §10.4-2)
     if (backdrop.current) backdrop.current.style.opacity = String(Math.max(0, 1 - Math.max(0, ty) / p.offsetHeight));
     d.samples.push({ t: e.timeStamp, y: e.clientY });
     while (d.samples.length > 2 && e.timeStamp - d.samples[0].t > 100) d.samples.shift();
@@ -127,7 +126,7 @@ export function BottomSheet({ open, onClose, label, className, children }: { ope
     if (!d || !p || e.pointerId !== d.id) return;
     drag.current = null;
     if (p.hasPointerCapture(e.pointerId)) p.releasePointerCapture(e.pointerId);
-    const back = () => { void springBack(p, [p]); if (b) void fadeTo(b, 1, undefined, undefined, undefined, true); root.current?.classList.remove("dragging"); };
+    const back = () => { void springBack(p, [p]); if (b) void fadeTo(b, 1, { clearAtEnd: true }); };
     if (!d.moved) { if (d.held) back(); return; } // a tap: the handle's own click closes; a tap that stopped the opening animation lets it finish
     suppressClick.current = true;
     window.setTimeout(() => { suppressClick.current = false; }, 60);
