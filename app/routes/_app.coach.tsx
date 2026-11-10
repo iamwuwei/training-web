@@ -362,6 +362,8 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
   const location = useLocation();
   const cameFromApp = location.key !== "default";
   // Leaving slides the modal down (300 ms) and then goes one step back; a second press while it leaves is ignored. The browser's back button has no leaving animation.
+  // the thread takes the focus when the modal is there: keys (PageUp, arrows, Space, Home, End) scroll it, as they scrolled the window before
+  useEffect(() => { scrollerRef.current?.focus({ preventScroll: true }); }, []);
   const closing = useRef(false);
   const close = () => {
     if (closing.current) return;
@@ -637,7 +639,7 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
 
   return (
     <FlashContext.Provider value={flash}>
-      <div className="modal-scroll" ref={scrollerRef}>
+      <div className="modal-scroll" ref={scrollerRef} tabIndex={-1}>
       <NavBar kind="inline" left={<GlassButton label="關閉" onClick={close}><CloseIcon /></GlassButton>} title="Woo" subtitle="你的教練 · 只聊跑步和課表" scroller={scrollerRef} />
       <main className="thread" style={{ "--composer-h": `${composerH}px` } as React.CSSProperties}>
         <div className={`thread-top${hasMore ? "" : " end"}`} ref={topRef} aria-live="polite">
@@ -734,7 +736,7 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
         {quote && !openAsk ? (
           <div className="quote-chip">
             <span>引用 {quoteLine(quote)}</span>
-            <button type="button" aria-label="移除引用" onClick={() => { setQuote(null); setSearch({}, { replace: true }); }}>×</button>
+            <button type="button" className="qx" aria-label="移除引用" onClick={() => { setQuote(null); setSearch({}, { replace: true }); }}>×</button>
           </div>
         ) : null}
         {openAsk ? (
@@ -759,7 +761,7 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
           />
           <button type="submit" className="send" aria-label="送出" disabled={busy || !text.trim()}><SendIcon /></button>
         </div>
-        {error ? <p className="hint err">{error}</p> : null}
+        {error ? <p className="hint err" role="alert">{error}</p> : null}
       </form>
     </FlashContext.Provider>
   );

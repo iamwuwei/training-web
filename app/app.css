@@ -100,7 +100,7 @@ ul { padding: 0; list-style: none; }
 .shell > main { flex: 1 1 auto; padding: 0 16px calc(var(--tab-h) + var(--tab-gap) + 24px); }
 .shell.modal { position: fixed; inset: 0; z-index: 4; min-height: 0; overflow: hidden; background: var(--bg); }
 /* the coach modal (01b §5.6): a fixed box of its own that slides in (lib/motion.ts); the thread scrolls in .modal-scroll, the composer is positioned in the box (so it rides along with the slide) */
-.modal-scroll { flex: 1 1 auto; min-height: 0; height: 100%; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.modal-scroll { flex: 1 1 auto; min-height: 0; height: 100%; overflow-y: auto; overscroll-behavior: contain; outline: none; } /* it takes focus (tabindex -1) so PageUp / arrows / Space / Home scroll the thread; no ring on a scroll area */
 
 /* ---- v5 shell (01b §5.7, §6.1, §6.2; 02 §2.2, §5) -------------------------------------------------------------------
    Glass, two levels: `--glass` (.72 light / .78 dark) on bars and floating controls (tab bar, nav bar, round buttons, back pill), only --ink on it;
@@ -611,14 +611,15 @@ a.blk.link { display: block; }
 /* 16px: iOS Safari zooms the page when a field under 16px gets focus. field-sizing grows the box with the text (1 line 44px, up to 5 lines 132px, then it scrolls inside) */
 .composer textarea { flex: 1 1 auto; min-width: 0; min-height: 44px; max-height: 132px; padding: 10px 16px; border: 1px solid var(--field-line); border-radius: 22px; font: inherit; font-size: 16px; line-height: 22px; field-sizing: content; color: var(--ink); background: var(--surface); resize: none; }
 .composer textarea:focus { outline: none; border-color: var(--ink-2); }
+.composer textarea::placeholder { color: var(--ink-3); opacity: 1; } /* the browser's grey was 3.69:1 in dark; --ink-3 on the solid --surface field */
 /* 44px round, --ink */
 .composer .send { flex: none; width: 44px; height: 44px; padding: 0; border-radius: 50%; background: var(--ink); color: var(--on-ink); display: flex; align-items: center; justify-content: center; }
 .composer .send:focus-visible { outline-offset: 2px; border-radius: 50%; }
 .composer .send:disabled { opacity: .35; }
-.composer .quote-chip { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 4px; padding-bottom: 6px; font-size: 12px; color: var(--ink); }
+.composer .quote-chip { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 4px; padding-bottom: 8px; font-size: 12px; color: var(--ink); }
 .composer .quote-chip span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 2px solid var(--ink); padding-left: 8px; }
 .composer .quote-chip button { flex: none; font-size: 16px; color: var(--ink); width: 28px; height: 28px; }
-.composer .quote-chip button::before { left: -8px; right: -8px; } /* 44 px wide to touch */
+.composer .quote-chip button.qx::before { left: -8px; right: -8px; } /* 44 × 44 to touch (28 + 8 each side; the chip's 8 px of padding below keeps the field under it from covering the lower 8): the class beats the shared `:is(…)::before { left: 0; right: 0 }` above, which a plain `button::before` loses to on specificity */
 /* on glass the text is --ink; an error is told by a red dot (like the draft capsule's), not by red letters */
 .composer .hint { padding-top: 6px; padding-bottom: 2px; font-size: 12px; color: var(--ink); }
 .composer .hint.err { display: flex; gap: 8px; align-items: flex-start; }
@@ -637,7 +638,7 @@ a.blk.link { display: block; }
 .strava-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #FC5200; margin-right: 8px; vertical-align: middle; flex: none; }
 .msg.me .bubble.pick { display: inline-flex; align-items: center; }
 .msg.me .rpe-tag { display: inline-block; margin-left: 8px; font-family: "Barlow Condensed", sans-serif; font-weight: 700; font-size: 14px; color: var(--ink-2); }
-.composer .rpe-row { margin: 0; padding: 6px 0; display: flex; align-items: center; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+.composer .rpe-row { margin: 0; padding: 8px 0; display: flex; align-items: center; gap: 4px; overflow-x: auto; scrollbar-width: none; }
 .composer .rpe-row .k { flex: none; font-size: 12px; color: var(--ink); margin-right: 4px; }
 /* RPE button: 28px disc, 32x44 touch area (the ::before). Not .rpe: that is the report page's 10-column grid */
 .composer .rpe-btn { position: relative; flex: none; display: inline-flex; align-items: center; justify-content: center; padding: 0; width: 28px; height: 28px; border-radius: 50%; border: 0; background: var(--fill); color: var(--ink); font-family: "Barlow Condensed", sans-serif; font-size: 14px; font-weight: 700; line-height: 1; }

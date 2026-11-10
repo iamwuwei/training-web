@@ -159,10 +159,3 @@ export function clearMotion(el: HTMLElement) {
   el.style.opacity = "";
   el.style.willChange = "";
 }
-
-/** Glass that is moved by a CSS transition (the tab lens): solid for the length of it and 150 ms after, like the animated kind. */
-export function markMoving(glass: HTMLElement, duration: number) {
-  window.clearTimeout(settleTimers.get(glass));
-  glass.setAttribute("data-moving", "");
-  settleTimers.set(glass, window.setTimeout(() => glass.removeAttribute("data-moving"), duration + 150));
-}
