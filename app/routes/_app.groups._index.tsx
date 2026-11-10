@@ -5,7 +5,8 @@ import { GroupAddSheet } from "../components/group-add-sheet";
 import { GroupCreateSheet } from "../components/group-create-sheet";
 import { LoadFailed } from "../components/group-parts";
 import { ChevronIcon, GroupIcon, PlusIcon } from "../components/icons";
-import { SectionH, TopBar } from "../components/ui";
+import { GlassButton, NavBar } from "../components/nav-bar";
+import { SectionH } from "../components/ui";
 import { getGroups } from "../lib/api";
 import { todayJst } from "../lib/date";
 import { countdown, limitText } from "../lib/groups";
@@ -64,7 +65,7 @@ export default function Groups({ loaderData }: Route.ComponentProps) {
     const missing = loaderData.status === "notfound" || (loaderData.status === "error" && loaderData.http === 404);
     return (
       <>
-        <TopBar title="群組" />
+        <NavBar kind="large" title="群組" />
         <main>
           <LoadFailed text={missing ? "這個功能還沒開通。" : "讀不到群組。"} onRetry={() => void revalidator.revalidate()} />
         </main>
@@ -83,11 +84,12 @@ export default function Groups({ loaderData }: Route.ComponentProps) {
 
   return (
     <>
-      <TopBar
+      <NavBar
+        kind="large"
         title="群組"
-        aside={full
-          ? <button type="button" className="icon-btn" aria-disabled="true" aria-label={`新增群組（已經有 ${max} 個群組）`} onClick={showLimit}><PlusIcon /></button>
-          : <button type="button" className="icon-btn" aria-label="新增群組：建立或用邀請連結加入" onClick={() => setAddOpen(true)}><PlusIcon /></button>}
+        right={full
+          ? <GlassButton ariaDisabled label={`新增群組（已經有 ${max} 個群組）`} onClick={showLimit}><PlusIcon /></GlassButton>
+          : <GlassButton label="新增群組：建立或用邀請連結加入" onClick={() => setAddOpen(true)}><PlusIcon /></GlassButton>}
       />
       <main>
         {notice ? <p className="group-note" role="status">{notice}</p> : null}

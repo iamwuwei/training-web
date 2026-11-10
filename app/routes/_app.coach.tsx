@@ -2,6 +2,7 @@ import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useMem
 import { Link, redirect, useLocation, useNavigate, useRevalidator, useSearchParams } from "react-router";
 import type { Route } from "./+types/_app.coach";
 import { CloseIcon, SendIcon } from "../components/icons";
+import { GlassButton, NavBar } from "../components/nav-bar";
 import { ConstraintCard, ProposalCard } from "../components/proposals";
 import { Rejected, WeeklyReviewBody } from "../components/weekly-review";
 import { CoachAvatar, VerdictTag, verdictBadge } from "../components/ui";
@@ -167,7 +168,7 @@ function mergeThread(cache: Map<string, ApiCoachMessage>, latest: ApiCoachMessag
 function scrollToMessage(id: string): number | null {
   const el = document.getElementById(`msg-${id}`);
   if (!el) return null;
-  const top = document.querySelector(".coach-head")?.getBoundingClientRect().bottom ?? 0;
+  const top = document.querySelector(".navbar")?.getBoundingClientRect().bottom ?? 0;
   const bottom = document.querySelector(".composer")?.getBoundingClientRect().top ?? window.innerHeight;
   const room = bottom - top;
   const r = el.getBoundingClientRect();
@@ -622,11 +623,7 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
 
   return (
     <FlashContext.Provider value={flash}>
-      <header className="topbar coach-head">
-        <button type="button" className="back" aria-label="關閉" onClick={close}><CloseIcon /></button>
-        <CoachAvatar />
-        <div className="who"><h1>Woo</h1><div className="sub">你的教練 · 只聊跑步和課表</div></div>
-      </header>
+      <NavBar kind="inline" left={<GlassButton label="關閉" onClick={close}><CloseIcon /></GlassButton>} title="Woo" subtitle="你的教練 · 只聊跑步和課表" />
       <main className="thread" style={{ "--composer-h": `${composerH}px` } as React.CSSProperties}>
         <div className={`thread-top${hasMore ? "" : " end"}`} ref={topRef} aria-live="polite">
           {loadingOlder ? <span className="tt-load">載入更早的對話<span className="typing-dots" aria-hidden="true"><i /><i /><i /></span></span> : olderError ? "載入失敗，往上滑再試一次" : null}

@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
-import { NavLink } from "react-router";
+import { Link, useLocation } from "react-router";
 import type { ApiSession, Verdict } from "../types/api";
 import { labelStyle, verdictKind } from "../lib/labels";
+import { rootIndex, lensIndex } from "../lib/nav";
 import { CalendarIcon, ChatIcon, GroupIcon, HomeIcon } from "./icons";
 
 /** Type avatar: coloured disc with a 1–2 character code; rest/strength is a hollow grey ring. */
@@ -56,38 +57,32 @@ export function Reminders({ items }: { items: string[] }) {
 }
 
 /**
+ * The floating glass bar with four tabs and a lens under the selected one (01b §6.1, 02 §2.2). The lens slides to the tab of the
+ * current path; a page outside the tabs (報告, 加入群組) leaves it where it was, 設定 sits under 今天.
  * `coachUnread`: Woo has posted since the thread was last opened; a dot on the 教練 tab until it is. (The coach page is a modal with no tab bar, so the tab is never the active one while the bar is drawn.)
  * `groupsUnread`: some group has 消息中心 events I have not seen (`groups_unread` of GET /plan); the same dot on the 群組 tab.
  */
 export function TabBar({ coachUnread = false, groupsUnread = false }: { coachUnread?: boolean; groupsUnread?: boolean }) {
+  const { pathname } = useLocation();
+  const idx = lensIndex(pathname);
+  const cur = rootIndex(pathname);
+  const here = (i: number, root: string): "page" | "true" | undefined => (cur === i ? (pathname === root ? "page" : "true") : undefined);
   return (
-    <div className="tabbar">
+    <div className="tabbar glass">
       <nav aria-label="主選單">
-        <NavLink to="/" end><HomeIcon /><span>今天</span></NavLink>
-        <NavLink to="/plan"><CalendarIcon /><span>課表</span></NavLink>
-        <NavLink to="/groups">
-          {({ isActive }) => (
-            <>
-              <span className="icon"><GroupIcon />{groupsUnread && !isActive ? <i className="unread" aria-hidden="true" /> : null}</span>
-              <span>{groupsUnread && !isActive ? <span className="sr-only">有新動態 · </span> : null}群組</span>
-            </>
-          )}
-        </NavLink>
-        <NavLink to="/coach">
+        <i className="lens" aria-hidden="true" style={{ transform: `translateX(${idx * 100}%)` }} />
+        <Link to="/" aria-current={here(0, "/")}><HomeIcon /><span>今天</span></Link>
+        <Link to="/plan" aria-current={here(1, "/plan")}><CalendarIcon /><span>課表</span></Link>
+        <Link to="/groups" aria-current={here(2, "/groups")}>
+          <span className="icon"><GroupIcon />{groupsUnread && cur !== 2 ? <i className="unread" aria-hidden="true" /> : null}</span>
+          <span>{groupsUnread && cur !== 2 ? <span className="sr-only">有新動態 · </span> : null}群組</span>
+        </Link>
+        <Link to="/coach">
           <span className="icon"><ChatIcon />{coachUnread ? <i className="unread" aria-hidden="true" /> : null}</span>
           <span>{coachUnread ? <span className="sr-only">有新訊息 · </span> : null}教練</span>
-        </NavLink>
+        </Link>
       </nav>
     </div>
-  );
-}
-
-export function TopBar({ title, aside, back }: { title: ReactNode; aside?: ReactNode; back?: ReactNode }) {
-  return (
-    <header className="topbar">
-      <h1>{back}{title}</h1>
-      {aside ? <div className="aside">{aside}</div> : null}
-    </header>
   );
 }
 

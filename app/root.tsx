@@ -1,7 +1,9 @@
 import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router";
 import type { Route } from "./+types/root";
+import { NavBar } from "./components/nav-bar";
 import { FeedSkeleton } from "./components/ui";
 import { ApiError } from "./lib/api";
+import { TAB_ROOTS } from "./lib/nav";
 import "./app.css";
 
 export const links: Route.LinksFunction = () => [
@@ -35,7 +37,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </head>
       <body>
         {children}
-        <ScrollRestoration />
+        <ScrollRestoration getKey={(loc) => (TAB_ROOTS.has(loc.pathname) ? loc.pathname : loc.key)} />
         <Scripts />
       </body>
     </html>
@@ -50,7 +52,7 @@ export default function Root() {
 export function HydrateFallback() {
   return (
     <div className="shell">
-      <header className="topbar"><h1>富士山マラソン 2026</h1></header>
+      <NavBar kind="large" title="富士山マラソン 2026" />
       <main><FeedSkeleton /></main>
     </div>
   );
@@ -70,7 +72,7 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   }
   return (
     <div className="shell">
-      <header className="topbar"><h1>{title}</h1></header>
+      <NavBar kind="large" title={title} />
       <main>
         <p className="empty">{detail || "重新整理再試一次。"}</p>
         <p className="note"><a href="/" style={{ color: "var(--ink-2)", textDecoration: "underline" }}>回首頁</a></p>

@@ -3,7 +3,8 @@ import { useNavigate, useRevalidator } from "react-router";
 import type { Route } from "./+types/_app.groups.$id.settings";
 import { GroupConfirm } from "../components/group-confirm";
 import { GroupBack, GroupNotFound, LoadFailed } from "../components/group-parts";
-import { SectionH, TopBar } from "../components/ui";
+import { NavBar } from "../components/nav-bar";
+import { SectionH } from "../components/ui";
 import { deleteGroup, getGroup, postGroupLeave } from "../lib/api";
 import { dow } from "../lib/date";
 import { isStatus, NOTICE_GONE } from "../lib/groups";
@@ -32,7 +33,7 @@ export default function GroupSettings({ loaderData, params }: Route.ComponentPro
   if (loaderData.status === "error") {
     return (
       <>
-        <TopBar title="群組設定" back={<GroupBack to={`/groups/${id}`} label="回群組" />} />
+        <NavBar kind="inline" title="群組設定" left={<GroupBack to={`/groups/${id}`} label="群組" ariaLabel="回群組" />} />
         <main><LoadFailed text="讀不到群組。" onRetry={() => void revalidator.revalidate()} /></main>
       </>
     );
@@ -59,7 +60,7 @@ export default function GroupSettings({ loaderData, params }: Route.ComponentPro
 
   return (
     <>
-      <TopBar title="群組設定" back={<GroupBack to={`/groups/${id}`} label="回群組" />} />
+      <NavBar kind="inline" title="群組設定" left={<GroupBack to={`/groups/${id}`} label="群組" ariaLabel="回群組" />} />
       <main>
         <SectionH>群組</SectionH>
         <div className="setting"><span className="k">名稱</span><span className="v">{g.name}</span></div>

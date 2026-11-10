@@ -7,7 +7,8 @@ import { Progress } from "../components/progress";
 import { SessionSheet } from "../components/session-sheet";
 import { WeeklyReviewSheet } from "../components/weekly-review-sheet";
 import { StrengthDay } from "../components/strength-day";
-import { Avatar, Bar, CoachAvatar, SectionH, TopBar, VerdictTag } from "../components/ui";
+import { GlassButton, NavBar } from "../components/nav-bar";
+import { Avatar, Bar, CoachAvatar, SectionH, VerdictTag } from "../components/ui";
 import { md, mdDow, relativeDay, timeJst } from "../lib/date";
 import { duration, int, km, kmPlan, pace } from "../lib/format";
 import { isStrengthDay, shortName, sportName } from "../lib/labels";
@@ -242,9 +243,11 @@ export default function Today() {
 
   return (
     <>
-      <TopBar
-        title={<><MountainIcon /><span className="t">{data.plan.race_name}</span></>}
-        aside={<Link to="/settings" className="gear" aria-label="設定"><GearIcon /></Link>}
+      <NavBar
+        kind="large"
+        title="今天"
+        subtitle={<><MountainIcon />{data.plan.race_name}</>}
+        right={<GlassButton to="/settings" label="設定"><GearIcon /></GlassButton>}
       />
       <main>
         <div className="hero2">

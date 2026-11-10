@@ -17,7 +17,6 @@
   --chip: var(--fill);    /* alias */
   --chip-line: var(--sep); /* alias; new code does not use it */
   --band: var(--track);   /* alias */
-  --tab-off: var(--ink-3); /* kept until the tab bar is rewritten (PR 2), then deleted */
   --accent: #f0553a;    /* coral: only for things worth being glad about */
   --accent-ink: #c8391f; /* coral text 11-17px */
   --accent-bg: #fff1ed;
@@ -46,7 +45,7 @@
   --rise: 8px; --press: 0.97; --parallax: -30%;
 
   /* glass (used from PR 2 on; .member-menu uses it now) */
-  --glass: rgba(249, 249, 251, 0.72); --glass-solid: #f9f9fb;
+  --glass: rgba(249, 249, 251, 0.72); --glass-menu: rgba(249, 249, 251, 0.88); --glass-solid: #f9f9fb; /* --glass: bars and floating controls (only --ink on it); --glass-menu: small floating panels */
   --glass-hi: rgba(255, 255, 255, 0.95); --glass-edge: rgba(0, 0, 0, 0.07); --glass-spec: rgba(255, 255, 255, 0.55);
   --glass-shadow: 0 8px 28px rgba(20, 22, 40, 0.16), 0 1px 3px rgba(20, 22, 40, 0.08);
   --lens: rgba(0, 0, 0, 0.07); --lens-hi: rgba(255, 255, 255, 0.9); --lens-shadow: 0 1px 6px rgba(20, 22, 40, 0.10);
@@ -54,7 +53,7 @@
   --push-dim: rgba(0, 0, 0, 0.10); --push-shadow: -8px 0 24px rgba(20, 22, 40, 0.12);
 
   /* layout (used from PR 2 on); --sa-* wrap env() so QA can override them */
-  --nav-h: 44px; --tab-h: 64px; --tab-gap: max(16px, calc(env(safe-area-inset-bottom) - 10px));
+  --nav-h: 44px; --tab-h: 64px; --tab-gap: max(16px, calc(var(--sa-b) - 10px));
   --sa-t: env(safe-area-inset-top); --sa-b: env(safe-area-inset-bottom); --sa-l: env(safe-area-inset-left); --sa-r: env(safe-area-inset-right);
   color-scheme: light;
 }
@@ -92,34 +91,71 @@ ul { padding: 0; list-style: none; }
 
 /* ---- shell ------------------------------------------------------------------ */
 .shell { max-width: 600px; margin: 0 auto; min-height: 100dvh; display: flex; flex-direction: column; }
-.shell > main { flex: 1 1 auto; padding: 0 20px calc(96px + env(safe-area-inset-bottom)); }
+.shell { padding-left: var(--sa-l); padding-right: var(--sa-r); }
+.shell > main { flex: 1 1 auto; padding: 0 16px calc(var(--tab-h) + var(--tab-gap) + 24px); }
 .shell.modal { animation: fade var(--d-2) var(--ease-out); } /* the coach modal; opacity only (a transform would move the fixed composer) */
 
-.topbar {
-  position: sticky; top: 0; z-index: 2;
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  padding: calc(14px + env(safe-area-inset-top)) 20px 12px;
-  background: color-mix(in srgb, var(--bg) 92%, transparent);
-  backdrop-filter: saturate(180%) blur(12px); -webkit-backdrop-filter: saturate(180%) blur(12px);
-  border-bottom: .5px solid var(--sep);
+/* ---- v5 shell (01b §5.7, §6.1, §6.2; 02 §2.2, §5) -------------------------------------------------------------------
+   Glass, two levels: `--glass` (.72 light / .78 dark) on bars and floating controls (tab bar, nav bar, round buttons, back pill), only --ink on it;
+   `--glass-menu` (.88) on small floating panels (.member-menu). Without backdrop-filter both fall back to --glass-solid.
+   `.moving` (added by the motion code of PR 4 while a glass piece is being moved) makes it solid so the blur is not recomputed every frame. */
+:where(.glass:not(.navbar)) { position: relative; } /* zero specificity: .tabbar (fixed) and .member-menu (absolute) keep their own position */
+.glass:not(.navbar) { background: var(--glass-solid); box-shadow: inset 0 1px 0 var(--glass-hi), inset 0 0 0 .5px var(--glass-edge), var(--glass-shadow); transition: background-color var(--d-1) var(--ease-out); }
+.glass:not(.navbar)::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: linear-gradient(var(--glass-spec), transparent 55%); }
+@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .glass:not(.navbar):not(.moving) { background: var(--glass); -webkit-backdrop-filter: blur(18px) saturate(180%); backdrop-filter: blur(18px) saturate(180%); }
 }
-.topbar h1 { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; display: flex; align-items: center; gap: 8px; }
-.topbar .aside .gear { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; margin-right: -8px; color: var(--ink-2); }
-.topbar .aside { font-size: 13px; color: var(--ink-2); display: flex; align-items: baseline; gap: 3px; white-space: nowrap; }
-.topbar .aside .num { font-size: 18px; color: var(--ink); }
-.topbar .back { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; margin-left: -12px; }
 
-.tabbar {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 3;
-  background: var(--surface); border-top: .5px solid var(--sep);
+/* nav bar: transparent (the page colour) at rest, glass + a .5px line once content is under it. The glass is a ::after layer whose opacity fades (200 ms); the blur itself never animates. */
+.navbar { position: sticky; top: 0; z-index: 2; isolation: isolate; height: calc(var(--nav-h) + var(--sa-t)); padding: var(--sa-t) 8px 0; color: var(--ink); }
+.navbar::after { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: 0; background: var(--glass-solid); box-shadow: inset 0 -.5px 0 var(--sep); transition: opacity var(--d-2) var(--ease-out); }
+@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .navbar:not(.moving)::after { background: var(--glass); -webkit-backdrop-filter: blur(18px) saturate(180%); backdrop-filter: blur(18px) saturate(180%); }
 }
-.tabbar nav { max-width: 600px; margin: 0 auto; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 6px 8px calc(10px + env(safe-area-inset-bottom)); }
-.tabbar a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 48px; color: var(--tab-off); font-size: 11px; }
-.tabbar a svg { width: 24px; height: 24px; }
-.tabbar a[aria-current="page"] { color: var(--ink); font-weight: 700; }
+.navbar.glass::after { opacity: 1; }
+.navrow { height: var(--nav-h); display: grid; grid-template-columns: minmax(max-content, 1fr) minmax(0, auto) minmax(max-content, 1fr); align-items: center; }
+.navrow .nl { justify-self: start; display: flex; align-items: center; }
+.navrow .nr { justify-self: end; display: flex; align-items: center; gap: 4px; }
+.navrow .ttl { min-width: 0; margin: 0; padding: 0 4px; text-align: center; font-size: 17px; font-weight: 600; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.navrow .ttl small { display: block; font-size: 12px; font-weight: 400; color: var(--ink); }
+.navrow.large .ttl { opacity: 0; transition: opacity var(--d-2) var(--ease-out); }
+.navbar.glass .navrow.large .ttl { opacity: 1; }
+.nav-sentinel { display: block; height: 1px; margin-bottom: -1px; pointer-events: none; }
+/* the large title of a root page (今天, 課表, 群組); the bar's small title takes over once it is under the bar */
+.lt { padding: 2px 20px 0; }
+.lt h1 { font-size: 34px; line-height: 41px; font-weight: 700; letter-spacing: -0.02em; outline: none; }
+.lt .sub { display: flex; align-items: center; gap: 6px; margin-top: 2px; font-size: 15px; color: var(--ink-2); }
+.lt .sub svg { width: 16px; height: 16px; flex: none; }
+/* round glass button (44) and the back pill; inside a glass bar they give their own glass up */
+.gbtn { position: relative; flex: none; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 22px; color: var(--ink); }
+.gbtn svg { width: 22px; height: 22px; }
+.gbtn.backpill { width: auto; padding: 0 14px 0 8px; gap: 2px; font-size: 17px; white-space: nowrap; }
+.gbtn[aria-disabled="true"] { opacity: 0.7; }
+.gbtn.refresh:disabled { opacity: 0.6; }
+.gbtn.refresh[aria-busy="true"] svg { animation: group-spin 0.8s linear infinite; }
+.navbar.glass .gbtn.glass { background: none; -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none; }
+.navbar.glass .gbtn.glass::before { display: none; }
+.navbar.glass .gbtn.backpill { padding: 0 8px 0 4px; }
+/* 課表預覽: the bar carries a 2 px amber line even at rest (that line is the marker that this is not the plan yet) */
+.navbar.preview::before { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--v-warn); }
+.navbar.preview.glass::after { box-shadow: none; }
+.navbar.preview .ttl { text-align: left; }
+.navbar .pv { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; vertical-align: middle; }
+.navbar .pv-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 15px; font-weight: 700; line-height: 1.2; }
+.navbar .pv-t small { display: block; font-size: 12px; font-weight: 400; color: var(--ink); overflow: hidden; text-overflow: ellipsis; }
+.navbar .chip { height: 32px; padding: 0 14px; font-size: 13px; }
+
+/* tab bar: a floating glass capsule; the lens is the selected tab's rest, it slides to the next one (400 ms --spring) */
+.tabbar { position: fixed; z-index: 3; left: max(16px, var(--sa-l), calc((100vw - 600px) / 2 + 16px)); right: max(16px, var(--sa-r), calc((100vw - 600px) / 2 + 16px)); bottom: var(--tab-gap); height: var(--tab-h); padding: 4px; border-radius: 32px; }
+.tabbar nav { position: relative; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); height: 100%; }
+.tabbar .lens { position: absolute; left: 0; top: 0; width: 25%; height: 100%; border-radius: 28px; background: var(--lens); box-shadow: inset 0 1px 0 var(--lens-hi), var(--lens-shadow); transition: transform var(--d-4) var(--spring); pointer-events: none; }
+.tabbar a { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; color: var(--ink); font-size: 11px; font-weight: 500; }
+.tabbar a svg { width: 24px; height: 24px; stroke-width: 1.8; }
+.tabbar a[aria-current] { font-weight: 700; }
+.tabbar a[aria-current] svg { stroke-width: 2.4; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .tabbar a .icon { position: relative; display: flex; }
-.tabbar a .unread { position: absolute; top: -2px; right: -5px; width: 8px; height: 8px; border-radius: 50%; background: var(--ink); box-shadow: 0 0 0 2px var(--surface); }
+.tabbar a .unread { position: absolute; top: -2px; right: -5px; width: 8px; height: 8px; border-radius: 50%; background: var(--ink); box-shadow: 0 0 0 2px var(--glass-solid); }
 
 /* ---- sections / feed -------------------------------------------------------- */
 .section-h { margin: 22px 0 4px; padding: 0 16px; font-size: 13px; font-weight: 700; color: var(--ink-2); letter-spacing: 0.04em; }
@@ -139,7 +175,7 @@ ul { padding: 0; list-style: none; }
 .bar.ink > i { background: var(--ink); }
 
 .post { display: grid; grid-template-columns: 40px 1fr; gap: 12px; padding: 12px 0; border-bottom: .5px solid var(--sep); color: var(--ink); }
-.post.link:active { background: var(--fill-press); margin: 0 -20px; padding-left: 20px; padding-right: 20px; }
+.post.link:active { background: var(--fill-press); margin: 0 -16px; padding-left: 16px; padding-right: 16px; }
 .post.dim { color: var(--ink-3); }
 .post .body { min-width: 0; }
 .post .meta { display: flex; align-items: baseline; gap: 6px; font-size: 14px; flex-wrap: wrap; }
@@ -350,7 +386,7 @@ ul { padding: 0; list-style: none; }
     --t-easy: #6b8ff0; --t-long: #a37cf0; --t-hard: #f08a3c; --t-race: #ff7b7b;
     --accent: #ff6a4d; --accent-ink: var(--accent); --scrim: rgba(0, 0, 0, 0.60); --accent-bg: #2a1915;
     --v-good: var(--accent); --v-warn: #f0b34a; --v-bad: #ff7b7b;
-    --glass: rgba(30, 30, 32, 0.78); --glass-solid: #1e1e20;
+    --glass: rgba(30, 30, 32, 0.78); --glass-menu: rgba(30, 30, 32, 0.88); --glass-solid: #1e1e20;
     --glass-hi: rgba(255, 255, 255, 0.22); --glass-edge: rgba(255, 255, 255, 0.10); --glass-spec: rgba(255, 255, 255, 0.08);
     --glass-shadow: 0 8px 28px rgba(0, 0, 0, 0.55), 0 1px 3px rgba(0, 0, 0, 0.4);
     --lens: rgba(255, 255, 255, 0.12); --lens-hi: rgba(255, 255, 255, 0.25); --lens-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
@@ -467,10 +503,6 @@ ul { padding: 0; list-style: none; }
 .coach .hint { margin: 0; font-size: 12px; }
 
 /* ---- 教練 Woo: the thread ------------------------------------------------------ */
-.coach-head { align-items: center; justify-content: flex-start; gap: 12px; } /* the title no longer pushed right by .topbar's space-between */
-.coach-head .who { min-width: 0; flex: 1 1 auto; }
-.coach-head h1 { font-size: 17px; }
-.coach-head .sub { font-size: 12px; color: var(--ink-3); }
 /* --composer-h is the composer's measured height (ResizeObserver in the coach route); 69 = a one-line composer, the first frame's guess; 16 = breathing room. The coach page is a modal (no tab bar) */
 .shell > main.thread { overflow-anchor: none; } /* the scroll fix after loading older messages is done by hand (Safari has no scroll anchoring; Chrome's would double it) */
 .shell > main.thread { padding-bottom: calc(var(--composer-h, 69px) + 16px); }
@@ -544,7 +576,7 @@ ul { padding: 0; list-style: none; }
 .composer .hint { margin: 0; padding-bottom: 8px; font-size: 12px; }
 
 /* ---- Woo's post-run check-in ---- */
-.msg.coach .chips-scroll { display: flex; gap: 8px; margin: 10px 0 0 -52px; padding: 0 20px 6px 52px; overflow-x: auto; scrollbar-width: none; width: 100vw; max-width: 600px; box-sizing: border-box; }
+.msg.coach .chips-scroll { display: flex; gap: 8px; margin: 10px 0 0 -52px; padding: 0 20px 6px 52px; overflow-x: auto; scrollbar-width: none; width: calc(100vw - 16px); max-width: 600px; box-sizing: border-box; }
 .msg.coach .chips-scroll::-webkit-scrollbar { display: none; }
 .msg.coach .chip-col { flex: none; display: flex; flex-direction: column; gap: 4px; }
 .msg.coach .chip-col .tag { font-size: 11px; color: var(--ink-3); padding-left: 4px; }
@@ -908,17 +940,11 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 .memo-card.dismissed .actions { display: none; }
 
 /* ---- 課表預覽: /plan?proposal=<id> (the title bar with a 2px amber underline is the whole marker) ---- */
-.plan-preview-bar { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 10px; padding: calc(10px + env(safe-area-inset-top)) 20px 10px; background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: saturate(180%) blur(12px); -webkit-backdrop-filter: saturate(180%) blur(12px); border-bottom: 2px solid var(--v-warn); }
-.plan-preview-bar .back { display: flex; align-items: center; justify-content: center; flex: none; width: 32px; height: 44px; margin-left: -8px; }
-.plan-preview-bar .mid { flex: 1 1 auto; min-width: 0; line-height: 1.2; }
-.plan-preview-bar .t { font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.plan-preview-bar .s { font-size: 12px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.plan-preview-bar .chip { height: 32px; padding: 0 14px; font-size: 13px; }
 .weekbars .labels .changed { color: var(--v-warn); font-weight: 700; }
 .week-head2 .kms .was { margin-right: 4px; font-size: 13px; color: var(--ink-3); }
 .week-head2 .sub .was { color: var(--ink-3); }
 .week-head2 .sub .now { color: var(--ink-2); font-weight: 600; }
-.dayrow.changed { margin: 0 -20px; padding: 0 20px 0 17px; width: calc(100% + 40px); border-left: 3px solid var(--v-warn); }
+.dayrow.changed { margin: 0 -16px; padding: 0 16px 0 13px; width: calc(100% + 32px); border-left: 3px solid var(--v-warn); }
 .dayrow > .was { grid-column: 3 / -1; font-size: 12px; line-height: 1.35; color: var(--ink-3); margin-top: -4px; }
 .dayrow.changed { height: auto; min-height: 56px; grid-template-rows: minmax(44px, auto) auto; align-content: center; padding-top: 6px; padding-bottom: 8px; row-gap: 0; } /* the 原本 line gets its own full-width line */
 .plan-note { margin: 12px 0 0; font-size: 12px; line-height: 1.5; color: var(--ink-3); }
@@ -1052,8 +1078,6 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 .group-hero .v.text { white-space: normal; }
 .group-hero .race { font-size: 17px; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .group-hero .meta { align-self: start; font-size: 13px; color: var(--ink-2); white-space: nowrap; }
-.topbar h1:has(.back) { min-width: 0; }
-.topbar h1 .t { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* dashboard member row: min-height 84 (with the 4th line 102); the whole row is a link to 大家的課表 ?m= */
 .group-members { margin: 0; }
@@ -1141,13 +1165,13 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 .member-menu { position: absolute; z-index: 5; top: calc(100% + 6px); left: 0; width: min(280px, calc(100vw - 40px)); margin: 0; padding: 6px; border-radius: var(--r-l);
   background: var(--glass-solid); box-shadow: inset 0 1px 0 var(--glass-hi), inset 0 0 0 .5px var(--glass-edge), var(--glass-shadow); }
 @supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
-  .member-menu { background: var(--glass); -webkit-backdrop-filter: blur(20px) saturate(160%); backdrop-filter: blur(20px) saturate(160%); }
+  .member-menu { background: var(--glass-menu); -webkit-backdrop-filter: blur(20px) saturate(160%); backdrop-filter: blur(20px) saturate(160%); }
 }
 .member-menu .mm-row { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto 20px; column-gap: 10px; align-items: center; width: 100%; min-height: 48px; padding: 0 10px 0 8px; border-radius: var(--r-m); color: var(--ink); text-align: left; }
 .member-menu .mm-row:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
 .member-menu .mm-row[aria-selected="true"] .nm { font-weight: 600; }
 .member-menu .mm-row .nm { min-width: 0; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.member-menu .mm-row .hint { font-size: 12px; color: var(--ink-2); white-space: nowrap; }
+.member-menu .mm-row .hint { font-size: 11px; color: var(--ink); white-space: nowrap; }
 .member-menu .mm-row .ck { width: 20px; height: 20px; color: var(--ink); }
 .member-plan-head { margin: 8px 0 0; font-size: 13px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .member-plan-head b { font-weight: 600; color: var(--ink); }
@@ -1235,10 +1259,6 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 .actions-row { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 .actions-row .grow { margin-right: auto; }
 .group-empty .btn.compact { margin-top: 16px; }
-/* TopBar right icon button (same look as the 今天 gear: --ink-2, 22px icon), 44×44 hit area */
-.topbar .aside .icon-btn { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; margin: -6px -12px -6px 0; border-radius: 50%; color: var(--ink-2); }
-.topbar .aside .icon-btn svg { width: 22px; height: 22px; }
-.topbar .aside .icon-btn[aria-disabled="true"] { opacity: 0.7; }
 /* destructive page action as text (the confirm sheet carries the real button) */
 .group-danger { display: flex; align-items: center; justify-content: center; min-height: 44px; margin: 16px auto 0; font-size: 15px; font-weight: 600; color: var(--v-bad); }
 /* ＋ sheet: 建立群組／用邀請連結加入 */
@@ -1255,9 +1275,7 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 .group-add .ga-join .err { margin: 6px 0 0; font-size: 12px; color: var(--v-bad); }
 .group-add .ga-join .actions-row { margin-top: 10px; }
 
-/* ---- v3: 重新整理 as a TopBar icon button (詳細頁、消息中心) ---- */
-.topbar .aside .icon-btn.refresh:disabled { opacity: 0.6; }
-.topbar .aside .icon-btn.refresh[aria-busy="true"] svg { animation: group-spin 0.8s linear infinite; }
+/* ---- v3: 重新整理 spins while it reads (.gbtn.refresh) ---- */
 @keyframes group-spin { to { transform: rotate(360deg); } }
 
 /* ---- group-race: small additions the design left to the page (tokens only) ---- */
@@ -1269,7 +1287,6 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 .group-foot a { display: inline-flex; align-items: center; min-height: 44px; margin: -13px 0; }
 
 /* ---- ai-plan-generation (canvas v3.1): 沒課表的入口、/plan/new、/plan/draft/:id (tokens only) ---- */
-.topbar h1:has(.t) { min-width: 0; }
 
 .plan-entry { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 32px 0 12px; }
 .plan-entry .avatar.woo { width: 44px; height: 44px; font-size: 19px; }
@@ -1353,9 +1370,9 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
 .draft-week-flag { margin: 2px 0 6px; padding-left: 42px; font-size: 12px; line-height: 1.45; color: var(--v-warn); }
 .draft-days .dayrow > .was { color: var(--v-warn); }
 
-.shell > main.draft { padding-bottom: calc(64px + var(--tabbar-h, calc(66px + env(safe-area-inset-bottom))) + 16px); }
-.draft-bar { position: fixed; left: 0; right: 0; bottom: var(--tabbar-h, calc(66px + env(safe-area-inset-bottom))); z-index: 2; background: var(--surface); border-top: .5px solid var(--sep); }
-.draft-bar .row { max-width: 600px; margin: 0 auto; display: flex; align-items: center; gap: 12px; padding: 10px 20px; }
+.shell > main.draft { padding-bottom: calc(64px + var(--tab-h) + var(--tab-gap) + 8px + 16px); }
+.draft-bar { position: fixed; left: 0; right: 0; bottom: calc(var(--tab-h) + var(--tab-gap) + 8px); z-index: 2; background: var(--surface); border-top: .5px solid var(--sep); }
+.draft-bar .row { max-width: 600px; margin: 0 auto; display: flex; align-items: center; gap: 12px; padding: 10px 16px; }
 .draft-bar .s { flex: 1 1 auto; min-width: 0; font-size: 13px; line-height: 1.4; color: var(--ink-2); }
 .draft-bar .s.err { color: var(--v-bad); }
 /* the status line's own `.t` (WooStatus) sits inside `.plan-entry .t`: without this it takes the title's top margin a second time */
@@ -1399,6 +1416,10 @@ button.next-row { width: 100%; text-align: left; border-radius: 0; }
   .extras .n { flex-direction: column; align-items: flex-start; gap: 0; white-space: normal; }
   .extra-row { grid-template-columns: minmax(0, 1fr) 112px; }
   .metrics, .totals { column-gap: 8px; }
+  .tabbar a span { white-space: nowrap; }
+  /* 課表預覽 bar: the back pill is the arrow only (still named 「返回教練」) so 預覽 Woo 的提案 and the 採用／不用 chips fit */
+  .navbar.preview .gbtn.backpill { min-width: 44px; padding: 0; }
+  .navbar.preview .gbtn.backpill span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   /* 進步 three metrics: with the longest realistic delta lines the nowrap columns left 0〜2 px between them; the delta line may wrap (instead of touching or clipping) */
   .metrics { grid-template-columns: repeat(3, minmax(0, auto)); }
   .metric .d { white-space: normal; }

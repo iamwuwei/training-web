@@ -1,5 +1,6 @@
 import { Outlet, redirect, useMatches, type ShouldRevalidateFunctionArgs } from "react-router";
 import type { Route } from "./+types/_app";
+import { NavBar } from "../components/nav-bar";
 import { TabBar } from "../components/ui";
 import { ApiError, getGroups, getPlan } from "../lib/api";
 import { ensureWeekly } from "../lib/use-weekly";
@@ -63,7 +64,7 @@ export default function AppLayout({ loaderData }: Route.ComponentProps) {
     const notRegistered = loaderData.error === "not_registered";
     return (
       <div className="shell">
-        <header className="topbar"><h1>{notRegistered ? "尚未加入名單" : "登入失敗"}</h1></header>
+        <NavBar kind="large" title={notRegistered ? "尚未加入名單" : "登入失敗"} />
         <main>
           <p className="empty">
             {notRegistered

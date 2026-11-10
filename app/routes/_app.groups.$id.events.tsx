@@ -5,7 +5,8 @@ import { GroupEventRow } from "../components/group-event-row";
 import { GroupEventSheet } from "../components/group-event-sheet";
 import { GroupBack, GroupNotFound, LoadFailed } from "../components/group-parts";
 import { RefreshIcon } from "../components/icons";
-import { SectionH, TopBar } from "../components/ui";
+import { GlassButton, NavBar } from "../components/nav-bar";
+import { SectionH } from "../components/ui";
 import { getGroupEvents, getGroups, putGroupSeen } from "../lib/api";
 import { todayJst } from "../lib/date";
 import { isStatus } from "../lib/groups";
@@ -57,7 +58,7 @@ export default function GroupEvents({ loaderData, params }: Route.ComponentProps
   if (loaderData.status === "error" || !first) {
     return (
       <>
-        <TopBar title="消息中心" back={<GroupBack to={`/groups/${id}`} label="回群組" />} />
+        <NavBar kind="inline" title="消息中心" left={<GroupBack to={`/groups/${id}`} label="群組" ariaLabel="回群組" />} />
         <main><LoadFailed text="讀不到動態。" onRetry={() => void revalidator.revalidate()} /></main>
       </>
     );
@@ -86,10 +87,11 @@ export default function GroupEvents({ loaderData, params }: Route.ComponentProps
 
   return (
     <>
-      <TopBar
+      <NavBar
+        kind="inline"
         title="消息中心"
-        back={<GroupBack to={`/groups/${id}`} label="回群組" />}
-        aside={<button type="button" className="icon-btn refresh" aria-label={loading ? "更新中" : "重新整理"} aria-busy={loading} disabled={loading} onClick={reload}><RefreshIcon /></button>}
+        left={<GroupBack to={`/groups/${id}`} label="群組" ariaLabel="回群組" />}
+        right={<GlassButton className="refresh" label={loading ? "更新中" : "重新整理"} busy={loading} disabled={loading} onClick={reload}><RefreshIcon /></GlassButton>}
       />
       <main>
         <SectionH>最近 90 天</SectionH>

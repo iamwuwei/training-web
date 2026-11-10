@@ -2,9 +2,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useRevalidator } from "react-router";
 import type { Route } from "./+types/_app.plan_.draft.$id";
 import { GroupConfirm } from "../components/group-confirm";
-import { BackIcon, ChevronIcon, EditIcon, RefreshIcon, TrashIcon } from "../components/icons";
+import { ChevronIcon, EditIcon, RefreshIcon, TrashIcon } from "../components/icons";
 import { DayRow, WeekBars } from "../components/plan-week";
-import { Bar, CoachAvatar, TopBar } from "../components/ui";
+import { BackPill, GlassButton, NavBar } from "../components/nav-bar";
+import { Bar, CoachAvatar } from "../components/ui";
 import { WooStatus } from "../components/woo-status";
 import { adoptPlanDraft, ApiError, discardPlanDraft, getPlanDraft, resumePlanDraft } from "../lib/api";
 import { md, todayJst } from "../lib/date";
@@ -290,18 +291,18 @@ export default function PlanDraft({ loaderData }: Route.ComponentProps) {
     }
   }
 
-  const back = <Link to="/" className="back" aria-label="返回今天"><BackIcon /></Link>;
+  const back = <BackPill to="/" label="今天" ariaLabel="返回今天" />;
   const title = <span className="t">{d ? draftName(d) : "新課表"}</span>;
   const discard = (
     <GroupConfirm open={discardOpen} title={T.discard.title} text={T.discard.text} action={T.discard.action} busyLabel={T.discard.busy} tone="danger"
       onCancel={() => setDiscardOpen(false)} onConfirm={async () => { await discardPlanDraft(d?.id ?? ""); await navigate("/", { replace: true }); }} />
   );
-  const trash = <button type="button" className="icon-btn" aria-label={T.wait.discard} onClick={() => setDiscardOpen(true)}><TrashIcon /></button>;
+  const trash = <GlassButton label={T.wait.discard} onClick={() => setDiscardOpen(true)}><TrashIcon /></GlassButton>;
 
   if (loaderData.loadFailed) {
     return (
       <>
-        <TopBar title={title} back={back} aside={<button type="button" className="icon-btn" aria-label={T.wait.again} onClick={() => void revalidate()}><RefreshIcon /></button>} />
+        <NavBar kind="inline" title={title} left={back} right={<GlassButton label={T.wait.again} onClick={() => void revalidate()}><RefreshIcon /></GlassButton>} />
         <main>
           <div className="plan-entry">
             <p className="err" role="alert">{SEND_FAILED}</p>
@@ -315,7 +316,7 @@ export default function PlanDraft({ loaderData }: Route.ComponentProps) {
   if (!d || adopted) {
     return (
       <>
-        <TopBar title={title} back={back} />
+        <NavBar kind="inline" title={title} left={back} />
         <main>{adopted ? null : <DraftEnd d={null} onRestart={startOver} onResume={resume} resuming={false} resumeError={null} />}</main>
       </>
     );
@@ -324,8 +325,8 @@ export default function PlanDraft({ loaderData }: Route.ComponentProps) {
   if (d.status === "pending") {
     return (
       <>
-        <TopBar title={title} back={back} aside={<>
-          {timedOut || unreadable ? <button type="button" className="icon-btn" aria-label={T.wait.again} onClick={() => { restart(); void revalidate(); }}><RefreshIcon /></button> : null}
+        <NavBar kind="inline" title={title} left={back} right={<>
+          {timedOut || unreadable ? <GlassButton label={T.wait.again} onClick={() => { restart(); void revalidate(); }}><RefreshIcon /></GlassButton> : null}
           {trash}
         </>} />
         <main>
@@ -341,8 +342,8 @@ export default function PlanDraft({ loaderData }: Route.ComponentProps) {
   if (d.status === "ready") {
     return (
       <>
-        <TopBar title={title} back={back} aside={<>
-          <button type="button" className="icon-btn" aria-label={T.preview.edit} onClick={startOver}><EditIcon /></button>
+        <NavBar kind="inline" title={title} left={back} right={<>
+          <GlassButton label={T.preview.edit} onClick={startOver}><EditIcon /></GlassButton>
           {trash}
         </>} />
         <DraftPreview d={d} adopt={() => void adopt()} adopting={adopting} adoptError={adoptError} />
@@ -353,7 +354,7 @@ export default function PlanDraft({ loaderData }: Route.ComponentProps) {
 
   return (
     <>
-      <TopBar title={title} back={back} />
+      <NavBar kind="inline" title={title} left={back} />
       <main><DraftEnd d={d} onRestart={startOver} onResume={() => void resume()} resuming={resuming} resumeError={resumeError} /></main>
     </>
   );
