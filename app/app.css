@@ -593,7 +593,7 @@ a.blk.link { display: block; }
 .wooline .woo-status { min-height: 20px; align-items: center; }
 /* reduced motion: no dots at all (and no "…" in their place), just the text, swapped without a fade */
 .msg.me { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; padding: 6px 0 10px; }
-.msg.me .bubble { max-width: 82%; background: var(--surface); border-radius: var(--r-l) var(--r-l) 4px var(--r-l); padding: 10px 14px; line-height: 1.55; white-space: pre-wrap; }
+.msg.me .bubble { max-width: 80%; background: var(--surface); border-radius: 18px 18px 6px 18px; padding: 10px 14px; line-height: 1.55; white-space: pre-wrap; }
 .msg.me .quote { border-left: 2px solid var(--chip-line); padding-left: 10px; margin-bottom: 6px; font-size: 13px; color: var(--ink-2); }
 .msg.me .when { font-size: 11px; color: var(--ink-3); margin-right: 4px; }
 .msg.me .when button { font-size: 11px; color: var(--ink); text-decoration: underline; }
@@ -893,7 +893,7 @@ button.next-row { width: 100%; text-align: left; }
 .strength-head .sub { margin-top: 2px; font-size: 13px; color: var(--ink-3); }
 .strength-ask { padding-left: 52px; }
 .strength-ask .wooline { margin-top: 4px; }
-.chips-row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.chips-row { display: flex; gap: 12px 8px; margin-top: 10px; flex-wrap: wrap; } /* 12 between two lines: each chip's 44 px touch area (its ::before) ends where the next one's begins, the upper one keeps its 44 */
 .strength-ask .hint, .routine .hint, .strength-done .memo-line { margin: 8px 0 0; font-size: 13px; color: var(--ink-3); }
 .link { color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; font-size: inherit; }
 .routine { padding-left: 52px; }
@@ -945,7 +945,11 @@ button.next-row { width: 100%; text-align: left; }
 .proposal-card .basis { font-size: 12px; color: var(--ink-3); line-height: 1.5; }
 .proposal-card .basis b { font-weight: 700; }
 .proposal-card .flags { font-size: 13px; font-weight: 700; color: var(--v-warn); line-height: 1.45; }
-.proposal-card .actions { display: flex; gap: 8px; margin-top: 2px; }
+.proposal-card .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
+/* the buttons of a card (02 §2.5): two on one row sharing it, 44 high, radius 12; 「在課表上看 ›」 of a card with several weeks is a row of its own under them */
+:is(.proposal-card, .memo-card) .actions > .chip { flex: 1 1 0; min-width: 0; height: 44px; padding: 0 8px; border-radius: var(--r-m); justify-content: center; text-align: center; font-size: 15px; line-height: 1.25; }
+:is(.proposal-card, .memo-card) .actions > .chip::before { display: none; }
+.proposal-card .actions .preview { flex: 0 0 100%; margin: 0; min-height: 44px; display: flex; align-items: center; justify-content: center; }
 .proposal-card > .decided { position: absolute; top: 12px; right: 12px; font-size: 12px; font-weight: 600; color: var(--ink-3); }
 .proposal-card > .decided.applied { color: var(--accent-ink); }
 .proposal-card > .decided + .proposal .t { padding-right: 56px; }

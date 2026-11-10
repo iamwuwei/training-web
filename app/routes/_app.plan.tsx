@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Route } from "./+types/_app.plan";
 import { useNavigate, useRevalidator, useSearchParams } from "react-router";
-import { DayRow, WeekBars } from "../components/plan-week";
+import { DayRow, WeekBars, WeekBody } from "../components/plan-week";
 import { SessionSheet } from "../components/session-sheet";
 import { WeeklyReviewSheet } from "../components/weekly-review-sheet";
 import { BackPill, NavBar } from "../components/nav-bar";
@@ -174,17 +174,19 @@ export default function Plan() {
               </div>
               {entry ? <button type="button" className="review-entry" onClick={() => setReviewId(entry.id)}><CoachAvatar size={20} />週回顧 ›</button> : null}
             </section>
-            <div className="grp dayrows">
-              {week.days.map((d) => <DayRow key={d.session.id} day={d} view={view} weekNo={week.week_no} isToday={d.session.scheduled_date === today} onOpen={setOpen} routine={view.routineBySession.get(d.session.id) ?? null} was={preview?.was.get(d.session.id)} preview={!!preview} />)}
-            </div>
-            {preview ? (
-              <p className="plan-note">
-                琥珀線的列是這張提案會改的，下面一行是改前。
-                {changedList.filter((n) => n !== week.week_no).length ? `${changedList.filter((n) => n !== week.week_no).map((n) => `第 ${n} 週也有改${n < week.week_no ? "（‹）" : "（›）"}`).join("；")}。` : ""}
-                採用後{changedList.map(weekAfter).join("、")}。
-              </p>
-            ) : null}
-            <ExtraRows week={week} unassigned={view.unassigned} />
+            <WeekBody weekNo={week.week_no}>
+              <div className="grp dayrows">
+                {week.days.map((d) => <DayRow key={d.session.id} day={d} view={view} weekNo={week.week_no} isToday={d.session.scheduled_date === today} onOpen={setOpen} routine={view.routineBySession.get(d.session.id) ?? null} was={preview?.was.get(d.session.id)} preview={!!preview} />)}
+              </div>
+              {preview ? (
+                <p className="plan-note">
+                  琥珀線的列是這張提案會改的，下面一行是改前。
+                  {changedList.filter((n) => n !== week.week_no).length ? `${changedList.filter((n) => n !== week.week_no).map((n) => `第 ${n} 週也有改${n < week.week_no ? "（‹）" : "（›）"}`).join("；")}。` : ""}
+                  採用後{changedList.map(weekAfter).join("、")}。
+                </p>
+              ) : null}
+              <ExtraRows week={week} unassigned={view.unassigned} />
+            </WeekBody>
           </>
         ) : null}
       </main>
