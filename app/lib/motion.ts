@@ -118,6 +118,28 @@ export interface FadeOpts {
   clearAtEnd?: boolean;
 }
 
+export interface MoveOpts {
+  /** ms */
+  duration: number;
+  /** `spring` for coming and going (--spring), `exit` for leaving (--ease-exit). */
+  ease?: "spring" | "exit";
+  /** The start; default where the element is now (a running animation is stopped there). */
+  from?: string;
+  /** "keep" leaves the end transform on the element, "clear" removes it (back at rest). */
+  end?: "keep" | "clear";
+  glass?: HTMLElement[];
+}
+
+/**
+ * A transform animation to an end the caller names (`translateX(-30%)`, `none`): the push / pop of a page, the lower page's parallax, a drag finishing or
+ * springing back. It does not look at reduced motion: a caller that moves something (a page) fades instead (`fadeTo`) when `reducedMotion()`.
+ */
+export function move(el: HTMLElement, to: string, opts: MoveOpts): Slide {
+  const t = tok();
+  const from = opts.from ?? currentTransform(el);
+  return play(el, [{ transform: from }, { transform: to }], opts.duration, opts.ease === "exit" ? t.exit : t.spring, opts.glass, opts.end ?? "keep");
+}
+
 /** Opacity from where it is to `opacity`. */
 export function fadeTo(el: HTMLElement, opacity: number, opts: FadeOpts = {}): Slide {
   const t = tok();
@@ -135,6 +157,13 @@ export function springBack(el: HTMLElement, glass?: HTMLElement[]): Slide {
 
 /** Stop whatever is running on `el` where it is (a finger takes over); the current transform stays as inline style. Returns whether something was running. */
 export function holdAt(el: HTMLElement): boolean { const was = running.has(el); stopAtCurrent(el); el.style.willChange = ""; return was; }
+
+/** The horizontal distance an element is translated by right now (px). */
+export function translateXNow(el: HTMLElement): number {
+  const t = getComputedStyle(el).transform;
+  if (!t || t === "none") return 0;
+  return new DOMMatrixReadOnly(t).m41;
+}
 
 /** The vertical distance an element is translated by right now (px), from its computed transform. */
 export function translateYNow(el: HTMLElement): number {

@@ -85,7 +85,7 @@ export default function GroupPage({ loaderData }: Route.ComponentProps) {
           <Link to={`/groups/${g.id}/plans`} className="group-link"><span>看大家的課表</span><span className="r"><ChevronIcon aria-hidden="true" /></span></Link>
           <Link to={`/groups/${g.id}/members`} className="group-link"><span>成員</span><span className="r">{g.member_count} / {g.max_members}<ChevronIcon aria-hidden="true" /></span></Link>
         </div>
-        <p className="group-foot"><Link to="/settings#share">分享在設定裡決定 ›</Link></p>
+        <p className="group-foot"><Link to="/settings/privacy">分享在設定裡決定 ›</Link></p>
       </main>
       <GroupEventSheet groupId={g.id} event={open} onClose={(reload) => { setOpen(null); if (reload) void revalidator.revalidate(); }} />
     </>
