@@ -4,6 +4,7 @@ import { useReviewPolling } from "../lib/use-review-polling";
 import type { Route } from "./+types/_app.activities.$id";
 import { DetailsSheet } from "../components/details-sheet";
 import { GearInfo } from "../components/gear-info";
+import { ChevronIcon } from "../components/icons";
 import { MemoEditor } from "../components/memo";
 import { SessionSheet } from "../components/session-sheet";
 import { BottomSheet } from "../components/sheet";
@@ -207,7 +208,7 @@ function Trend({ current, session, all, sessions }: { current: ApiActivity; sess
 function SegmentsList({ c }: { c: Combined }) {
   return (
     <section className="segments" aria-label="這堂的紀錄">
-      <div className="head"><h2 className="section-h" style={{ margin: 0 }}>紀錄 · {c.count} 段</h2><span className="sub">移動時間 {duration(c.moving_time_sec)} · 空檔不算</span></div>
+      <div className="head"><h2 className="section-h" style={{ margin: 0 }}>紀錄 · {c.count} 段</h2><span className="sub">移動時間 {duration(c.moving_time_sec)}</span></div>
       {c.group.map((x, i) => {
         const run = isRunSport(x.sport_type);
         const gap = c.gaps[i];
@@ -284,7 +285,7 @@ function ActivitiesBody({ onClose, c, s, all, view }: { onClose: () => void; c: 
         <div key={x.id} className="acts-row">
           <Avatar session={null} sport={x.sport_type} />
           <span className="txt">
-            <span className="l1"><i className="strava-dot" />{sportName(x.sport_type)}<span className="when">{when(x)}</span>{c.count > 1 && i === 0 ? <span className="tag">主要</span> : null}</span>
+            <span className="l1"><i className="strava-dot" />{sportName(x.sport_type)}<span className="when">{when(x)}</span>{c.count > 1 && i === 0 ? <span className="tag">主要<span className="sr-only">紀錄，判定和心得掛在這筆</span></span> : null}</span>
             <ActNums x={x} />
           </span>
           <button type="button" className="chip" disabled={busy != null}
@@ -317,7 +318,7 @@ function ActivitiesBody({ onClose, c, s, all, view }: { onClose: () => void; c: 
       )) : <p className="empty">前後一天沒有別的活動。Strava 可能還沒同步。</p>}
       {/* a refusal whose row is gone after the page fetched again (the activity is no longer offered): the sentence stays */}
       {Object.entries(errors).filter(([id]) => !inGroup.has(id) && !others.some((x) => x.id === id)).map(([id, msg]) => <p key={id} className="group-err" role="alert">{msg}</p>)}
-      <p className="sheet-foot">最早的那筆是主要紀錄，判定和心得都掛在它上面。加進、移除或換了之後，Woo 會重新看整堂。</p>
+      <p className="sheet-foot">加進、移除或換了之後，Woo 會重新看整堂。</p>
     </>
   );
 }
@@ -409,9 +410,9 @@ export default function Report({ loaderData }: Route.ComponentProps) {
           </div>
         </article>
         {s ? (
-          <button type="button" className="plan-row" onClick={() => setShowPlan(true)}>
+          <button type="button" className="plan-row" aria-label="打開課表內容" onClick={() => setShowPlan(true)}>
             <span>課表內容{s.content ? <span className="grey"> · {s.content.length > 22 ? `${s.content.slice(0, 22)}…` : s.content}</span> : null}</span>
-            <span className="open">打開 ›</span>
+            <span className="open" aria-hidden="true"><ChevronIcon small /></span>
           </button>
         ) : null}
 
@@ -444,7 +445,7 @@ export default function Report({ loaderData }: Route.ComponentProps) {
         ) : r?.failed ? (
           <section className="verdict-block bad">
             <h2>分析失敗</h2>
-            <p className="comment" style={{ color: "var(--ink-2)" }}>這次分析沒成功，再試一次。數據和心得都已經存好。</p>
+            <p className="comment" style={{ color: "var(--ink-2)" }}>數據和心得都已經存好。</p>
             <div className="src"><span className="who"><CoachAvatar size={20} />Woo</span><span className="acts"><Link to={`/coach?quote=${a.id}`} className="chip">問教練</Link>{retryChip}</span></div>
             {rereviewError ? <p className="hint" style={{ color: "var(--v-bad)" }}>{rereviewError}</p> : null}
           </section>
@@ -455,7 +456,7 @@ export default function Report({ loaderData }: Route.ComponentProps) {
             ) : timedOut ? (
               <>
                 <h2 className="pending-h">分析比較久</h2>
-                <p className="comment" style={{ color: "var(--ink-2)" }}>已經等了 3 分鐘還沒有結果。可能是資料庫剛喚醒或教練那邊塞車，稍後再回來看，或直接重新分析。</p>
+                <p className="comment" style={{ color: "var(--ink-2)" }}>等了 3 分鐘還沒有結果。稍後再回來看，或重新分析。</p>
                 <div className="src"><span className="who"><CoachAvatar size={20} />Woo</span>{retryChip}</div>
                 {rereviewError ? <p className="hint" style={{ color: "var(--v-bad)" }}>{rereviewError}</p> : null}
               </>
@@ -467,15 +468,7 @@ export default function Report({ loaderData }: Route.ComponentProps) {
           </section>
         ) : null}
 
-        {s && plan ? <TargetVsActual a={c} s={s} plan={plan} /> : (
-          <section className="targets">
-            <div className="stats">
-              {run || a.distance_m > 0 ? <span><b className="num">{km(a.distance_m)}</b> km</span> : null}
-              {run ? <span><b className="num">{pace(a.avg_pace_sec_km)}</b> /km</span> : null}
-              {a.avg_hr != null ? <span><b className="num">{int(a.avg_hr)}</b> bpm</span> : null}
-            </div>
-          </section>
-        )}
+        {s && plan ? <TargetVsActual a={c} s={s} plan={plan} /> : null}
 
         {c.count > 1 ? <SegmentsList c={c} /> : null}
 
