@@ -70,7 +70,7 @@ export function MemoEditor({ activity, onSaved }: { activity: ApiActivity; onSav
         </div>
         <p className="body">
           {activity.rpe ? <span className="rpe-chip">RPE {activity.rpe}<span style={{ fontFamily: "var(--font)", fontSize: 13, fontWeight: 500, color: "var(--ink-2)" }}> {rpeWord(activity.rpe)}</span></span> : null}
-          {activity.memo ?? <span className="placeholder">（只有感受，沒寫文字）</span>}
+          {activity.memo}
         </p>
       </section>
     );
@@ -89,7 +89,7 @@ export function MemoEditor({ activity, onSaved }: { activity: ApiActivity; onSav
         </button>
       </div>
       {error ? <p className="hint" style={{ color: "var(--v-bad)" }}>{error}</p> : null}
-      <p className="hint">{claudeReview ? "存檔後教練判定會參考這段心得重新評一次，幾秒後更新。" : "這筆是手動判定，心得只記錄，不會改變判定。"}</p>
+      <p className="hint">{claudeReview ? "存檔後 Woo 會參考心得重新判定。" : "這筆是手動判定，心得只記錄，不會改變判定。"}</p>
     </section>
   );
 }

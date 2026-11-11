@@ -4,7 +4,6 @@ import type { Route } from "./+types/_app.groups.$id.settings";
 import { GroupConfirm } from "../components/group-confirm";
 import { GroupBack, GroupNotFound, LoadFailed } from "../components/group-parts";
 import { NavBar } from "../components/nav-bar";
-import { SectionH } from "../components/ui";
 import { deleteGroup, getGroup, postGroupLeave } from "../lib/api";
 import { dow } from "../lib/date";
 import { isStatus, NOTICE_GONE } from "../lib/groups";
@@ -62,7 +61,6 @@ export default function GroupSettings({ loaderData, params }: Route.ComponentPro
     <>
       <NavBar kind="inline" title="群組設定" left={<GroupBack to={`/groups/${id}`} label="群組" ariaLabel="回群組" />} />
       <main>
-        <SectionH>群組</SectionH>
         <div className="setting"><span className="k">名稱</span><span className="v">{g.name}</span></div>
         <div className="setting"><span className="k">比賽</span><span className="v">{g.race_name}</span></div>
         <div className="setting"><span className="k">比賽日</span><span className="v">{g.race_date.replace(/-/g, "/")} {dow(g.race_date)}</span></div>
@@ -72,14 +70,10 @@ export default function GroupSettings({ loaderData, params }: Route.ComponentPro
         {owner ? (
           <>
             <button type="button" className="group-danger" onClick={() => setAsk("disband")}>解散群組</button>
-            <p className="group-foot">解散後所有人都看不到這個群組，邀請連結全部失效。</p>
             <p className="group-foot">你是擁有者，不能離開；要走就解散。</p>
           </>
         ) : (
-          <>
-            <button type="button" className="group-danger" onClick={() => setAsk("leave")}>離開群組</button>
-            <p className="group-foot">離開後大家看不到你的任何東西，你也看不到大家的。你在其他群組不受影響。</p>
-          </>
+          <button type="button" className="group-danger" onClick={() => setAsk("leave")}>離開群組</button>
         )}
       </main>
       <GroupConfirm

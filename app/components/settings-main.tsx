@@ -6,7 +6,7 @@ import { ApiError, postConstraint } from "../lib/api";
 import { logout } from "../lib/auth";
 import { config, useMock } from "../lib/config";
 import { periodMeta } from "../lib/constraints";
-import { md, todayJst, toJstDate } from "../lib/date";
+import { todayJst } from "../lib/date";
 import type { SettingsContext } from "../lib/settings-context";
 import { shareSummary } from "../lib/share-summary";
 import { usePlan } from "../lib/use-plan";
@@ -48,7 +48,7 @@ function Constraints() {
             <div className="constraint">
               <div className="txt">
                 <div className="t">{c.text}</div>
-                <div className={`meta${meta.expired ? " expired" : ""}`}>{meta.text} · 來自 {md(toJstDate(c.created_at))} 的對話</div>
+                <div className={`meta${meta.expired ? " expired" : ""}`}>{meta.text}</div>
               </div>
               <button type="button" className="del" aria-label={`刪除：${c.text}`} onClick={() => void remove(c.id)}>刪除</button>
             </div>
@@ -56,7 +56,7 @@ function Constraints() {
         );
       })}
       {error ? <p className="err" role="alert" style={{ marginTop: 8, fontSize: 13, color: "var(--v-bad)" }}>{error}</p> : null}
-      {rows.length ? <p className="note-line">排課提案不會違反這些。過期的自動不算，不用刪；刪了 Woo 就當沒說過。</p> : null}
+      {rows.length ? <p className="note-line">排課提案不會違反這些。</p> : null}
     </section>
   );
 }

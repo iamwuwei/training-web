@@ -1,6 +1,7 @@
 import { eventTime, mdPlain } from "../lib/groups";
 import type { ApiGroupEvent } from "../types/api";
 import { verdictKind } from "../lib/labels";
+import { ChevronIcon } from "./icons";
 
 /** The verdict word of a session_done row: the colour is on the dot, the word stays ink. Nothing when the analysis failed. */
 function EventVerdict({ session }: { session: NonNullable<ApiGroupEvent["session"]> }) {
@@ -25,7 +26,7 @@ export function GroupEventRow({ event: e, today, isNew, onOpen }: { event: ApiGr
         {avatar}
         <div className="body">
           <div className="l1"><span className="t"><b>{who}</b> 完成了 {mdPlain(e.session.date)} 的 {e.session.label}</span>{dot}</div>
-          <div className="l2">{tag}{tag ? <span aria-hidden="true">·</span> : null}<span>{time}</span><span className="open">看詳細 ›</span></div>
+          <div className="l2">{tag}{tag ? <span aria-hidden="true">·</span> : null}<span>{time}</span><span className="open" aria-hidden="true"><ChevronIcon small /></span><span className="sr-only">看詳細</span></div>
         </div>
       </button>
     );

@@ -37,12 +37,12 @@ function Body({ onClose, onCreate }: { onClose: () => void; onCreate: () => void
       <h2 className="sheet-title st">加入或建立群組</h2>
       <button type="button" className="ga-row" onClick={onCreate}>
         <span className="ic" aria-hidden="true"><PlusIcon /></span>
-        <span><div className="t">建立群組</div><div className="s">你當擁有者，再邀朋友</div></span>
+        <span><div className="t">建立群組</div></span>
         <ChevronIcon aria-hidden="true" />
       </button>
       <button type="button" className="ga-row" aria-expanded={joining} onClick={() => setJoining(true)}>
         <span className="ic" aria-hidden="true"><LinkIcon /></span>
-        <span><div className="t">用邀請連結加入</div><div className="s">貼上朋友傳的連結或代碼</div></span>
+        <span><div className="t">用邀請連結加入</div></span>
         <ChevronIcon aria-hidden="true" />
       </button>
       {joining ? (

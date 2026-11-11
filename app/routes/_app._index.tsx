@@ -159,26 +159,26 @@ function TodayPost({ day, view, slow, onOpen }: { day: Day; view: PlanView; slow
   return (
     <div className="today-open">
       <button type="button" className="open-plan blk link" onClick={() => onOpen(session)}><PlanPost session={session} big /><ChevronIcon small className="chev" /></button>
-      <div className="blk">
-        {prep && !first ? <WooLine text={prep} /> : null}
-        {first ? (
-          <>
-            <p className="synced">
-              <i aria-hidden="true" />Strava：{sportName(first.sport_type)}
-              {first.distance_m > 0 ? <> <b className="num">{km(first.distance_m)}</b> km</> : null}
-              {isRunSport(first.sport_type) ? <> · <b className="num">{pace(first.avg_pace_sec_km)}</b> /km</> : null}
-            </p>
-            {view.data.coach_checkin_open ? (
-              <Link to="/coach" className="btn primary woo"><span className="w" aria-hidden="true">W</span>Woo 在問這趟練得怎麼樣</Link>
-            ) : (
-              <button type="button" className="btn primary" onClick={() => void assign(first, session.id)} disabled={busy}>{busy ? "送出中…" : "這趟就是今天的課"}</button>
-            )}
-            {error ? <p className="hint" style={{ color: "var(--v-bad)" }}>{error}</p> : null}
-          </>
-        ) : (
-          <p className="hint">跑完後 Strava 會自動同步到這裡</p>
-        )}
-      </div>
+      {prep || first ? (
+        <div className="blk">
+          {prep && !first ? <WooLine text={prep} /> : null}
+          {first ? (
+            <>
+              <p className="synced">
+                <i role="img" aria-label="Strava" />{sportName(first.sport_type)}
+                {first.distance_m > 0 ? <> <b className="num">{km(first.distance_m)}</b> km</> : null}
+                {isRunSport(first.sport_type) ? <> · <b className="num">{pace(first.avg_pace_sec_km)}</b> /km</> : null}
+              </p>
+              {view.data.coach_checkin_open ? (
+                <Link to="/coach" className="btn primary woo"><span className="w" aria-hidden="true">W</span>Woo 在問這趟練得怎麼樣</Link>
+              ) : (
+                <button type="button" className="btn primary" onClick={() => void assign(first, session.id)} disabled={busy}>{busy ? "送出中…" : "這趟就是今天的課"}</button>
+              )}
+              {error ? <p className="hint" style={{ color: "var(--v-bad)" }}>{error}</p> : null}
+            </>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -265,10 +265,10 @@ export default function Today() {
             <div className="v">{daysToRace > 0 ? <><span className="num big">{daysToRace}</span><span className="unit">天</span></> : <span className="num mid">{daysToRace === 0 ? "比賽日" : "已完賽"}</span>}</div>
           </div>
           {currentWeek ? (() => {
-            const label = `第 ${currentWeek.week_no} 週 ${km(currentWeek.actual_m)} / ${kmPlan(currentWeek.plan_m)} km`;
+            const label = `第 ${currentWeek.week_no} 週 ${md(currentWeek.week_start)}–${md(currentWeek.week_end)} ${km(currentWeek.actual_m)} / ${kmPlan(currentWeek.plan_m)} km`;
             return (
               <Link to="/plan" className="h-right week-link" aria-label={label}>
-                <div className="k"><span>第 {currentWeek.week_no} 週 ·</span> <span>{md(currentWeek.week_start)}–{md(currentWeek.week_end)}</span></div>
+                <div className="k">第 {currentWeek.week_no} 週</div>
                 <Ring value={currentWeek.actual_m} max={currentWeek.plan_m} complete={currentWeek.isComplete} label={label} ringKey={currentWeek.week_start}>
                   <b className="num">{km(currentWeek.actual_m)}</b><small>/ {kmPlan(currentWeek.plan_m)} km</small>
                 </Ring>
@@ -300,7 +300,7 @@ export default function Today() {
         ) : null}
 
         {/* Only the next session: the 進步 block below should start on the second screen. */}
-        <SectionH>下次{next ? ` · ${mdDow(next.session.scheduled_date)}` : ""}</SectionH>
+        <SectionH>下次</SectionH>
         {next ? (
           <button type="button" className="blk link next-row first" onClick={() => setOpen(next.session)}>
             <Avatar session={next.session} />

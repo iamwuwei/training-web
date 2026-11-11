@@ -43,7 +43,6 @@ export default function Login() {
         <div>
           <div className="eyebrow">2026 · 12 / 13</div>
           <h1>富士山マラソン</h1>
-          <p className="sub">訓練課表與每次練習紀錄</p>
         </div>
         <div className="count">
           <span className="num">{days}</span>

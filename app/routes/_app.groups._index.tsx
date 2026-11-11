@@ -7,7 +7,6 @@ import { GroupCreateSheet } from "../components/group-create-sheet";
 import { LoadFailed } from "../components/group-parts";
 import { ChevronIcon, GroupIcon, PlusIcon } from "../components/icons";
 import { GlassButton, NavBar } from "../components/nav-bar";
-import { SectionH } from "../components/ui";
 import { getGroups } from "../lib/api";
 import { todayJst } from "../lib/date";
 import { countdown, limitText } from "../lib/groups";
@@ -100,15 +99,13 @@ export default function Groups({ loaderData }: Route.ComponentProps) {
             <div className="group-empty">
               <GroupIcon width={44} height={44} strokeWidth={1.6} />
               <div className="t">跟朋友一起備戰同一場比賽</div>
-              <p className="sub">建一個群組，邀 1〜4 個朋友。大家各跑各的課表，在這裡看得到彼此的進度、誰完成了課，還有大家願意分享的課表。</p>
+              <p className="sub">建一個群組，邀 1〜4 個朋友，看得到彼此的進度和完成的課。</p>
               <button type="button" className="btn compact primary" onClick={() => setCreateOpen(true)}>建立群組</button>
-              <p className="hint">有邀請連結？點連結就能加入。</p>
             </div>
-            <p className="group-privacy">每個人在<Link to="/settings/privacy">設定</Link>裡決定給群組看什麼（第一次建立或加入時五項都開著，隨時可以關）。跟 Woo 的對話、心得、Woo 記住的限制與傷痛和 Strava 的原始資料，永遠不會給別人看；課表備註和 Woo 的評論可能提到傷痛或行程。</p>
+            <p className="group-privacy">分享什麼在<Link to="/settings/privacy">設定</Link>裡決定（建立或加入時五項都開著）。對話、心得、限制與傷痛、Strava 原始資料永遠不會給別人看。</p>
           </>
         ) : (
           <>
-            <SectionH>我的群組 · {groups.length} / {max}</SectionH>
             <div className="group-list">{groups.map((g) => <GroupRow key={g.id} g={g} today={today} />)}</div>
           </>
         )}

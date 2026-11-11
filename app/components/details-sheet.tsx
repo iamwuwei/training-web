@@ -79,7 +79,7 @@ function DetailsForm({ activity, busy, setBusy, onClose, onSaved }: { activity: 
         const s = strava(f.key);
         const isWeather = f.key === "weather";
         const showClear = isWeather ? clean(v) !== "" : clean(v) !== (s ?? "");
-        const hint = isWeather ? null : s == null ? "Strava 沒有這項" : clean(v) === s ? `Strava：${s}` : `清除後回到：${s}`;
+        const hint = isWeather ? null : s == null ? null : clean(v) === s ? `Strava：${s}` : `清除後回到：${s}`;
         // a name over 40 chars (Strava allows them; the api does not store them) is no suggestion: it could not be saved
         const sug = f.key === "weather" ? [] : (options?.[f.key] ?? []).filter((n) => n !== clean(v) && n.length <= MAX);
         const id = `${uid}-${f.key}`;
