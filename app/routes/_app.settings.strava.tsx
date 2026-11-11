@@ -41,13 +41,10 @@ export default function SettingsStrava() {
           <span className="t">狀態</span>
           <span className="v">
             {strava
-              ? <span className="status on">已連結 · athlete {strava.athlete_id}</span>
+              ? <span className="status on">已連結</span>
               : <span className="status">尚未連結</span>}
           </span>
         </div>
-        {strava ? (
-          <div className="row two"><span className="t">權限</span><span className="v grey">{strava.scope}</span></div>
-        ) : null}
       </div>
       {strava ? (
         <div className="grp">
@@ -59,7 +56,7 @@ export default function SettingsStrava() {
       )}
       {error ? <p className="sf err" role="alert">{error}</p> : null}
       <p className="sf">
-        連結後 Strava 的每次跑步會自動配對課表。{strava ? "重新連結會換新的授權；解除連結會向 Strava 撤銷授權，已匯入的紀錄保留。" : "會開 Strava 的授權頁，同意後回到這裡重新整理。"}
+        {strava ? "解除後已匯入的紀錄保留。" : "連結後 Strava 的每次跑步會自動配對課表。會開 Strava 的授權頁，同意後回到這裡重新整理。"}
       </p>
     </main>
   );
