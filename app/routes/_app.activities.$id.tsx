@@ -1,10 +1,11 @@
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { Link, redirect, useNavigate, useRevalidator } from "react-router";
 import { useReviewPolling } from "../lib/use-review-polling";
 import type { Route } from "./+types/_app.activities.$id";
 import { DetailsSheet } from "../components/details-sheet";
 import { GearInfo } from "../components/gear-info";
 import { ChevronIcon } from "../components/icons";
+import { LinkSheet } from "../components/link-sheet";
 import { MemoEditor } from "../components/memo";
 import { SessionSheet } from "../components/session-sheet";
 import { BottomSheet } from "../components/sheet";
@@ -17,7 +18,7 @@ import { assignErrorText, combine, groupOf, inOtherMultiSession, MAX_PER_SESSION
 import { dayDiff, md, mdDow, timeJst } from "../lib/date";
 import { duration, int, km, kmPlan, pace } from "../lib/format";
 import { labelStyle, shortName, sportName, verdictKind } from "../lib/labels";
-import { activityDate, hrOver, isRunSport, paceFast, type PlanView } from "../lib/plan";
+import { activityDate, canLink, hrOver, isRunSport, paceFast, type PlanView } from "../lib/plan";
 import { focusLabel, focusStats, fullSplits, planFor, sessionBand, splitPace, type Band, type SessionPlan } from "../lib/segments";
 import { kindSeries } from "../lib/trend";
 import type { ApiActivity, ApiSession } from "../types/api";
@@ -386,7 +387,18 @@ export default function Report({ loaderData }: Route.ComponentProps) {
     }
   }
   const [showPlan, setShowPlan] = useState(false);
+  // 算成哪一堂: an activity with no session gets the entry under its title when the plan has a session it could be logged as. The sheet is
+  // offered while the activity is still unbound (not only while something is left to pick), so a list that empties under it says so (01 要件 14).
+  const [showLink, setShowLink] = useState(false);
+  const linkable = !!view && canLink(view, a);
+  const unbound = !a.session_id && a.match_status === "unplanned";
   const [showActs, setShowActs] = useState(false);
+  const closeLink = useCallback(() => setShowLink(false), []);
+  // bound: the page is now that session's report; the screen reader hears its new name (the entry that opened the sheet is gone)
+  const onLinked = useCallback(() => {
+    // two frames: the sheet's own cleanup (it makes the page live again) runs after the first
+    requestAnimationFrame(() => requestAnimationFrame(() => document.querySelector<HTMLElement>(".report-head .name")?.focus({ preventScroll: true })));
+  }, []);
   const [showDetails, setShowDetails] = useState(false);
   const retryChip = (
     <button type="button" className="chip" onClick={() => void askAgain()} disabled={rereviewBusy}>
@@ -405,13 +417,18 @@ export default function Report({ loaderData }: Route.ComponentProps) {
         <article className="post report-head">
           <Avatar session={s} sport={a.sport_type} />
           <div className="body">
-            <p className="name">{s ? shortName(s) : `${sportName(a.sport_type)} ${a.distance_m > 0 ? `${km(a.distance_m)} km` : duration(a.moving_time_sec)}`}</p>
+            <p className="name" tabIndex={-1}>{s ? shortName(s) : `${sportName(a.sport_type)} ${a.distance_m > 0 ? `${km(a.distance_m)} km` : duration(a.moving_time_sec)}`}</p>
             <p className="meta-line">{meta}</p>
           </div>
         </article>
         {s ? (
-          <button type="button" className="plan-row" aria-label="打開課表內容" onClick={() => setShowPlan(true)}>
+          <button key="plan" type="button" className="plan-row" aria-label="打開課表內容" onClick={() => setShowPlan(true)}>
             <span>課表內容{s.content ? <span className="grey"> · {s.content.length > 22 ? `${s.content.slice(0, 22)}…` : s.content}</span> : null}</span>
+            <span className="open" aria-hidden="true"><ChevronIcon small /></span>
+          </button>
+        ) : linkable ? (
+          <button key="link" type="button" className="plan-row link-entry" aria-haspopup="dialog" onClick={() => setShowLink(true)}>
+            <span>算成哪一堂</span>
             <span className="open" aria-hidden="true"><ChevronIcon small /></span>
           </button>
         ) : null}
@@ -489,6 +506,7 @@ export default function Report({ loaderData }: Route.ComponentProps) {
       </main>
       <DetailsSheet open={showDetails} onClose={() => setShowDetails(false)} activity={a} onSaved={setOverride} />
       {view && s ? <SessionSheet session={showPlan ? s : null} view={view} onClose={() => setShowPlan(false)} /> : null}
+      {view ? <LinkSheet open={showLink} activity={unbound ? a : null} view={view} onClose={closeLink} onLinked={onLinked} /> : null}
       {s ? <ActivitiesSheet open={showActs} onClose={() => setShowActs(false)} c={c} s={s} all={all} view={view} /> : null}
     </>
   );

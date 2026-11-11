@@ -333,6 +333,13 @@ function build(): PlanResponse {
     { ...base, id: "u-walk-1020", strava_activity_id: "900013", sport_type: "Walk", start_time: at20("18:20"), distance_m: 3100, moving_time_sec: 2465, elapsed_time_sec: 2520, avg_pace_sec_km: 795, avg_hr: 98, max_hr: 116, avg_watts: null, kcal: 190, device_name: "Apple Watch Series 11" },
     { ...base, id: "u-run-1019", strava_activity_id: "900014", sport_type: "Run", start_time: new Date("2026-10-19T19:05:00+09:00").toISOString(), distance_m: 4050, moving_time_sec: 1830, elapsed_time_sec: 1890, avg_pace_sec_km: 452, avg_hr: 139, max_hr: 150, avg_watts: null, kcal: 280, device_name: "Apple Watch Series 11" },
   );
+  // link-past-activity (算成哪一堂): runs nothing is bound to, from before today. 10/27 has an Easy 7 km with no recording (the plain case: the same day, so it is
+  // picked when the sheet opens). 10/09 is a rest day with every run session around it already run (10/8, 10/10, 10/11), so only 10/14 MP is open and it is 5 days away:
+  // nothing is picked when the sheet opens.
+  unassigned.push(
+    { ...base, id: "u-link-1027", strava_activity_id: "900021", sport_type: "Run", start_time: new Date("2026-10-27T06:50:00+09:00").toISOString(), distance_m: 7040, moving_time_sec: 3140, elapsed_time_sec: 3200, avg_pace_sec_km: 446, avg_hr: 141, max_hr: 153, avg_watts: null, kcal: 480, device_name: "Apple Watch Series 11" },
+    { ...base, id: "u-link-1009", strava_activity_id: "900022", sport_type: "Run", start_time: new Date("2026-10-09T18:30:00+09:00").toISOString(), distance_m: 3200, moving_time_sec: 1480, elapsed_time_sec: 1530, avg_pace_sec_km: 463, avg_hr: 133, max_hr: 146, avg_watts: null, kcal: 215, device_name: "Apple Watch Series 11" },
+  );
   if (multi().elsewhere) {
     for (const id of ["u-early", "u-run-1019"]) {
       const i = unassigned.findIndex((x) => x.id === id);
@@ -720,7 +727,7 @@ function limitReview(a: ApiActivity) {
  *   without it a confirmed holder is a 409 unless `replace`, which bumps every holder back to unassigned.
  *   { session_id: null } on a recording of a group: the rest of the group is judged again.
  */
-export function mockPutSession(activityId: string, body: PutSessionRequest): PutSessionResponse {
+function putSessionNow(activityId: string, body: PutSessionRequest): PutSessionResponse {
   const d = data();
   const a = findActivity(activityId);
   if (!a) throw new Error("not found");
@@ -774,6 +781,57 @@ export function mockPutSession(activityId: string, body: PutSessionRequest): Put
   }
   refreshSegments();
   return { activity: { ...a } };
+}
+
+/**
+ * link-past-activity (算成哪一堂): the sheet's call is `{ session_id }` alone (no replace, no append). It answers after `linkDelay` ms (350 unless set: the 送出中… state can be seen,
+ * and a second press has time to happen) and is counted in `window.__linkPuts` (one entry per call, "activityId>sessionId"). `window.__mock = { link }` shapes the FIRST such call
+ * only (the next ones are normal, so a retry or another pick can be tried):
+ *   taken  another activity took the session first: 409 "session already confirmed for another activity" (the session now holds one, so the list loses it)
+ *   gone   the session was changed under him (another tab adopted a card): 404 "session not found" (the session is no longer in the plan)
+ *   fail   a network error, nothing changed
+ *   lost   the api bound it but the answer never came back: the data changes, then a network error (the reload finds the activity bound)
+ * `reviewLimit` works as for the other binds (the report page shows 今天沒辦法重判). A pick that does not look like the session makes Woo ask first (the usual mismatch).
+ */
+interface LinkSwitches { link?: "taken" | "gone" | "fail" | "lost"; linkDelay?: number }
+const lsw = (): LinkSwitches => (globalThis as unknown as { __mock?: LinkSwitches }).__mock ?? {};
+const linkPuts: string[] = [];
+if (typeof window !== "undefined") (window as unknown as { __linkPuts: string[] }).__linkPuts = linkPuts;
+let linkShaped = false;
+
+function linkPut(activityId: string, body: PutSessionRequest): Promise<PutSessionResponse> {
+  const sessionId = body.session_id as string;
+  linkPuts.push(`${activityId}>${sessionId}`);
+  const mode = linkShaped ? undefined : lsw().link;
+  linkShaped = true;
+  return new Promise((resolve, reject) => setTimeout(() => {
+    try {
+      const d = data();
+      const a = findActivity(activityId);
+      if (!a) throw new ApiError(404, "activity not found");
+      if (mode === "fail") throw new Error("network");
+      if (mode === "gone") {
+        d.sessions.splice(d.sessions.findIndex((x) => x.id === sessionId), 1);
+        throw new ApiError(404, "session not found");
+      }
+      if (mode === "taken") {
+        const s = d.sessions.find((x) => x.id === sessionId);
+        const other: ApiActivity = { ...a, id: "u-link-taker", strava_activity_id: "900999", session_id: sessionId, match_status: "confirmed", start_time: new Date(`${s?.scheduled_date ?? todayJst()}T07:30:00+09:00`).toISOString(), review: null, splits: null };
+        d.activities.push(other);
+        seedDetails(other);
+        throw new ApiError(409, "session already confirmed for another activity");
+      }
+      const done = putSessionNow(activityId, body);
+      if (mode === "lost") throw new Error("network");
+      resolve(done);
+    } catch (e) {
+      reject(e);
+    }
+  }, lsw().linkDelay ?? 350));
+}
+
+export function mockPutSession(activityId: string, body: PutSessionRequest): PutSessionResponse | Promise<PutSessionResponse> {
+  return body.session_id && !body.append && !body.replace ? linkPut(activityId, body) : putSessionNow(activityId, body);
 }
 
 export function mockActivities(status?: MatchStatus): ActivitiesResponse {

@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Route } from "./+types/_app.plan";
 import { useNavigate, useRevalidator, useSearchParams } from "react-router";
+import { LinkSheet } from "../components/link-sheet";
 import { DayRow, WeekBars, WeekBody } from "../components/plan-week";
 import { SessionSheet } from "../components/session-sheet";
 import { WeeklyReviewSheet } from "../components/weekly-review-sheet";
@@ -10,8 +11,8 @@ import { Avatar, Bar, CoachAvatar } from "../components/ui";
 import { ApiError, postProposal } from "../lib/api";
 import { md, timeJst } from "../lib/date";
 import { km, kmPlan, pace } from "../lib/format";
-import { sportName } from "../lib/labels";
-import { activityDate, buildPlanView, isRunSport, weekSubline, type Week } from "../lib/plan";
+import { shortName, sportName } from "../lib/labels";
+import { activityDate, buildPlanView, canLink, isRunSport, weekSubline, type PlanView, type Week } from "../lib/plan";
 import { buildPreview, type Preview } from "../lib/preview";
 import { NoPlanEntry, usePlan } from "../lib/use-plan";
 import { useProposal, useReviewedWeeks } from "../lib/use-proposal";
@@ -27,8 +28,14 @@ export function meta({ matches }: Route.MetaArgs): Route.MetaDescriptors {
 
 const NO_WEEKS: ApiWeek[] = [];
 
-/** 其他活動: the week's Strava activities that are not a session (walks, strength, unmatched runs), under the 7 rows. Each opens its report. */
-function ExtraRows({ week, unassigned }: { week: Week; unassigned: ApiActivity[] }) {
+/** The rows next to the one whose 算成哪一堂 sheet opened: where the focus goes when that row is gone (02 §3.5). */
+interface LinkNear { next: string | null; prev: string | null }
+
+/**
+ * 其他活動: the week's Strava activities that are not a session (walks, strength, unmatched runs), under the 7 rows. Each opens its report.
+ * A row that has a session it could be logged as (`canLink`) carries 算成哪一堂 under it: a sibling of the link, not inside it (02 §2).
+ */
+function ExtraRows({ week, unassigned, view, onLink }: { week: Week; unassigned: ApiActivity[]; view: PlanView; onLink?: (a: ApiActivity, near: LinkNear) => void }) {
   const rows = unassigned
     .filter((a) => { const d = activityDate(a); return a.match_status !== "ignored" && d >= week.week_start && d <= week.week_end; })
     .sort((a, b) => a.start_time.localeCompare(b.start_time));
@@ -37,16 +44,26 @@ function ExtraRows({ week, unassigned }: { week: Week; unassigned: ApiActivity[]
     <section className="extras" aria-label="其他活動">
       <h3 className="h">其他活動</h3>
       <div className="grp">
-      {rows.map((a) => {
+      {rows.map((a, i) => {
         const run = isRunSport(a.sport_type);
-        return (
-          <PushLink key={a.id} to={`/activities/${a.id}`} className="xrow">
+        const link = (
+          <PushLink key={a.id} to={`/activities/${a.id}`} className="xrow" data-xid={a.id}>
             <span aria-hidden="true" />
             <Avatar session={null} sport={a.sport_type} />
             <span className="n"><span className="t">{sportName(a.sport_type)}</span><span className="when">{md(activityDate(a))} {timeJst(a.start_time)}</span></span>
             <span className="r">{run || a.distance_m > 0 ? <><b className="num">{km(a.distance_m)}</b> km</> : <><b className="num">{Math.round(a.moving_time_sec / 60)}</b> 分</>}</span>
             <span className="r">{run && a.avg_pace_sec_km ? <><b className="num">{pace(a.avg_pace_sec_km)}</b> /km</> : a.avg_hr != null ? <><b className="num">{a.avg_hr}</b> bpm</> : null}</span>
           </PushLink>
+        );
+        if (!onLink || !canLink(view, a)) return link;
+        return (
+          <div key={a.id} className="xitem">
+            {link}
+            <div className="xlink">
+              <button type="button" className="chip" aria-haspopup="dialog" aria-label={`算成哪一堂：${sportName(a.sport_type)} ${md(activityDate(a))} ${timeJst(a.start_time)}`}
+                onClick={() => onLink(a, { next: rows[i + 1]?.id ?? null, prev: rows[i - 1]?.id ?? null })}>算成哪一堂</button>
+            </div>
+          </div>
         );
       })}
       </div>
@@ -66,6 +83,26 @@ export default function Plan() {
   const revalidator = useRevalidator();
   const [picked, setPicked] = useState<number | null>(null);
   const [open, setOpen] = useState<ApiSession | null>(null);
+  // 算成哪一堂 (the sheet of an 其他活動 row): which activity it is open for, and a line for screen readers once it is bound
+  const [linkId, setLinkId] = useState<string | null>(null);
+  const linkNear = useRef<LinkNear>({ next: null, prev: null });
+  const [linkNote, setLinkNote] = useState("");
+  const closeLink = useCallback(() => setLinkId(null), []);
+  useEffect(() => {
+    if (!linkNote) return;
+    const t = window.setTimeout(() => setLinkNote(""), 3000);
+    return () => window.clearTimeout(t);
+  }, [linkNote]);
+  // bound: the row that opened the sheet is gone, so the focus goes to the row that was under it, else the one above, else the week's title
+  const onLinked = useCallback((s: ApiSession) => {
+    setLinkNote(`已算成 ${md(s.scheduled_date)} 的 ${shortName(s)}`);
+    const { next, prev } = linkNear.current;
+    // two frames: the sheet's own cleanup (which makes the page live again, and would put the focus back on a row that is gone) runs after the first
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const row = (id: string | null) => (id ? document.querySelector<HTMLElement>(`[data-xid="${CSS.escape(id)}"]`) : null);
+      (row(next) ?? row(prev) ?? document.querySelector<HTMLElement>("[data-week-title]"))?.focus({ preventScroll: true });
+    }));
+  }, []);
   // the weekly-review sheet (週回顧): the entry is in the header of a week that has one
   const { reviews } = useWeeklyReviews();
   const [reviewId, setReviewId] = useState<string | null>(null);
@@ -95,6 +132,7 @@ export default function Plan() {
 
   if (!view || !base) return <NoPlanEntry title="課表" />;
   const { weeks, currentWeek, today } = view;
+  const linking = linkId ? base.unassigned.find((a) => a.id === linkId) ?? null : null; // the plan as it is, not as a proposal would leave it
   const current = currentWeek?.week_no ?? weeks.find((w) => w.isFuture)?.week_no ?? weeks[weeks.length - 1]?.week_no;
   // a 補課 card opens on the week it moves to: the week it came from is over, with one grey row in it
   const changedIn = preview ? weeks.filter((w) => preview.changedWeeks.has(w.week_no)) : [];
@@ -145,6 +183,7 @@ export default function Plan() {
         />
       ) : <NavBar kind="large" title="課表" subtitle={currentWeek?.phase ? currentWeek.phase : `${weeks.length} 週`} />}
       <main>
+        <p className="sr-only" role="status">{linkNote}</p>
         {notice && noticeGone !== proposalId ? <p className="plan-notice" role="status">這張提案已經處理過了</p> : null}
         {error ? <p className="plan-notice" role="alert" style={{ color: "var(--v-bad)" }}>{error}</p> : null}
         {week ? (
@@ -155,7 +194,7 @@ export default function Plan() {
                 <button type="button" className="step" onClick={go(idx - 1)} disabled={!go(idx - 1)} aria-label="上一週">‹</button>
                 <div className="mid">
                   <div className="line">
-                    <span className="title">第 {week.week_no} 週 {week.isCurrent ? <span className="pill">本週</span> : current != null && current !== week.week_no ? <button type="button" className="back-today" onClick={() => setPicked(current)}>回本週</button> : null}</span>
+                    <span className="title" tabIndex={-1} data-week-title>第 {week.week_no} 週 {week.isCurrent ? <span className="pill">本週</span> : current != null && current !== week.week_no ? <button type="button" className="back-today" onClick={() => setPicked(current)}>回本週</button> : null}</span>
                     <span className="kms">
                       {preview && preview.changedWeeks.has(week.week_no) && preview.beforeM.get(week.week_no) !== week.plan_m ? <span className="was"><s>{kmPlan(preview.beforeM.get(week.week_no))}</s> →</span> : null}
                       {week.isFuture ? <><b className="num plan">{kmPlan(week.plan_m)}</b><span className="of"> km</span></> : <><b className={`num${week.isComplete ? " done" : ""}`}>{km(week.actual_m)}</b><span className="of"> / {kmPlan(week.plan_m)} km</span></>}
@@ -184,11 +223,12 @@ export default function Plan() {
                   採用後{changedList.map(weekAfter).join("、")}。
                 </p>
               ) : null}
-              <ExtraRows week={week} unassigned={view.unassigned} />
+              <ExtraRows week={week} unassigned={view.unassigned} view={base} onLink={preview ? undefined : (a, near) => { linkNear.current = near; setLinkId(a.id); }} />
             </WeekBody>
           </>
         ) : null}
       </main>
+      <LinkSheet open={linkId != null} activity={linking} view={base} onClose={closeLink} onLinked={onLinked} />
       <SessionSheet session={open} view={view} onClose={() => setOpen(null)} onOpen={setOpen} />
       <WeeklyReviewSheet review={reviews.find((r) => r.id === reviewId) ?? null} view={view} onClose={() => setReviewId(null)} />
     </>

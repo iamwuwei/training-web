@@ -3,7 +3,7 @@
 
 import type { ApiActivity, ApiRoutine, ApiSession, ApiWeek, PlanResponse, Verdict } from "../types/api";
 import { combine, groupBySession, type Combined } from "./combine";
-import { dayDiff, md, toJstDate } from "./date";
+import { addDays, dayDiff, md, toJstDate } from "./date";
 import { isStrengthDay, rowName } from "./labels";
 
 export type DayStatus = "done" | "today" | "upcoming" | "skipped" | "rest" | "moved";
@@ -231,21 +231,66 @@ export function weekSubline(week: Week, view: Pick<PlanView, "data">): string {
 }
 
 /**
+ * Could row `d` take `a` as its first recording? Nothing bound to it yet, a session the athlete can log, and the right kind:
+ * a run goes on a training day, anything else on a 肌力 day.
+ */
+export function openFor(d: Day, a: Pick<ApiActivity, "sport_type">): boolean {
+  return !d.activity && isLoggable(d.session) && (isRunSport(a.sport_type) ? d.session.type !== "rest" : isStrengthDay(d.session));
+}
+
+/**
  * Where an unassigned activity on `date` could be logged: a loggable session within ±2 days
  * that has nothing yet, same day first, then the nearest (later before earlier on ties).
  */
 export function sessionForExtra(view: PlanView, a: ApiActivity): ApiSession | null {
   const date = activityDate(a);
-  const run = isRunSport(a.sport_type);
   const open = view.days.filter(
-    (d) => !d.activity && isLoggable(d.session) && (run ? d.session.type !== "rest" : isStrengthDay(d.session))
-      && Math.abs(dayDiff(date, d.session.scheduled_date)) <= 2 && dayDiff(view.today, d.session.scheduled_date) <= 2,
+    (d) => openFor(d, a) && Math.abs(dayDiff(date, d.session.scheduled_date)) <= 2 && dayDiff(view.today, d.session.scheduled_date) <= 2,
   );
   open.sort((a, b) => {
     const da = dayDiff(date, a.session.scheduled_date), db = dayDiff(date, b.session.scheduled_date);
     return Math.abs(da) - Math.abs(db) || db - da;
   });
   return open[0]?.session ?? null;
+}
+
+/** 算成哪一堂: a session later than this many days after today is not offered (the same cap as `sessionForExtra`, kept as its own number). */
+export const LINK_FUTURE_DAYS = 2;
+/** 算成哪一堂: the sheet opens with a session picked only when one is this close to the activity's day. */
+export const LINK_PRESELECT_DAYS = 2;
+
+export interface LinkOptions {
+  /** The open sessions `a` could be logged as, oldest first. */
+  days: Day[];
+  /** The session the sheet opens with (its id), or null when none is close enough. */
+  preselect: string | null;
+}
+
+/**
+ * What the 算成哪一堂 sheet offers for an unassigned activity: the open sessions (see `openFor`) of the week it was run in and the
+ * week before and after, none later than `LINK_FUTURE_DAYS` after today. An activity outside every week of the plan gets 7 days either side.
+ */
+export function linkOptions(view: PlanView, a: ApiActivity): LinkOptions {
+  const date = activityDate(a);
+  const i = view.weeks.findIndex((w) => date >= w.week_start && date <= w.week_end);
+  const from = i >= 0 ? view.weeks[Math.max(0, i - 1)].week_start : addDays(date, -7);
+  const to = i >= 0 ? view.weeks[Math.min(view.weeks.length - 1, i + 1)].week_end : addDays(date, 7);
+  const days = view.days
+    .filter((d) => openFor(d, a) && d.session.scheduled_date >= from && d.session.scheduled_date <= to && dayDiff(view.today, d.session.scheduled_date) <= LINK_FUTURE_DAYS)
+    .sort((x, y) => x.session.scheduled_date.localeCompare(y.session.scheduled_date) || x.session.id.localeCompare(y.session.id));
+  // the same order as `sessionForExtra`: the nearest day first, the later one when two are as near
+  const near = days
+    .filter((d) => Math.abs(dayDiff(date, d.session.scheduled_date)) <= LINK_PRESELECT_DAYS)
+    .sort((x, y) => {
+      const dx = dayDiff(date, x.session.scheduled_date), dy = dayDiff(date, y.session.scheduled_date);
+      return Math.abs(dx) - Math.abs(dy) || dy - dx;
+    });
+  return { days, preselect: near[0]?.session.id ?? null };
+}
+
+/** Is there anything to offer? The entry shows only then. */
+export function canLink(view: PlanView, a: ApiActivity): boolean {
+  return !a.session_id && a.match_status === "unplanned" && linkOptions(view, a).days.length > 0;
 }
 
 /**
