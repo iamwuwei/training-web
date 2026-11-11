@@ -348,6 +348,8 @@ ul { padding: 0; list-style: none; }
 @media (max-width: 359px) { .gear-info .gi-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 10px; } }
 
 /* ---- memo editor (報告頁 · 我的心得) ------------------------------------------ */
+/* The line above 我的心得 is the one under the block before it (.verdict-block, .targets, .segments). When that block is not drawn (no plan, or a plan with no target to compare), the memo draws its own. */
+:not(.targets, .segments, .verdict-block) + .memo { border-top: .5px solid var(--sep); }
 .memo { padding: 16px 0; border-bottom: .5px solid var(--sep); display: flex; flex-direction: column; gap: 10px; }
 .memo .head { display: flex; justify-content: space-between; align-items: baseline; }
 .memo .head h2 { margin: 0; font-size: 12px; font-weight: 600; color: var(--ink-3); letter-spacing: 0.08em; }
