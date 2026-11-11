@@ -196,3 +196,15 @@ export function assignErrorText(e: unknown, a: Pick<ApiActivity, "sport_type"> |
   if (/already confirmed/i.test(e.message)) return where === "coach" ? "這堂已經有紀錄了，重新整理後再選一次" : "這堂已經有紀錄了，要併進去按「加進這堂」";
   return "這堂的紀錄剛被改過，關掉再打開一次";
 }
+
+/**
+ * What the 算成哪一堂 sheet says when binding fails (02 §5-2). Only Chinese reaches the screen: 404 (the session was changed, or is gone)
+ * and 409 (taken by another activity, or changed under us) have their own sentence, 503 the database one, everything else the plain retry.
+ * (`assignErrorText` is not used: it hands the api's English message back for the statuses it does not know.)
+ */
+export function linkErrorText(e: unknown): string {
+  if (e instanceof ApiError && e.status === 404) return "這堂課剛被改過，重新選一次";
+  if (e instanceof ApiError && e.status === 409) return /already confirmed/i.test(e.message) ? "這堂剛有了紀錄，選別堂" : "這堂課剛被改過，重新選一次";
+  if (e instanceof ApiError && e.status === 503) return "資料庫還在啟動，幾秒後再按一次";
+  return "送出失敗，再試一次";
+}

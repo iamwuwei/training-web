@@ -378,7 +378,7 @@ ul { padding: 0; list-style: none; }
 .setting .v .status.on::before { background: var(--v-good); }
 .btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; height: 44px; border-radius: var(--r-m); border: 0; font-size: 15px; font-weight: 600; color: var(--ink); background: var(--fill); margin-top: 12px; }
 .btn.primary { height: 50px; border-radius: 14px; background: var(--ink); color: var(--on-ink); font-size: 17px; }
-.btn:disabled { opacity: 0.6; }
+.btn:disabled, .btn[aria-disabled="true"] { opacity: 0.6; }
 
 /* ---- v5 grouped list (01b §6.3). `.row` is scoped under `.grp`: bare `.row` is already the name of the compare / dots / composer / segments / extras / impact / es-segs rows ---- */
 .grp { margin-top: 8px; background: var(--surface); border-radius: var(--r-l); overflow: hidden; }
@@ -870,8 +870,10 @@ main > .bar { height: 4px; margin: 6px 0 6px; }
 .extras .grp { margin-top: 0; }
 .extras .h { margin: 22px 0 4px; padding: 0 16px; font-size: 13px; font-weight: 700; color: var(--ink-2); letter-spacing: 0.04em; }
 .extras .xrow { display: grid; grid-template-columns: 28px 30px minmax(0, 1fr) 60px 64px; gap: 10px; align-items: center; min-height: 56px; padding: 0 16px; color: var(--ink-2); }
-.extras .xrow + .xrow { background: linear-gradient(var(--sep), var(--sep)) 54px 0 / calc(100% - 54px) .5px no-repeat; }
+.extras .grp > :is(.xrow, .xitem) + :is(.xrow, .xitem) { background: linear-gradient(var(--sep), var(--sep)) 54px 0 / calc(100% - 54px) .5px no-repeat; }
 .extras .xrow:active { background-color: var(--fill-press); }
+/* 算成哪一堂 (link-past-activity 02 §2): the entry is a 44 px band under the link, its chip's left edge on the name column (16 + 28 + 10 + 30 + 10) */
+.extras .xlink { display: flex; align-items: center; height: 44px; padding: 0 16px 0 94px; }
 .extras .avatar { width: 30px; height: 30px; font-size: 13px; }
 .extras .avatar.cjk { font-size: 12px; }
 .extras .n { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
@@ -1550,7 +1552,8 @@ html[data-nav="pop"]::view-transition-old(root) { animation-name: vt-out-right; 
   .dayrow .r .l .num { font-size: 16px; }
   .extras .xrow { grid-template-columns: 30px minmax(0, 1fr) 56px 60px; }
   .extras .xrow > span:first-child { display: none; }
-  .extras .xrow + .xrow { background-position: 16px 0; background-size: calc(100% - 16px) .5px; }
+  .extras .grp > :is(.xrow, .xitem) + :is(.xrow, .xitem) { background-position: 16px 0; background-size: calc(100% - 16px) .5px; }
+  .extras .xlink { padding-left: 56px; } /* the date column is gone: the name starts at 16 + 30 + 10 */
   /* the grouped card leaves 224 px at 320: the button goes under the activity (aligned with its text) instead of squeezing the name and time into 50 px */
   .extra-row { grid-template-columns: minmax(0, 1fr); row-gap: 8px; }
   .extra-row .chip { width: calc(100% - 52px); margin-left: 52px; }
@@ -1594,3 +1597,28 @@ html[data-nav="pop"]::view-transition-old(root) { animation-name: vt-out-right; 
 .review-sheet .proposal-card.multi { margin-left: 0; }
 /* 到對話裡回 › in the sheet: 44 px touch height without moving the text (same method as `.group-foot a`) */
 .review-sheet .said a { position: relative; z-index: 1; display: inline-flex; align-items: center; min-height: 44px; margin: -13px 0; } /* z-index: the next .said line would otherwise sit over its lower 13 px */
+
+/* ---- link-past-activity (v5.3): 算成哪一堂, the sheet that logs an unassigned activity as one of the open sessions around it (02 §3) ---- */
+.link-sheet .sheet-body { padding-bottom: 0; } /* the safe area is the footer's, so that it can stick to the bottom */
+.lk-head { padding: 4px 0 12px; }
+.lk-head .sheet-title { padding: 0; }
+.lk-sub { margin-top: 2px; font-size: 13px; color: var(--ink-3); }
+.lk-list { background: var(--surface); border-radius: var(--r-l); overflow: hidden; }
+.lk-row { position: relative; display: grid; grid-template-columns: 30px minmax(0, 1fr) 22px; column-gap: 12px; align-items: center; min-height: 56px; padding: 6px 16px; cursor: pointer; }
+.lk-row + .lk-row { background: linear-gradient(var(--sep), var(--sep)) 58px 0 / calc(100% - 58px) .5px no-repeat; }
+.lk-row:active { background-color: var(--fill-press); }
+.lk-row:has(input:disabled) { cursor: default; }
+.lk-row:has(input:disabled):active { background-color: transparent; }
+.lk-row .avatar { width: 30px; height: 30px; font-size: 13px; }
+.lk-row .avatar.cjk { font-size: 12px; }
+.lk-row.skipped .avatar { background: transparent; color: var(--ink-3); border: 1.5px solid var(--field-line); }
+.lk-row .txt { display: flex; flex-direction: column; min-width: 0; }
+.lk-row .t { font-size: 15px; font-weight: 600; line-height: 1.25; color: var(--ink); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.lk-row .s { font-size: 13px; color: var(--ink-3); white-space: nowrap; }
+.lk-row .radio { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--field-line); box-sizing: border-box; transition: background-color var(--d-1) var(--ease-out), border-color var(--d-1) var(--ease-out); }
+.lk-row input:checked ~ .radio { border-color: var(--ink); background: radial-gradient(circle, var(--ink) 0 5px, transparent 5.5px); }
+.lk-row:has(input:focus-visible) { outline: 2px solid var(--ink); outline-offset: -2px; border-radius: var(--r-l); } /* inside: the card clips a frame drawn outside */
+.lk-foot { position: sticky; bottom: 0; margin: 0 -16px; padding: 12px 16px calc(16px + var(--sa-b)); background: var(--sheet-solid); }
+.link-sheet .lk-foot .btn.primary { margin-top: 0; }
+.lk-foot .err { margin: 0 0 10px; font-size: 13px; line-height: 1.45; color: var(--v-bad); }
+.week-head2 .title[data-week-title]:focus, .report-head .name:focus { outline: none; } /* programmatic landing spots (a sheet closed on an entry that is gone), not controls: no ring around the whole line (as .modal-scroll) */
