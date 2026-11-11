@@ -56,7 +56,7 @@ function Constraints() {
         );
       })}
       {error ? <p className="err" role="alert" style={{ marginTop: 8, fontSize: 13, color: "var(--v-bad)" }}>{error}</p> : null}
-      {rows.length ? <p className="note-line">排課提案不會違反這些。</p> : null}
+      {rows.length ? <p className="note-line">排課提案不會違反這些。刪了 Woo 就當沒說過。</p> : null}
     </section>
   );
 }
