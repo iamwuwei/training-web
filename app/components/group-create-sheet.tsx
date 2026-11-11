@@ -26,6 +26,8 @@ function Body({ onClose, defaults, today }: { onClose: () => void; defaults: Cre
   const [date, setDate] = useState(defaults && defaults.race_date >= today ? defaults.race_date : "");
   const [busy, setBusy] = useState(false);
   const [errs, setErrs] = useState<{ name?: string; race?: string; date?: string; form?: string }>({});
+  // With a race on the plan the field is prefilled and needs no words; without one, say what to do.
+  const raceHint = defaults ? null : "你的課表還沒有比賽，請自己填";
 
   // the api cleans the same way (one line, trimmed); this is only so the check below and the request agree
   const one = (v: string) => v.replace(/\s+/g, " ").trim();
@@ -63,7 +65,7 @@ function Body({ onClose, defaults, today }: { onClose: () => void; defaults: Cre
       <div className="gf-field">
         <label className="gf-label" htmlFor="g-race"><span>比賽</span><span className={`gf-count${race.length >= RACE_MAX ? " max" : ""}`}>{race.length} / {RACE_MAX}</span></label>
         <input id="g-race" type="text" className={`oneline${errs.race ? " bad" : ""}`} value={race} maxLength={RACE_MAX} autoComplete="off" onChange={(e) => setRace(e.target.value)} aria-invalid={!!errs.race} />
-        {errs.race ? <p className="err" role="alert">{errs.race}</p> : defaults ? null : <p className="gf-hint">你的課表還沒有比賽，請自己填</p>}
+        {errs.race ? <p className="err" role="alert">{errs.race}</p> : raceHint ? <p className="gf-hint">{raceHint}</p> : null}
       </div>
       <div className="gf-field">
         <label className="gf-label" htmlFor="g-date"><span>比賽日</span></label>

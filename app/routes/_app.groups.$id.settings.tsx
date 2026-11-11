@@ -73,9 +73,7 @@ export default function GroupSettings({ loaderData, params }: Route.ComponentPro
             <p className="group-foot">你是擁有者，不能離開；要走就解散。</p>
           </>
         ) : (
-          <>
-            <button type="button" className="group-danger" onClick={() => setAsk("leave")}>離開群組</button>
-          </>
+          <button type="button" className="group-danger" onClick={() => setAsk("leave")}>離開群組</button>
         )}
       </main>
       <GroupConfirm
