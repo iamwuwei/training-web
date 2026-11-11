@@ -46,7 +46,7 @@ export function ShareSettingsBody({ share, update, inGroups }: { share: ShareSet
           </label>
         ))}
       </div>
-      <p className="sf">切換就存好，馬上生效（包含以前的）。</p>
+      <p className="sf">切換就存好，馬上生效；關掉後，群組的人連以前的也看不到。</p>
       <p className="sf never"><b>永遠不會給別人看：</b>跟 Woo 的對話、週回顧、記住的限制與傷痛、你寫的心得和 RPE、Strava 的原始資料、裝備與天氣、email、你在哪些其他群組。打開「我的課表內容」「Woo 的判定」後，課表備註和 Woo 的評論別人看得到，裡面可能提到傷痛或行程。</p>
     </div>
   );
