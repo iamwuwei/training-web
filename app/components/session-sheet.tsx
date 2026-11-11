@@ -50,7 +50,7 @@ export function SessionSheet({ session, view, onClose, onOpen, readOnly }: { ses
   const countsIn = !s ? null : s.moved_to_date ? movedCountsIn(view, s) : s.moved_from_date ? s.counts_in_week_no : null;
   const n = countsIn != null && countsIn !== s?.week_no ? countsIn : null;
   return (
-    <BottomSheet open={!!s} onClose={onClose} label="課表細節" className={readOnly ? "event-sheet" : undefined}>
+    <BottomSheet open={!!s} onClose={onClose} label={readOnly ? `${readOnly.name} 的課表（唯讀）` : "課表細節"} className={readOnly ? "event-sheet" : undefined}>
       {s ? (
         <>
           <div className={`ss-head st${s.moved_to_date ? " moved" : ""}`}>
@@ -69,18 +69,15 @@ export function SessionSheet({ session, view, onClose, onOpen, readOnly }: { ses
             <div className="ss-moved"><span>補 {mdDow(s.moved_from_date)}的課{n ? ` · 算在第 ${n} 週` : ""}</span></div>
           ) : null}
           {!isRest && rows.length ? (
-            <>
-              <h2 className="section-h">怎麼跑</h2>
-              <div className="ss-rows">
-                {rows.map((r, i) => (
-                  <div key={i} className="ss-row">
-                    <b className="num">{r.head}</b>
-                    <span className="b">{r.body}</span>
-                    <span className="r">{r.right}</span>
-                  </div>
-                ))}
-              </div>
-            </>
+            <section className="ss-rows" aria-label="怎麼跑">
+              {rows.map((r, i) => (
+                <div key={i} className="ss-row">
+                  <b className="num">{r.head}</b>
+                  <span className="b">{r.body}</span>
+                  <span className="r">{r.right}</span>
+                </div>
+              ))}
+            </section>
           ) : null}
           {woo ? <div className="wooline"><CoachAvatar size={20} /><span>{woo}</span></div> : null}
           {s.note ? (
@@ -117,7 +114,6 @@ export function SessionSheet({ session, view, onClose, onOpen, readOnly }: { ses
               </PushLink>
             </>
           ) : null}
-          {readOnly ? <p className="sheet-foot">這是 {readOnly.name} 的課表，只能看。</p> : null}
         </>
       ) : null}
     </BottomSheet>
