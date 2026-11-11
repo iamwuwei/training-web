@@ -639,7 +639,7 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
   return (
     <FlashContext.Provider value={flash}>
       <div className="modal-scroll" ref={scrollerRef} tabIndex={-1}>
-        <NavBar kind="inline" left={<GlassButton label="關閉" onClick={close}><CloseIcon /></GlassButton>} title="Woo" scroller={scrollerRef} />
+        <NavBar kind="inline" left={<GlassButton label="關閉" onClick={close}><CloseIcon /></GlassButton>} title={<>Woo<span className="sr-only">，你的教練</span></>} scroller={scrollerRef} />
         <main className="thread" style={{ "--composer-h": `${composerH}px` } as React.CSSProperties}>
           <div className={`thread-top${hasMore ? "" : " end"}`} ref={topRef} aria-live="polite">
             {loadingOlder ? <span className="tt-load">載入更早的對話<span className="typing-dots" aria-hidden="true"><i /><i /><i /></span></span> : olderError ? "載入失敗，往上滑再試一次" : null}
