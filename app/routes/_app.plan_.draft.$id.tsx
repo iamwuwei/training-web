@@ -85,7 +85,7 @@ function DraftFlags({ items, onGo }: { items: FlagItem[]; onGo: (weekNo: number)
   return (
     <section className="draft-flags" aria-label="提醒">
       <div className={`h${items.length ? "" : " none"}`}>{items.length ? `${items.length} 條提醒` : T.preview.none}</div>
-      {items.length === 0 ? <p className="none">{T.preview.noneSub}</p> : shown.map((f, i) => {
+      {shown.map((f, i) => {
         const where = flagWhere(f);
         return f.week_no == null ? (
           <div className="draft-flag" key={i}><span>{f.text}</span></div>
