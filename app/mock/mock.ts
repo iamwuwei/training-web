@@ -94,6 +94,7 @@ const knobs = () => globalThis as unknown as MockKnobs;
 
 /**
  * multi-session-activities switches (`window.__mock = { … }`, set before the page loads, e.g. with addInitScript):
+ *   noTargets     every session has no pace, heart rate or distance target (a plan with nothing to compare: the report draws no 目標 vs 實際)
  *   three         10/23 Easy is three recordings (off: no activity on that day, as before)
  *   five          10/20 Easy is five recordings: the sheet's 加進這堂 is disabled
  *   ignoreSegment an activity id (`a-2026-10-20-2`): that recording is ignored, the session shows one again
@@ -102,7 +103,7 @@ const knobs = () => globalThis as unknown as MockKnobs;
  *   elsewhere     `u-early` and `u-run-1019` are two recordings of 10/21's session: no entry offers them to 10/20 (the web hides them)
  *   elsewhere409  every move of an activity that sits in a session with other recordings answers the api's 409 (the rule below is always on; this forces it for any activity)
  */
-interface MultiSwitches { three?: boolean; five?: boolean; ignoreSegment?: string; tooMany?: boolean; conflict?: boolean; elsewhere?: boolean; elsewhere409?: boolean }
+interface MultiSwitches { noTargets?: boolean; three?: boolean; five?: boolean; ignoreSegment?: string; tooMany?: boolean; conflict?: boolean; elsewhere?: boolean; elsewhere409?: boolean }
 const multi = (): MultiSwitches => (globalThis as unknown as { __mock?: MultiSwitches }).__mock ?? {};
 
 /**
@@ -181,12 +182,12 @@ function build(): PlanResponse {
     content: s.content,
     note: s.note,
     target: s.target,
-    target_distance_m: s.distance_m,
-    target_pace_sec_km: s.pace_sec_km,
-    target_pace_min_sec_km: s.pace_min_sec_km,
-    target_pace_max_sec_km: s.pace_max_sec_km,
-    target_hr_min: s.hr_min,
-    target_hr_max: s.hr_max,
+    target_distance_m: multi().noTargets ? null : s.distance_m,
+    target_pace_sec_km: multi().noTargets ? null : s.pace_sec_km,
+    target_pace_min_sec_km: multi().noTargets ? null : s.pace_min_sec_km,
+    target_pace_max_sec_km: multi().noTargets ? null : s.pace_max_sec_km,
+    target_hr_min: multi().noTargets ? null : s.hr_min,
+    target_hr_max: multi().noTargets ? null : s.hr_max,
     brief: DEMO_BRIEFS[s.date] ?? null,
     skipped_at: null,
     version: 1,

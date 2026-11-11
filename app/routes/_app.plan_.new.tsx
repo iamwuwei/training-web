@@ -261,7 +261,6 @@ export default function NewPlan() {
               <div className="choice" role="group" aria-labelledby="l-days">
                 <Chips items={[2, 3, 4, 5, 6].map((n) => ({ value: n, label: `${n} 天` }))} value={form.days_per_week} onPick={(v) => set("days_per_week", v, ["fixed_rest_weekdays"])} />
               </div>
-              <p className="intake-hint">{F.daysHint}</p>
             </div>
             <div className="intake-field" id="field-fixed_rest_weekdays">
               <div className="intake-label" id="l-fixed">固定不能練的日子</div>

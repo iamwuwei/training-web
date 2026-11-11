@@ -35,7 +35,7 @@ function ExtraRows({ week, unassigned }: { week: Week; unassigned: ApiActivity[]
   if (!rows.length) return null;
   return (
     <section className="extras" aria-label="其他活動">
-      <h3 className="h">其他活動 · 沒配到課的</h3>
+      <h3 className="h">其他活動</h3>
       <div className="grp">
       {rows.map((a) => {
         const run = isRunSport(a.sport_type);
@@ -137,7 +137,7 @@ export default function Plan() {
           kind="inline"
           className="preview"
           left={<BackPill label="教練" ariaLabel="返回教練" onClick={backToCoach} />}
-          title={<span className="pv"><CoachAvatar size={24} /><span className="pv-t">預覽 Woo 的提案<small>{changedList.length ? <><span className={changedList.length <= 2 ? "nw" : undefined}>第 {changedList.join("、")} 週會改 ·</span>{" "}<span className="nw">還沒生效</span></> : "還沒生效"}</small></span></span>}
+          title={<span className="pv"><CoachAvatar size={24} /><span className="pv-t">預覽 Woo 的提案<small>{changedList.length ? <><span className={changedList.length <= 2 ? "nw" : undefined}>第 {changedList.join("、")} 週會改</span><span className="sr-only">，還沒生效</span></> : "還沒生效"}</small></span></span>}
           right={<>
             <button type="button" className="chip primary" disabled={busy} onClick={() => void decide("apply")}>採用</button>
             <button type="button" className="chip" disabled={busy} onClick={() => void decide("dismiss")}>不用</button>
@@ -180,7 +180,6 @@ export default function Plan() {
               </div>
               {preview ? (
                 <p className="plan-note">
-                  琥珀線的列是這張提案會改的，下面一行是改前。
                   {changedList.filter((n) => n !== week.week_no).length ? `${changedList.filter((n) => n !== week.week_no).map((n) => `第 ${n} 週也有改${n < week.week_no ? "（‹）" : "（›）"}`).join("；")}。` : ""}
                   採用後{changedList.map(weekAfter).join("、")}。
                 </p>

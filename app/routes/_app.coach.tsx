@@ -186,10 +186,10 @@ function DayRule({ date }: { date: string }) {
 /** The message `/coach?message=<id>` jumped to, for its two seconds of ring. */
 const FlashContext = createContext<string | null>(null);
 
-function CoachMessage({ m, children, badge, className }: { m: ApiCoachMessage; children: React.ReactNode; badge?: "check" | "warn" | null; className?: string }) {
+function CoachMessage({ m, children, badge, className, label }: { m: ApiCoachMessage; children: React.ReactNode; badge?: "check" | "warn" | null; className?: string; label?: string }) {
   const flash = useContext(FlashContext) === m.id;
   return (
-    <article id={`msg-${m.id}`} className={`msg coach${className ? ` ${className}` : ""}${flash ? " target" : ""}`}>
+    <article id={`msg-${m.id}`} className={`msg coach${className ? ` ${className}` : ""}${flash ? " target" : ""}`} aria-label={label}>
       <CoachAvatar badge={badge} />
       <div className="body">
         <div className="meta"><b>Woo</b><span className="grey">· {timeJst(m.created_at)}</span></div>
@@ -639,7 +639,7 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
   return (
     <FlashContext.Provider value={flash}>
       <div className="modal-scroll" ref={scrollerRef} tabIndex={-1}>
-        <NavBar kind="inline" left={<GlassButton label="關閉" onClick={close}><CloseIcon /></GlassButton>} title="Woo" subtitle="你的教練 · 只聊跑步和課表" scroller={scrollerRef} />
+        <NavBar kind="inline" left={<GlassButton label="關閉" onClick={close}><CloseIcon /></GlassButton>} title={<>Woo<span className="sr-only">，你的教練</span></>} scroller={scrollerRef} />
         <main className="thread" style={{ "--composer-h": `${composerH}px` } as React.CSSProperties}>
           <div className={`thread-top${hasMore ? "" : " end"}`} ref={topRef} aria-live="polite">
             {loadingOlder ? <span className="tt-load">載入更早的對話<span className="typing-dots" aria-hidden="true"><i /><i /><i /></span></span> : olderError ? "載入失敗，往上滑再試一次" : null}
@@ -698,8 +698,7 @@ export default function Coach({ loaderData }: Route.ComponentProps) {
               const old = m.review?.superseded === true;
               const first = old ? null : firstTime(m.activity_id);
               node = (
-                <CoachMessage m={m} badge={old ? null : verdictBadge(m.review?.verdict)} className={old ? "superseded" : undefined}>
-                  {old ? <p className="cancelled">這則判定已更新，以下面新的為準</p> : null}
+                <CoachMessage m={m} badge={old ? null : verdictBadge(m.review?.verdict)} className={old ? "superseded" : undefined} label={old ? "已更新，以下面新的為準" : undefined}>
                   {m.review?.updated ? <div className="updated rejudged"><span aria-hidden="true">⟳</span> 已更新判定 · {m.review.updated.reason}</div> : null}
                   <div className="head"><b>{m.review?.label}</b><VerdictTag verdict={m.review?.verdict} /></div>
                   {first ? <div className="celebrate"><div className="k">第一次</div><div className="v"><span className="num">{first}</span><span>km 長跑</span></div></div> : null}

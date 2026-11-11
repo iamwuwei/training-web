@@ -8,7 +8,7 @@ import { CheckIcon, CopyIcon, RotateIcon, ShareIcon, TrashIcon } from "./icons";
 import { BottomSheet } from "./sheet";
 
 const ONCE = "連結只顯示這一次。關掉這張就看不到了，要再拿只能重新產生（舊的會失效）。";
-const HIDDEN = "連結只在產生時顯示一次，這裡看不到也複製不了。要再傳給別人得重新產生——舊的會失效，已經傳出去的就不能用了。";
+const HIDDEN = "連結只在產生時顯示一次。要再傳得重新產生，舊的會失效。";
 
 /** `navigator.share` exists on phones and some desktops; where it does not, the button is simply not drawn. */
 const canShare = () => typeof navigator !== "undefined" && typeof navigator.share === "function";
@@ -89,7 +89,7 @@ function Inner({ onClose, groupId, invite, onChanged }: { onClose: () => void; g
         <div className="group-invite">
           {!current ? (
             <>
-              <p className="gi-sub">產生一條連結用 LINE 傳給朋友：7 天有效，用到滿 5 人為止。</p>
+              <p className="gi-sub">7 天有效，用到滿 5 人為止。</p>
               <div className="actions-row"><button type="button" className="btn compact primary" disabled={busy} onClick={() => void generate().catch(() => undefined)}>{busy ? "產生中…" : "產生邀請連結"}</button></div>
             </>
           ) : (

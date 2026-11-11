@@ -6,10 +6,8 @@ import { GroupInviteSheet } from "../components/group-invite";
 import { GroupBack, GroupNotFound, LoadFailed } from "../components/group-parts";
 import { ShareIcon } from "../components/icons";
 import { GlassButton, NavBar } from "../components/nav-bar";
-import { SectionH } from "../components/ui";
 import { getGroup, postGroupMemberRemove } from "../lib/api";
-import { toJstDate } from "../lib/date";
-import { groupIsGone, isStatus, mdPlain, NOTICE_GONE } from "../lib/groups";
+import { groupIsGone, isStatus, NOTICE_GONE } from "../lib/groups";
 import { loadGroupData } from "../lib/group-load";
 import type { ApiGroupMember } from "../types/api";
 import { pageTitle } from "../lib/meta";
@@ -87,7 +85,6 @@ export default function GroupMembers({ loaderData, params }: Route.ComponentProp
       />
       <main>
         {fullNote ? <p className="group-note" role="status">已滿 {g.max_members} 人。有人離開或被移除，才能再邀請。</p> : null}
-        <SectionH>成員 · {g.member_count} / {g.max_members}</SectionH>
         <div className="member-admin">
           {members.map((m) => (
             <div className="member-admin-row" key={m.id}>
@@ -98,7 +95,6 @@ export default function GroupMembers({ loaderData, params }: Route.ComponentProp
                   {m.is_me ? <span className="pill">你</span> : null}
                   {m.role === "owner" ? <span className="role">擁有者</span> : null}
                 </div>
-                <div className="l2">{mdPlain(toJstDate(m.joined_at))} {m.role === "owner" ? "建立" : "加入"}</div>
               </div>
               {owner && !m.is_me ? <button type="button" className="rm" aria-label={`移除 ${m.display_name}`} onClick={() => setRemoving(m)}>移除</button> : null}
             </div>

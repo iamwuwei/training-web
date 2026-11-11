@@ -121,7 +121,7 @@ export function StrengthDay({ session, routine, title }: { session: ApiSession; 
             <p className="hint">今天跳過了。<button type="button" className="link" onClick={() => { writeSkip(session.id, false); setSkipped(false); }}>改變主意 ›</button></p>
           ) : (
             <>
-              <div className="wooline"><CoachAvatar size={20} /><span>今天在家還是去健身房？我照備註開一份菜單。</span></div>
+              <div className="wooline"><CoachAvatar size={20} /><span>今天在家還是去健身房？</span></div>
               <div className="chips-row">
                 <button type="button" className="chip" aria-pressed="true" disabled={busy} onClick={() => void choose("home")}>在家</button>
                 <button type="button" className="chip" disabled={busy} onClick={() => void choose("gym")}>健身房</button>
@@ -184,7 +184,6 @@ export function StrengthDay({ session, routine, title }: { session: ApiSession; 
         <input type="text" className="oneline" value={note} maxLength={120} onChange={(e) => setNote(e.target.value)} placeholder="一句話（選填）：臀橋第三組大腿有抖…" aria-label="一句話" />
         <button type="button" className="btn primary" disabled={busy} onClick={() => void complete()}>{busy ? "送出中…" : "完成肌力"}</button>
         {error ? <p className="hint" style={{ color: "var(--v-bad)" }}>{error}</p> : null}
-        <p className="sheet-foot">關掉沒填的話，下次打開會再跳一次</p>
       </BottomSheet>
     </div>
   );
