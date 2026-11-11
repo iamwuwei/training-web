@@ -469,6 +469,8 @@ const planCalls: number[] = [];
 if (typeof window !== "undefined") (window as unknown as { __planCalls: number[] }).__planCalls = planCalls;
 export function mockPlan(): PlanResponse {
   planCalls.push(Date.now());
+  const pf = lsw().planFail; // link-past-activity: GET /plan fails (see LinkSwitches)
+  if (pf) throw pf === "503" ? new ApiError(503, "service unavailable") : new Error("network");
   if (adoptedPlan) return { ...adoptedPlan, groups_unread: groupsUnreadTotal() }; // ai-plan-generation: a draft was adopted, that is my plan now
   if (has("nomyplan")) throw new ApiError(404, "no active plan"); // the api answers 404 to someone without an active plan
   refreshSegments();
@@ -791,9 +793,12 @@ function putSessionNow(activityId: string, body: PutSessionRequest): PutSessionR
  *   gone   the session was changed under him (another tab adopted a card): 404 "session not found" (the session is no longer in the plan)
  *   fail   a network error, nothing changed
  *   lost   the api bound it but the answer never came back: the data changes, then a network error (the reload finds the activity bound)
+ *   503    the database is waking up: 503, nothing changed
+ * `planFail` (set on `window.__mock` AFTER the page has loaded, true or "503", false again to clear): every GET /plan fails (a network error, or a 503), as when the phone is offline
+ * or the database is down; with `link: "fail"` or `"503"` it shows the sheet's answer when the page cannot look again.
  * `reviewLimit` works as for the other binds (the report page shows 今天沒辦法重判). A pick that does not look like the session makes Woo ask first (the usual mismatch).
  */
-interface LinkSwitches { link?: "taken" | "gone" | "fail" | "lost"; linkDelay?: number }
+interface LinkSwitches { link?: "taken" | "gone" | "fail" | "lost" | "503"; linkDelay?: number; planFail?: boolean | "503" }
 const lsw = (): LinkSwitches => (globalThis as unknown as { __mock?: LinkSwitches }).__mock ?? {};
 const linkPuts: string[] = [];
 if (typeof window !== "undefined") (window as unknown as { __linkPuts: string[] }).__linkPuts = linkPuts;
@@ -810,6 +815,7 @@ function linkPut(activityId: string, body: PutSessionRequest): Promise<PutSessio
       const a = findActivity(activityId);
       if (!a) throw new ApiError(404, "activity not found");
       if (mode === "fail") throw new Error("network");
+      if (mode === "503") throw new ApiError(503, "service unavailable");
       if (mode === "gone") {
         d.sessions.splice(d.sessions.findIndex((x) => x.id === sessionId), 1);
         throw new ApiError(404, "session not found");

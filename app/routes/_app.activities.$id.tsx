@@ -393,12 +393,15 @@ export default function Report({ loaderData }: Route.ComponentProps) {
   const linkable = !!view && canLink(view, a);
   const unbound = !a.session_id && a.match_status === "unplanned";
   const [showActs, setShowActs] = useState(false);
-  const closeLink = useCallback(() => setShowLink(false), []);
-  // bound: the page is now that session's report; the screen reader hears its new name (the entry that opened the sheet is gone)
-  const onLinked = useCallback(() => {
-    // two frames: the sheet's own cleanup (it makes the page live again) runs after the first
-    requestAnimationFrame(() => requestAnimationFrame(() => document.querySelector<HTMLElement>(".report-head .name")?.focus({ preventScroll: true })));
-  }, []);
+  // the report's name is where the focus lands when the entry that opened the sheet is gone (bound: the page is the session's report now, and the screen reader hears its name)
+  const land = useCallback(() => document.querySelector<HTMLElement>(".report-head .name")?.focus({ preventScroll: true }), []);
+  // closed with nothing bound (the list emptied under him, so the entry is gone too): the focus would be on the body. Two frames: the sheet's
+  // own cleanup (it makes the page live again, and puts the focus back on its opener when that is still there) runs after the first
+  const closeLink = useCallback(() => {
+    setShowLink(false);
+    requestAnimationFrame(() => requestAnimationFrame(() => { if (!document.activeElement || document.activeElement === document.body) land(); }));
+  }, [land]);
+  const onLinked = useCallback(() => { requestAnimationFrame(() => requestAnimationFrame(land)); }, [land]);
   const [showDetails, setShowDetails] = useState(false);
   const retryChip = (
     <button type="button" className="chip" onClick={() => void askAgain()} disabled={rereviewBusy}>

@@ -87,22 +87,29 @@ export default function Plan() {
   const [linkId, setLinkId] = useState<string | null>(null);
   const linkNear = useRef<LinkNear>({ next: null, prev: null });
   const [linkNote, setLinkNote] = useState("");
-  const closeLink = useCallback(() => setLinkId(null), []);
+  // where the focus goes when the row that opened the sheet is gone: the row that was under it, else the one above, else the week's title
+  const land = useCallback(() => {
+    const { next, prev } = linkNear.current;
+    const row = (id: string | null) => (id ? document.querySelector<HTMLElement>(`[data-xid="${CSS.escape(id)}"]`) : null);
+    (row(next) ?? row(prev) ?? document.querySelector<HTMLElement>("[data-week-title]"))?.focus({ preventScroll: true });
+  }, []);
+  // two frames: the sheet's own cleanup (which makes the page live again, and puts the focus back on its opener when that is still there) runs after the first
+  const afterSheet = useCallback((f: () => void) => requestAnimationFrame(() => requestAnimationFrame(f)), []);
+  // closed with nothing bound (the list emptied under him, so the entry is gone too): the focus would be on the body
+  const closeLink = useCallback(() => {
+    setLinkId(null);
+    afterSheet(() => { if (!document.activeElement || document.activeElement === document.body) land(); });
+  }, [afterSheet, land]);
   useEffect(() => {
     if (!linkNote) return;
     const t = window.setTimeout(() => setLinkNote(""), 3000);
     return () => window.clearTimeout(t);
   }, [linkNote]);
-  // bound: the row that opened the sheet is gone, so the focus goes to the row that was under it, else the one above, else the week's title
+  // bound: the row that opened the sheet is gone
   const onLinked = useCallback((s: ApiSession) => {
     setLinkNote(`已算成 ${md(s.scheduled_date)} 的 ${shortName(s)}`);
-    const { next, prev } = linkNear.current;
-    // two frames: the sheet's own cleanup (which makes the page live again, and would put the focus back on a row that is gone) runs after the first
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      const row = (id: string | null) => (id ? document.querySelector<HTMLElement>(`[data-xid="${CSS.escape(id)}"]`) : null);
-      (row(next) ?? row(prev) ?? document.querySelector<HTMLElement>("[data-week-title]"))?.focus({ preventScroll: true });
-    }));
-  }, []);
+    afterSheet(land);
+  }, [afterSheet, land]);
   // the weekly-review sheet (週回顧): the entry is in the header of a week that has one
   const { reviews } = useWeeklyReviews();
   const [reviewId, setReviewId] = useState<string | null>(null);

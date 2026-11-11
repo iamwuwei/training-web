@@ -1,10 +1,10 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useRevalidator } from "react-router";
 import type { ApiActivity, ApiSession } from "../types/api";
-import { putSession } from "../lib/api";
+import { getPlan, putSession } from "../lib/api";
 import { linkErrorText } from "../lib/combine";
 import { mdDow } from "../lib/date";
-import { duration, km } from "../lib/format";
+import { km } from "../lib/format";
 import { shortName, sportName } from "../lib/labels";
 import { activityDate, linkOptions, type PlanView } from "../lib/plan";
 import { BottomSheet } from "./sheet";
@@ -15,6 +15,15 @@ import { Avatar } from "./ui";
  * slides out, so the body cannot learn this from its props; it reads it here instead (and says nothing more while it leaves).
  */
 const Offered = createContext(true);
+
+/**
+ * The activities whose bind is on its way. Outside the component on purpose: the sheet may be closed (02 §3.4 ⑥ allows it) and opened again before the
+ * answer is back, and the new body must not send the same pick a second time (the api does not treat a repeated PUT as a no-op: it judges again).
+ */
+const inFlight = new Set<string>();
+const watchers = new Set<() => void>();
+const setFlying = (id: string, on: boolean) => { if (on) inFlight.add(id); else inFlight.delete(id); watchers.forEach((f) => f()); };
+const watchFlying = (f: () => void) => { watchers.add(f); return () => void watchers.delete(f); };
 
 /**
  * 算成哪一堂: the open sessions around an unassigned activity (the week it was run in, the one before and the one after); pick one,
@@ -39,41 +48,43 @@ function LinkBody({ activity, view, onClose, onLinked }: { activity: ApiActivity
   const offered = useContext(Offered);
   const options = useMemo(() => linkOptions(view, activity), [view, activity]);
   const [picked, setPicked] = useState<string | null>(options.preselect);
-  const [sending, setSending] = useState(false);
+  const flying = useSyncExternalStore(watchFlying, () => inFlight.has(activity.id), () => false);
+  const [done, setDone] = useState(false); // bound: the sheet is on its way out, the button keeps saying 送出中…
   // a failure is told only after the page has looked again (02 §5-3), so it is kept here until then
   const [failure, setFailure] = useState<{ e: unknown } | null>(null);
-  const guard = useRef(false);
   // the choice that counts: when the list was refreshed and the picked session left it, nothing is picked (no other is picked for him)
   const sel = options.days.some((d) => d.session.id === picked) ? picked : null;
   // told once the page is in sync again; while it is not, or the sheet is already leaving, the button stays in 送出中…
   const told = failure != null && revalidator.state === "idle" && offered;
-  const busy = sending || (failure != null && !told);
+  const busy = flying || done || (failure != null && !told);
   const error = told ? linkErrorText(failure.e) : null;
 
   async function submit() {
-    if (!sel || busy || guard.current) return;
-    guard.current = true;
-    setSending(true);
+    if (!sel || busy || inFlight.has(activity.id)) return;
+    setFlying(activity.id, true);
     setFailure(null);
     try {
       await putSession(activity.id, { session_id: sel });
     } catch (e) {
       // look again before saying anything: 409 / 404 mean the list is out of date, and a lost answer means the api did bind it (then the
-      // page stops offering this activity and the sheet closes itself). One GET, never a second PUT.
-      try { await revalidator.revalidate(); } catch { /* the sentence below still holds */ }
+      // page stops offering this activity and the sheet closes itself). The page is asked only when it can answer: a failed GET inside
+      // `revalidate()` is not rejected, it sends the whole app to the error page. One GET to find out, one to reload; never a second PUT.
+      const reachable = await getPlan().then(() => true, () => false);
+      if (reachable) { try { await revalidator.revalidate(); } catch { /* the sentence below still holds */ } }
       setFailure({ e });
-      setSending(false);
-      guard.current = false;
+      setFlying(activity.id, false);
       return;
     }
+    setDone(true);
     try { await revalidator.revalidate(); } catch { /* it is bound; the page shows it on its next load */ }
     onClose();
     const s = options.days.find((d) => d.session.id === sel)?.session;
     if (s) onLinked?.(s);
+    setFlying(activity.id, false);
   }
 
   const date = mdDow(activityDate(activity));
-  const what = activity.distance_m > 0 ? `${km(activity.distance_m)} km` : duration(activity.moving_time_sec);
+  const what = activity.distance_m > 0 ? `${km(activity.distance_m)} km` : `${Math.round(activity.moving_time_sec / 60)} 分`;
   return (
     <>
       <div className="lk-head st">
