@@ -46,7 +46,6 @@ function MemberPlan({ data }: { data: MemberPlanResponse }) {
     return (
       <div className="member-plan-off">
         <p className="t">{member.display_name} 沒有分享課表</p>
-        <p className="sub">每個人在設定裡決定要不要給群組看課表。</p>
       </div>
     );
   }
@@ -88,7 +87,7 @@ function MemberPlan({ data }: { data: MemberPlanResponse }) {
           </div>
         </>
       ) : null}
-      {member.is_me ? <p className="member-plan-note">這裡只能看。要改課表或看報告，到<Link to="/plan">課表</Link>。</p> : null}
+      {member.is_me ? <p className="member-plan-note">要改課表，到<Link to="/plan">課表 ›</Link></p> : null}
       <SessionSheet session={open} view={view} onClose={() => setOpen(null)} onOpen={setOpen} readOnly={{ name: member.display_name, ...ro }} />
     </>
   );

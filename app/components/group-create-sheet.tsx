@@ -63,18 +63,18 @@ function Body({ onClose, defaults, today }: { onClose: () => void; defaults: Cre
       <div className="gf-field">
         <label className="gf-label" htmlFor="g-race"><span>比賽</span><span className={`gf-count${race.length >= RACE_MAX ? " max" : ""}`}>{race.length} / {RACE_MAX}</span></label>
         <input id="g-race" type="text" className={`oneline${errs.race ? " bad" : ""}`} value={race} maxLength={RACE_MAX} autoComplete="off" onChange={(e) => setRace(e.target.value)} aria-invalid={!!errs.race} />
-        {errs.race ? <p className="err" role="alert">{errs.race}</p> : <p className="gf-hint">{defaults ? "預設是你課表上的比賽" : "你的課表還沒有比賽，請自己填"}</p>}
+        {errs.race ? <p className="err" role="alert">{errs.race}</p> : defaults ? null : <p className="gf-hint">你的課表還沒有比賽，請自己填</p>}
       </div>
       <div className="gf-field">
         <label className="gf-label" htmlFor="g-date"><span>比賽日</span></label>
         <input id="g-date" type="date" className={`oneline${errs.date ? " bad" : ""}`} value={date} min={today} onChange={(e) => setDate(e.target.value)} aria-invalid={!!errs.date} />
-        {errs.date ? <p className="err" role="alert">{errs.date}</p> : <p className="gf-hint">倒數用這一天</p>}
+        {errs.date ? <p className="err" role="alert">{errs.date}</p> : null}
       </div>
       <p className="privacy">第一次建立或加入群組時，這五項會分享給群組成員：進度彙總、完成事件、課表內容、跑步詳情、Woo 的判定；可以隨時到設定關掉。</p>
       <p className="privacy-risk">課表備註和 Woo 的評論可能提到傷痛或行程。</p>
       {errs.form ? <p className="err" role="alert">{errs.form}</p> : null}
       <div className="actions-row"><button type="button" className="btn compact primary" disabled={busy} onClick={() => void submit()}>{busy ? "建立中…" : "建立"}</button></div>
-      <p className="sheet-foot">建好後你是擁有者，可以在「成員」產生邀請連結。</p>
+      <p className="sheet-foot">建好後在「成員」產生邀請連結。</p>
     </>
   );
 }

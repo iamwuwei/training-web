@@ -68,18 +68,16 @@ export default function GroupPage({ loaderData }: Route.ComponentProps) {
           <div>
             <div className="k">比賽 · {mdDowPlain(g.race_date)}</div>
             <div className="v text"><span className="race">{g.race_name}</span></div>
-            <div className="meta">成員 {g.member_count} / {g.max_members}</div>
           </div>
         </div>
 
-        <SectionH>夥伴</SectionH>
-        <div className="group-members">{members.map((m) => <GroupMemberRow key={m.id} group={g} member={m} today={today} />)}</div>
+        <section className="group-members" aria-label="夥伴">{members.map((m) => <GroupMemberRow key={m.id} group={g} member={m} today={today} />)}</section>
 
         <SectionH action={<PushLink to={`/groups/${g.id}/events`} className="more">{g.unread > 0 ? <span className="ucount" role="img" aria-label={`${g.unread} 則新動態`}>{g.unread}</span> : null}全部動態 ›</PushLink>}>消息中心</SectionH>
         {events.length ? (
           <div className="events">{events.map((e) => <GroupEventRow key={e.id} event={e} today={today} isNew={isNew.get(e.id) ?? false} onOpen={setOpen} />)}</div>
         ) : (
-          <p className="group-quiet">還沒有動態。有人完成了課，會出現在這裡。</p>
+          <p className="group-quiet">還沒有動態。</p>
         )}
 
         <div style={{ marginTop: 8 }}>

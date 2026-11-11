@@ -6,7 +6,6 @@ import { GroupEventSheet } from "../components/group-event-sheet";
 import { GroupBack, GroupNotFound, LoadFailed } from "../components/group-parts";
 import { RefreshIcon } from "../components/icons";
 import { GlassButton, NavBar } from "../components/nav-bar";
-import { SectionH } from "../components/ui";
 import { getGroupEvents, getGroups, putGroupSeen } from "../lib/api";
 import { todayJst } from "../lib/date";
 import { isStatus } from "../lib/groups";
@@ -94,9 +93,8 @@ export default function GroupEvents({ loaderData, params }: Route.ComponentProps
         right={<GlassButton className="refresh" label={loading ? "更新中" : "重新整理"} busy={loading} disabled={loading} onClick={reload}><RefreshIcon /></GlassButton>}
       />
       <main>
-        <SectionH>最近 90 天</SectionH>
         {events.length === 0 ? (
-          <p className="empty">還沒有動態。<br />有人完成了課、加入或離開，都會出現在這裡。</p>
+          <p className="empty">還沒有動態。</p>
         ) : (
           <div className="events">{events.map((e) => <GroupEventRow key={e.id} event={e} today={today} isNew={newIds.has(e.id)} onOpen={setOpen} />)}</div>
         )}
