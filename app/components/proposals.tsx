@@ -178,9 +178,9 @@ function removedText(c: ApiProposalChange, s: ReturnType<typeof changeSession>):
 /** coach-correct-plan: the fixed line under a correction row (the session is already done; only its estimated distance / note change, the verdict is redone). Only while the card is pending. */
 function correctionNote(changes: ApiProposalChange[]): string {
   const fields = new Set(changes.filter((c) => c.correction).map((c) => c.field));
-  if (fields.has("target_distance_m") && fields.has("note")) return "這堂已經跑完，只改課表上的距離和備註；完成紀錄不動，判定會重看一次。";
-  if (fields.has("note")) return "這堂已經跑完，只改課表上的備註；完成紀錄不動，判定會照新備註重看一次。";
-  return "這堂已經跑完，只改課表上的距離；完成紀錄不動，判定會照新距離重看一次。";
+  if (fields.has("target_distance_m") && fields.has("note")) return "只改課表上的距離和備註，判定會重看一次。";
+  if (fields.has("note")) return "只改課表上的備註，判定會重看一次。";
+  return "只改課表上的距離，判定會重看一次。";
 }
 
 function ChangeRow({ row, sessions, pending }: { row: Row; sessions: ApiSession[]; pending: boolean }) {
@@ -367,7 +367,7 @@ export function ProposalCard({ proposal, status: st, sessions, weeks, chosen, on
           )}
         </div>
       </Collapse>
-      {st === "stale" && asked ? <p className="hint">已請 Woo 重看，他會用現在的課表重發一張。</p> : null}
+      {st === "stale" && asked ? <p className="hint">已請 Woo 重看。</p> : null}
       {error ? <p className="hint" style={{ color: "var(--v-bad)" }}>{error}</p> : null}
     </>
   );
