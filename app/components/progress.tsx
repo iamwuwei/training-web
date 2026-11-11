@@ -37,7 +37,7 @@ export function Progress({ view }: { view: PlanView }) {
       <section className="blk prog" aria-label="進步">
         <p className="lead">{lead}</p>
         {aero.delta == null ? (
-          <p className="lead-sub">有氧效率要兩次以上心拍落在 {band ?? "區間"} 的 Easy 才算得出來</p>
+          <p className="lead-sub">再跑兩次心拍 {band ?? "區間"} 的 Easy 就算得出來</p>
         ) : (
           <div className={`delta ${tone}`}>
             <b className="num">{sign(aero.delta)}</b>
